@@ -25,17 +25,29 @@
   padding-bottom: 40px;
 }
 
-/* One grid row for PageHeader plus whatever it draws above itself. A
-   stripped-section persona has `PageHeader` render a tab strip
-   (`data-testid="section-tabs"`) as a sibling of its own toolbar row
-   (`HostedPageContext`, PageHeader.tsx L70) - two DOM nodes for what is one
-   conceptual band. Wrapping them in `.bill-top` keeps `.bill-page`'s grid to
-   exactly three rows regardless of persona; sizing this band by counting
-   pixels for "PageHeader's height" would have quietly broken for that
-   persona the day the tab strip shipped. */
+/* The counter's own bill bar replaces the generic page chrome. */
 .bill-top { min-height: 0; }
 
-.bill-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bill-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 0 12px; border-bottom: 1px solid var(--hairline);
+}
+.bill-mode { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 9px; }
+.bill-mode-button {
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  padding: 6px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.bill-mode-button.is-active { background: var(--navy-fill); color: #fff; }
+.bill-mode-button:disabled { cursor: not-allowed; opacity: .55; }
+.bill-identity { display: flex; flex-direction: column; min-width: 144px; gap: 1px; font-size: 12.5px; }
+.bill-identity strong { color: var(--ink); }
+.bill-sold-by { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.bill-sold-by .select { min-width: 128px; padding: 6px 8px; font-size: 12.5px; }
+.bill-bar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.bill-bar-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.bill-scan-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--blue); }
+.bill-page[data-mode="return"] input.bill-scan { border-color: var(--blue); }
 /* Element-qualified, and that is not decoration: a bare `.bill-scan` ties with
    the app's generic `.input` on specificity - both are one class - so the
    winner is whichever bundle chunk the bundler happens to emit last, and
@@ -46,7 +58,6 @@
    trap as `table.data th` and `input.bill-cell` below, same answer. (#243's
    width, #249's measurement.) */
 input.bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
-.bill-lifecycle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* The autosave indicator (#244) - quiet on purpose, beside the bill number
    rather than a banner of its own: a bill that autosaves continuously has

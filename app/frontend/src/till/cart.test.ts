@@ -6,6 +6,7 @@ import {
   capFor,
   changeFor,
   emptyCart,
+  inheritBillSalesman,
   priceCart,
   qtyFrom,
   scanPiece,
@@ -123,6 +124,20 @@ describe("a rescan of a piece already on the bill (#244, grill Q1)", () => {
 
     expect(fresh.lines).toHaveLength(1);
     expect(fresh.lines[0].salesman).toBe(4);
+  });
+});
+
+describe("bill-level Sold by", () => {
+  it("fills only lines without an actor, leaving an explicit line choice alone", () => {
+    const cart = cartOf(scanned(149900, { salesman: null }), scanned(149900, { salesman: 9 }));
+
+    expect(inheritBillSalesman(cart, 4).lines.map((line) => line.salesman)).toEqual([4, 9]);
+  });
+
+  it("leaves a bill unattributed when its bill-level actor is empty", () => {
+    const cart = cartOf(scanned(149900, { salesman: null }));
+
+    expect(inheritBillSalesman(cart, null).lines[0].salesman).toBeNull();
   });
 });
 

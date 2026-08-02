@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Gift,
-  PauseCircle,
   Plus,
   Printer,
-  RotateCcw,
-  Search,
   Undo2,
   X,
 } from "lucide-react";
 
-import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
+import { PageHeader } from "../../components/PageHeader";
 import { Money } from "../../lib/format";
 import { useTill } from "../../till/TillProvider";
 import { useCounterRoom } from "../../till/useCounterRoom";
 import {
   addManualPiece,
   emptyCart,
+  inheritBillSalesman,
   priceCart,
   scanPiece,
   toDraft,
@@ -51,12 +49,15 @@ import { emptyUndo, popUndo, pushUndo } from "../../till/undo";
 import type { UndoStack } from "../../till/undo";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
+import { useCounterKeys } from "../../till/useCounterKeys";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
 // screen with a dialog on it borrows from the same place.
 import "../Booking.css";
 import { newUuid } from "../../till/uuid";
 import { usePositionedPopover } from "../../shell/usePositionedPopover";
 import { Lines } from "./billing/BillGrid";
+import { BillBar } from "./billing/BillBar";
+import type { CounterMode } from "./billing/BillBar";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
@@ -164,6 +165,7 @@ function Counter({
   payments?: PaymentAdapter;
 }) {
   const { engine, till } = useTill();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [cart, setCart] = useState<Cart>(emptyCart);
   const [customer, setCustomer] = useState<TillCustomer>(NO_CUSTOMER);
@@ -183,6 +185,10 @@ function Counter({
   // previous customer. Nought until somebody picks, and then the counter's copy
   // takes over from what the dataset remembered across the session.
   const [lastPicked, setLastPicked] = useState<number | null>(null);
+  /** The bill-level actor is a default, not a replacement for a deliberate
+   * per-line choice. It is materialised only for the held/saved bill. */
+  const [billSalesman, setBillSalesman] = useState<number | null | undefined>(undefined);
+  const [mode, setMode] = useState<CounterMode>("sale");
   // Bumped by every commit so the in-memory copy re-reads the shelf the sale
   // just moved - and, since #182, the credit notes it just spent. The sync time
   // covers the other direction.
@@ -472,6 +478,19 @@ function Counter({
   }, [params, setParams]);
 
   const today = useMemo(() => tillToday(), []);
+  const defaultSalesman = lastPicked ?? world.lastSalesman;
+  const soldBy = billSalesman === undefined ? defaultSalesman : billSalesman;
+  // A new bill inherits the counter's last actor once, then its bill-level
+  // choice remains stable while a cashier assigns a different person per line.
+  useEffect(() => {
+    if (billSalesman === undefined && defaultSalesman !== null) {
+      setBillSalesman(defaultSalesman);
+    }
+  }, [billSalesman, defaultSalesman]);
+  const cartWithSoldBy = useMemo(() => inheritBillSalesman(cart, soldBy), [cart, soldBy]);
+  const differingSalesmen = cart.lines.filter(
+    (line) => line.salesman !== null && line.salesman !== soldBy,
+  ).length;
   // Which state this shop is registered in - the other half of every B2B tax
   // split. Null until the counter's identity has synced, and null is *not* a
   // state code: see `storeStateCodeOf` and `toDraft`.
@@ -482,10 +501,10 @@ function Counter({
   const taxKind: B2bTaxKind = storeState === null ? "none" : taxKindFor(customer.gstin, storeState);
   const bill = useMemo(
     () =>
-      priceCart(cart, world, today, {
+      priceCart(cartWithSoldBy, world, today, {
         capPercent: world.policy.manual_discount_cap_percent,
       }),
-    [cart, world, today],
+    [cartWithSoldBy, world, today],
   );
   // The counter's own refusals come first (#189): "this till does not know which
   // number it is on" is not something a cashier can fix by editing the cart, and
@@ -513,8 +532,6 @@ function Counter({
         : [],
     [typed, world.items, world.stock],
   );
-
-  const defaultSalesman = lastPicked ?? world.lastSalesman;
 
   /** Whether this counter makes a noise at all (#247, grill Q8) - set on Till &
    *  Sync, held in the counter's own database, so it is the same answer for
@@ -567,7 +584,7 @@ function Counter({
       // would mint a second, different key for a genuinely new line
       // (`addPiece`'s default), which is the exact collision class #244
       // closes - just against the very next scan instead of a crash restore.
-      const next = scanPiece(cart, piece, { stock, alternatives }, defaultSalesman);
+      const next = scanPiece(cart, piece, { stock, alternatives }, soldBy);
       onScreenRef.current = { ...onScreenRef.current, cart: next };
       setCart(next);
       startingANewBill();
@@ -579,7 +596,7 @@ function Counter({
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [cart, clearScan, defaultSalesman, muted, pushCartUndo, startingANewBill],
+    [cart, clearScan, muted, pushCartUndo, soldBy, startingANewBill],
   );
 
   /**
@@ -596,7 +613,7 @@ function Counter({
       // `addManualPiece` mints a key by default - computed once and reused
       // below for the same reason `takePiece` does: a second call would mint
       // a second, different key for what is meant to be the same line.
-      const manualLine = { ...addManualPiece(code), salesman: defaultSalesman };
+      const manualLine = { ...addManualPiece(code), salesman: soldBy };
       onScreenRef.current = {
         ...onScreenRef.current,
         cart: { ...cart, lines: [...cart.lines, manualLine] },
@@ -606,7 +623,7 @@ function Counter({
       clearScan();
       scan.focus();
     },
-    [cart, clearScan, defaultSalesman, pushCartUndo, scan, startingANewBill],
+    [cart, clearScan, pushCartUndo, scan, soldBy, startingANewBill],
   );
 
   const applyScan = useCallback(
@@ -657,6 +674,23 @@ function Counter({
     editLine(key, { salesman });
     setLastPicked(salesman);
     if (salesman != null) void engine?.rememberSalesman(salesman);
+    scan.focus();
+  }
+
+  function pickBillSalesman(salesman: number | null) {
+    setBillSalesman(salesman);
+    setLastPicked(salesman);
+    if (salesman !== null) void engine?.rememberSalesman(salesman);
+    scan.focus();
+  }
+
+  function applyBillSalesman() {
+    if (soldBy === null) return;
+    runSeq.current += 1;
+    setCart((current) => ({
+      ...current,
+      lines: current.lines.map((line) => ({ ...line, salesman: soldBy })),
+    }));
     scan.focus();
   }
 
@@ -796,6 +830,7 @@ function Counter({
     setCustomer(NO_CUSTOMER);
     setUndoStack(emptyUndo());
     setPendingDraft(null);
+    setBillSalesman(undefined);
     // A charge card left open over a bill that no longer exists would be
     // charging a figure nobody is being asked for.
     setCharging(false);
@@ -848,7 +883,7 @@ function Counter({
       await engine.hold({
         held_uuid: newUuid(),
         label: customer.name.trim(),
-        payload: heldPayload(cart, customer, {
+        payload: heldPayload(cartWithSoldBy, customer, {
           net_paise: bill.net_paise,
           pieces: bill.pieces,
         }),
@@ -1009,6 +1044,21 @@ function Counter({
     scan.focus();
   }, [clearScan, scan]);
 
+  const dismissCounterError = useCallback(() => {
+    setNote("");
+    setPrintProblem("");
+    closeScanFloat();
+  }, [closeScanFloat]);
+
+  useCounterKeys({
+    disabled: Boolean(asking || charging || counterBlocked || saving || holding),
+    onHold: () => void holdBill(),
+    onLookup: () => navigate("/sell/customers"),
+    onNewBill: newBill,
+    onSave: () => void save(),
+    onBackToScan: dismissCounterError,
+  });
+
   // "Did you mean" and "bill it off the tag" both hang off the scan box as one
   // floating panel (G-4: "nothing pushes the layout"), portaled out of the
   // work area so neither can push the rail or the footer. `usePositionedPopover`
@@ -1024,96 +1074,49 @@ function Counter({
   );
 
   return (
-    <div className="page-pad bill-page">
-      {/* Top strip: bill identity and the "which bill am I on" actions (D10
-          §4's placement, regrouped per #243). Wrapped with the one-line alert
-          below rather than left as PageHeader's own sibling, because a
-          stripped-section persona has `PageHeader` draw a tab row above its
-          toolbar (`HostedPageContext`) - two elements for one conceptual
-          band. Wrapping them keeps `.bill-page`'s row template honest at
-          `auto` however many elements PageHeader itself renders. */}
+    <div className="page-pad bill-page" data-mode={mode}>
+      {/* The counter owns its identity now: no generic page header, breadcrumb,
+          or section tabs are allowed into this room. */}
       <div className="bill-top">
-        <PageHeader
-          lead={
-            <>
-              Next bill <span className="mono">{till?.nextNumber ?? ""}</span>
-              {draftSaved && (
-                <span className="bill-draft-saved muted-cell" data-testid="bill-draft-saved">
-                  {" "}
-                  · Draft · saved
-                </span>
-              )}
-            </>
-          }
-          actions={
-            <div className="bill-head">
-              <ScanBox
-                boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
-                value={typed}
-                disabled={locked || counterBlocked}
-                onChange={setTyped}
-                onSubmit={applyScan}
-              />
-              <div className="bill-lifecycle">
-                {/* Finding an old bill is a different job with a different
-                    screen (#185, E1/E2), and it is read-only: nothing over
-                    there can change what was billed. */}
-                <Link className="btn" data-testid="bill-find" to="/sell/customers">
-                  <Search size={15} />
-                  Find a bill
-                </Link>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="bill-holds-open"
-                  aria-expanded={showHolds}
-                  // `HeldBills` lives inside `.bill-lines` (#243), which the
-                  // blocked-counter takeover replaces entirely - toggling this
-                  // while blocked would flip the label with nothing to show
-                  // for it, so it is disabled along with the actions below.
-                  disabled={counterBlocked}
-                  onClick={() => setShowHolds((open) => !open)}
-                >
-                  {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
-                </button>
-                {/* Undo lives in the lifecycle row rather than on the grid it
-                    steps back (#244): under #243's fixed frame `.bill-lines`
-                    is the band that scrolls, so a header inside it would
-                    scroll away exactly as the bill got long enough to want
-                    undoing. */}
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="bill-undo"
-                  disabled={counterBlocked || !undoStack.length || locked}
-                  onClick={undo}
-                >
-                  <RotateCcw size={15} />
-                  Undo
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="bill-hold"
-                  disabled={counterBlocked || !cart.lines.length || saving}
-                  onClick={() => void holdBill()}
-                >
-                  <PauseCircle size={15} />
-                  Hold bill
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="bill-new"
-                  disabled={counterBlocked || saving}
-                  onClick={newBill}
-                >
-                  New bill
-                </button>
-              </div>
-            </div>
-          }
+        <BillBar
+          mode={mode}
+          nextNumber={till?.nextNumber ?? ""}
+          draftSaved={draftSaved}
+          salesmen={world.salesmen}
+          soldBy={soldBy}
+          differingLines={differingSalesmen}
+          heldCount={holds.length}
+          showingHolds={showHolds}
+          disabled={counterBlocked || locked}
+          canHold={cart.lines.length > 0}
+          onModeChange={setMode}
+          onSoldByChange={pickBillSalesman}
+          onApplySoldBy={applyBillSalesman}
+          onShowHolds={() => setShowHolds((open) => !open)}
+          onHold={() => void holdBill()}
+          onLookup={() => navigate("/sell/customers")}
+          onNewBill={newBill}
         />
+        <div className="bill-scan-row">
+          <ScanBox
+            boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
+            value={typed}
+            disabled={locked || counterBlocked}
+            placeholder={mode === "sale" ? "Scan a tag, or type a design number" : "Scan a bill number"}
+            onChange={setTyped}
+            onSubmit={applyScan}
+          />
+          <button
+            type="button"
+            className="btn"
+            data-testid="bill-undo"
+            title="Undo (no keyboard shortcut)"
+            disabled={counterBlocked || !undoStack.length || locked}
+            onClick={undo}
+          >
+            <Undo2 size={15} /> Undo
+          </button>
+        </div>
 
         {paper !== null && (
           <div className="bill-paper" data-testid="bill-paper">
@@ -1416,6 +1419,7 @@ function Counter({
             type="button"
             className="btn"
             data-testid="bill-reprint"
+            title="Reprint (no keyboard shortcut)"
             disabled={!lastBill || saving}
             onClick={() => lastBill && void print(lastBill.receipt)}
           >
@@ -1427,6 +1431,7 @@ function Counter({
             type="button"
             className="btn btn-cta btn-lg"
             data-testid="bill-save"
+            title="Save & Print (F9)"
             disabled={Boolean(blocked) || saving}
             onClick={() => void save()}
           >
@@ -1637,12 +1642,14 @@ function ScanBox({
   boxRef,
   value,
   disabled,
+  placeholder,
   onChange,
   onSubmit,
 }: {
   boxRef: (node: HTMLInputElement | null) => void;
   value: string;
   disabled: boolean;
+  placeholder: string;
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
 }) {
@@ -1653,8 +1660,8 @@ function ScanBox({
       data-testid="bill-scan"
       autoComplete="off"
       disabled={disabled}
-      placeholder="Scan a tag, or type a design number"
-      aria-label="Scan a tag, or type a design number"
+      placeholder={placeholder}
+      aria-label={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
