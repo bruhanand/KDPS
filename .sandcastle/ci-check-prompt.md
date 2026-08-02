@@ -8,11 +8,19 @@ a wrong PASS here does not land broken code, it just wastes a wave.
 
 # RUN THE FAST CI GATE
 
-From the repo root:
+From the repo root, **in the foreground with an explicit long timeout**
+(the suite can take well over ten minutes in this sandbox; the default
+timeout backgrounds it and you then never see the verdict — issue #241's
+gate "failed" exactly this way with a green suite):
 
 ```
 npm run ci:fast
 ```
+
+Pass a 40-minute timeout (2400000 ms) on that Bash call. If it is ever
+backgrounded anyway, poll its output file until the run actually ends —
+never stop your turn while the suite is still running, and never emit a
+verdict you did not read from finished output.
 
 This runs `mypy core config`, the migration/DB-drift checks
 (`makemigrations --check --dry-run`, `check_db_drift`), `lint-imports`, and
