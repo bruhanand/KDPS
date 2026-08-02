@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { formatINR, Money } from "../../../lib/format";
 import { qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
-import { ratePercent } from "../../../till/tax";
+import { hasSlab, ratePercent } from "../../../till/tax";
 import { RupeeInput } from "./RupeeInput";
 
 /** Item · Brand · Barcode · Design · Size · Qty · Rate · Disc ₹ · GST ·
@@ -13,8 +13,8 @@ import { RupeeInput } from "./RupeeInput";
  *  GST was eight per cent of a counter screen for a rate and a rupee figure on
  *  every line - twelve numbers to answer a question that gets asked once a bill,
  *  at the end, about the whole bill. Grill Q7 collapsed it to a badge and moved
- *  the answer behind the footer's figure; the five points that freed go where
- *  the ruling sent them, to the item name and the discount box. */
+ *  the answer behind the footer's figure; the three points it frees go where
+ *  the ruling sent them - two to the item name, one to the discount box. */
 const COLUMN_WIDTHS = [
   "13%",
   "8%",
@@ -203,9 +203,10 @@ export function Lines({
  * away saying so.
  */
 function GstBadge({ line }: { line: PricedLine }) {
-  if (line.gst_paise === 0 && Number(line.gst_rate) === 0) {
-    return <span className="muted-cell">-</span>;
-  }
+  // `hasSlab`, the same test the breakup panel filters on - two spellings of
+  // "this line has no slab" can disagree, and a badge saying 0% beside a panel
+  // that left the line out is the counter telling two stories.
+  if (!hasSlab(line.gst_rate)) return <span className="muted-cell">-</span>;
   return (
     <span
       className="bill-gst-badge"

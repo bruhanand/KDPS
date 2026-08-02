@@ -330,9 +330,14 @@ select.bill-season { min-width: 0; }
    layout), portaled to `document.body` and placed by `usePositionedPopover`.
    Fixed width for the same reason `.bill-float` has one: a portaled node
    answers to no parent's column. */
+/* `max-height` is not decoration: the panel is `position: fixed`, so a bill
+   with several slabs on it and a short viewport would put rows below the fold
+   with no way to scroll to them - the same trap `.bill-float` documents above.
+   It must stay equal to `PANEL_HEIGHT` in TaxFigure.tsx, which is what the
+   popover hook clamps its first placement against. */
 .bill-tax-panel {
   position: fixed; z-index: 40; width: 320px; max-width: calc(100vw - 32px);
-  padding: 14px 16px;
+  max-height: 320px; overflow-y: auto; padding: 14px 16px;
 }
 .bill-tax-panel .eyebrow { margin-bottom: 8px; }
 table.data.bill-tax-rows { font-size: 12.5px; width: 100%; }

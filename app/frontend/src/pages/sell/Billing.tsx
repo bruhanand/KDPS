@@ -58,7 +58,7 @@ import { Lines } from "./billing/BillGrid";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
-import { TaxBreakup } from "./billing/TaxBreakup";
+import { TaxFigure } from "./billing/TaxFigure";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
@@ -1800,15 +1800,9 @@ function Totals({
         <Figure label="Rounding" value={<Money paise={bill.round_paise} />} />
       )}
       {/* Not a `Figure` any more (#247, grill Q7): the tax figure is the way
-          into the breakup that used to be twelve numbers down the grid, and
-          the two words on it are the receipt's own - a bill that gives more
-          tax back than it charges says "Tax given back" on the paper, so it
-          says that here (`receipt.ts`). */}
-      <TaxBreakup
-        bill={bill}
-        kind={taxKind}
-        label={bill.gst_paise < 0 ? "Tax given back" : "Tax included"}
-      />
+          into the breakup that used to be twelve numbers down the grid, and it
+          words itself from the same rule the paper does (`tax.taxLabel`). */}
+      <TaxFigure bill={bill} kind={taxKind} />
       <Figure label="Net" value={<Money paise={bill.net_paise} />} testId="bill-net" strong />
     </div>
   );

@@ -16,7 +16,7 @@ import { addManualPiece, addPiece, emptyCart, priceCart } from "./cart";
 import type { Cart } from "./cart";
 import { legFor } from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
-import { ratePercent, taxBreakup } from "./tax";
+import { ratePercent, taxBreakup, taxLabel } from "./tax";
 import { item, season } from "./testSupport";
 import type { TillGstSlab } from "./types";
 
@@ -31,10 +31,11 @@ const SLAB: TillGstSlab = {
 
 const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [], creditNotes: [] };
 
-function scanned(barcode: string, mrp: number | null) {
+function scanned(barcode: string, mrp: number | null, over: Partial<Cart["lines"][number]> = {}) {
   return {
     ...addPiece(item(barcode, "FW25", mrp), { stock: 3, alternatives: [] }),
     salesman: 1,
+    ...over,
   };
 }
 
@@ -88,8 +89,10 @@ describe("the per-rate rows", () => {
 
   it("adds up to the figure in the footer", () => {
     const bill = priced([scanned("8901", 149900), scanned("8903", 499900)]);
+    const breakup = taxBreakup(bill, "none");
 
-    expect(summed(taxBreakup(bill, "none").rows)).toBe(bill.gst_paise);
+    expect(summed(breakup.rows)).toBe(breakup.shown_paise);
+    expect(breakup.shown_paise).toBe(bill.gst_paise);
   });
 
   it("puts the lowest rate first, whatever order the pieces were scanned in", () => {
@@ -103,23 +106,32 @@ describe("the per-rate rows", () => {
     // and no tax, because there is nothing yet to tax - not because a garment is
     // zero-rated.
     const bill = priced([{ ...addManualPiece("9999"), salesman: 1 }]);
-    const { rows, gst_paise } = taxBreakup(bill, "none");
+    const { rows, shown_paise } = taxBreakup(bill, "none");
 
     expect(rows).toEqual([]);
-    expect(gst_paise).toBe(0);
+    expect(shown_paise).toBe(0);
+  });
+
+  it("leaves out a line discounted past its own price, for the same reason", () => {
+    // `priceLine` gives any line with a net of nought or less rate "0.00" - so a
+    // piece given away, or discounted below zero, would otherwise show a "0%"
+    // row with a negative base under it. It has no slab; it has a mistake.
+    const bill = priced([scanned("8901", 100000, { disc_paise: 150000 })]);
+
+    expect(taxBreakup(bill, "none").rows).toEqual([]);
   });
 });
 
 describe("a piece coming back on the same bill", () => {
   it("nets the returned tax off its own slab's row", () => {
     const bill = priced([scanned("8901", 149900)], exchangeOf(sold()));
-    const { rows } = taxBreakup(bill, "none");
+    const breakup = taxBreakup(bill, "none");
 
-    expect(rows.map((r) => r.rate)).toEqual(["5.00"]);
-    expect(summed(rows)).toBe(bill.gst_paise);
+    expect(breakup.rows.map((r) => r.rate)).toEqual(["5.00"]);
+    expect(summed(breakup.rows)).toBe(breakup.shown_paise);
     // The sold piece's tax less the returned piece's, which is what the footer
     // shows and what `accept._check_totals` re-derives.
-    expect(rows[0].gst_paise).toBe(bill.lines[0].gst_paise - 5714);
+    expect(breakup.rows[0].gst_paise).toBe(bill.lines[0].gst_paise - 5714);
   });
 
   it("still adds up when what came back was taxed at the other slab", () => {
@@ -127,14 +139,17 @@ describe("a piece coming back on the same bill", () => {
       [scanned("8901", 149900)],
       exchangeOf(sold({ net_paise: 499900, gst_rate: "18.00", gst_paise: 76256 })),
     );
-    const { rows } = taxBreakup(bill, "none");
+    const breakup = taxBreakup(bill, "none");
 
-    expect(rows.map((r) => r.rate)).toEqual(["5.00", "18.00"]);
-    expect(rows[1].gst_paise).toBeLessThan(0);
-    expect(summed(rows)).toBe(bill.gst_paise);
+    expect(breakup.rows.map((r) => r.rate)).toEqual(["5.00", "18.00"]);
+    expect(summed(breakup.rows)).toBe(breakup.shown_paise);
   });
 
-  it("says the tax is going back when the return is worth more than the sale", () => {
+  it("states the direction in words and the figures as amounts, like the paper", () => {
+    // A return worth more than what replaced it: the whole bill is giving tax
+    // back. `receipt.ts` prints "Tax given back ₹712", never "Tax included
+    // −₹712", and this panel has to read the same way or the counter and the
+    // customer's copy are two stories.
     const bill = priced(
       [scanned("8901", 100000)],
       exchangeOf(sold({ net_paise: 499900, gst_rate: "18.00", gst_paise: 76256 })),
@@ -143,9 +158,22 @@ describe("a piece coming back on the same bill", () => {
 
     expect(bill.gst_paise).toBeLessThan(0);
     expect(breakup.given_back).toBe(true);
-    // Split positive, exactly as `receipt.ts` prints it: the head is still IGST,
-    // and "IGST −₹712" is not how either the paper or the books say it.
-    expect(breakup.split).toEqual([{ label: "IGST", paise: Math.abs(bill.gst_paise) }]);
+    expect(breakup.shown_paise).toBe(Math.abs(bill.gst_paise));
+    expect(breakup.split).toEqual([{ label: "IGST", paise: breakup.shown_paise }]);
+    // And the rows turn with it, so the panel still adds up to its own heading:
+    // the 18% slab is what is going back, the 5% slab is still being charged and
+    // shows as the negative it is against that direction.
+    expect(summed(breakup.rows)).toBe(breakup.shown_paise);
+    expect(breakup.rows.find((r) => r.rate === "18.00")?.gst_paise).toBeGreaterThan(0);
+    expect(breakup.rows.find((r) => r.rate === "5.00")?.gst_paise).toBeLessThan(0);
+  });
+});
+
+describe("the two words on the figure", () => {
+  it("reads the way the customer's copy does", () => {
+    expect(taxLabel(7138)).toBe("Tax included");
+    expect(taxLabel(0)).toBe("Tax included");
+    expect(taxLabel(-7138)).toBe("Tax given back");
   });
 });
 
@@ -164,8 +192,10 @@ describe("the split the customer's copy carries", () => {
   });
 
   it("shows no split at all on a retail bill, exactly as the receipt prints it", () => {
-    expect(taxBreakup(bill, "none").split).toEqual([]);
-    expect(summed(taxBreakup(bill, "none").rows)).toBe(bill.gst_paise);
+    const breakup = taxBreakup(bill, "none");
+
+    expect(breakup.split).toEqual([]);
+    expect(summed(breakup.rows)).toBe(breakup.shown_paise);
   });
 });
 

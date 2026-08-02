@@ -67,7 +67,9 @@ export function toneForScan(outcome: ScanOutcome): Tone {
 export interface ToneAudio {
   currentTime: number;
   state: string;
-  resume(): void;
+  /** `unknown` because the real one answers a promise, and this module has no
+   *  use for it - see `playTone`, which still has to catch its rejection. */
+  resume(): unknown;
   destination: unknown;
   createOscillator(): {
     type: string;
@@ -105,9 +107,12 @@ const webAudio: ToneAudioOpener = () => {
 /**
  * Make the sound, unless the counter is muted.
  *
- * The mute check is *here* rather than at the four call sites, so a fifth one
- * cannot be added that ignores it - the toggle on Till & Sync is the only thing
- * standing between a cashier and a noise they cannot stop.
+ * The mute check is a parameter rather than something each caller remembers to
+ * write, so every scan path goes through the one gate: the toggle on Till & Sync
+ * is the only thing standing between a cashier and a noise they cannot stop.
+ * The toggle itself passes `false` on purpose - pressing "turn the sounds on"
+ * plays the tick it just turned on, which is the only honest answer to "is the
+ * sound working?" on a machine whose volume might be down.
  *
  * A context that the browser suspended (nothing has been clicked in this tab
  * yet) is resumed rather than skipped: the first scan of a shift is exactly the
@@ -119,7 +124,12 @@ export function playTone(tone: Tone, muted: boolean, open: ToneAudioOpener = web
   try {
     const audio = open();
     if (!audio) return;
-    if (audio.state === "suspended") audio.resume();
+    // The real `resume` answers a promise, and a rejected one thrown from
+    // inside a `try` block is not caught by it - it escapes as an unhandled
+    // rejection in a shop's browser. Swallowed like everything else here.
+    if (audio.state === "suspended") {
+      void Promise.resolve(audio.resume()).catch(() => undefined);
+    }
 
     const spec = TONES[tone];
     const now = audio.currentTime;
@@ -140,9 +150,4 @@ export function playTone(tone: Tone, muted: boolean, open: ToneAudioOpener = web
   } catch {
     // See the module note: a scan is never lost over a sound.
   }
-}
-
-/** Drop the shared context (tests, and a signed-out tab). */
-export function forgetToneAudio(): void {
-  shared = undefined;
 }

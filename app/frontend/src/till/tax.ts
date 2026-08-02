@@ -36,8 +36,9 @@ export interface TaxBreakup {
   /** CGST + SGST, or IGST, or nothing at all on a bill that is not a tax
    *  invoice - exactly the rows the customer's copy carries (`receipt.ts`). */
   split: { label: string; paise: number }[];
-  /** The footer's own figure, and what the rows sum to. */
-  gst_paise: number;
+  /** The figure as it is shown: a magnitude, in the direction `given_back`
+   *  names - the receipt's own presentation, and what the rows sum to. */
+  shown_paise: number;
   /** The bill gives more tax back than it charges - an exchange worth more than
    *  what replaced it. The receipt calls that "Tax given back"; so does this. */
   given_back: boolean;
@@ -67,22 +68,58 @@ export function taxBreakup(bill: PricedBill, kind: B2bTaxKind): TaxBreakup {
     add(leg.gst_rate, -(leg.refund_paise - leg.gst_paise), -leg.gst_paise);
   }
 
+  // One direction for the whole panel, taken from the bill's own total.
+  //
+  // The receipt states the direction in words and the figures as magnitudes -
+  // "Tax given back" over "CGST ₹306" - and this has to read the same way or
+  // the screen and the paper are two stories. Applied to the rate rows as well
+  // as the heads, so what is on the screen still adds up: on a bill that is
+  // net giving tax back, a row that comes out *negative* is a slab still being
+  // charged, netted against the refund like every other figure on this bill.
+  const sign = bill.gst_paise < 0 ? -1 : 1;
   const rows = [...byRate.values()]
     // A line nothing could price yet carries rate "0.00" and no tax at all
     // (`priceLine`). It is a real line and it is on the screen, but it has no
-    // slab to report under, and a "0%" row would read as "this piece is exempt".
-    .filter((row) => row.gst_paise !== 0 || row.taxable_paise !== 0)
-    .sort((a, b) => Number(a.rate) - Number(b.rate));
+    // slab to report under, and a "0%" row would read as "this piece is exempt"
+    // - which is a different thing from "nobody has said what it costs".
+    .filter((row) => hasSlab(row.rate))
+    .sort((a, b) => Number(a.rate) - Number(b.rate))
+    .map((row) => ({
+      rate: row.rate,
+      taxable_paise: row.taxable_paise * sign,
+      gst_paise: row.gst_paise * sign,
+    }));
 
   return {
     rows,
-    // `Math.abs`, as `receipt.ts` does: the two heads of a refunded tax are still
-    // CGST and SGST, and a negative half apiece is not how either paper or the
-    // books say it.
     split: splitTax(Math.abs(bill.gst_paise), kind),
-    gst_paise: bill.gst_paise,
+    shown_paise: Math.abs(bill.gst_paise),
     given_back: bill.gst_paise < 0,
   };
+}
+
+/** Does this rate name a slab at all?
+ *
+ *  One predicate for the badge and the breakup, because they are one question:
+ *  a line the counter could not price carries rate "0.00" and no tax, and both
+ *  places have to keep quiet about it rather than call the garment exempt. Two
+ *  spellings of this test - which is what shipped first - can disagree. */
+export function hasSlab(rate: string): boolean {
+  return Number(rate) !== 0;
+}
+
+/**
+ * The two words the tax figure wears, on paper and on the screen.
+ *
+ * Here rather than at each of the three places that need them, because they are
+ * the same sentence about the same number: `receipt.ts` prints it on the
+ * customer's copy, the footer shows it, and the breakup panel heads itself with
+ * it. A bill that gave more tax back than it charged and said so on the paper
+ * while the screen still read "Tax included" would be the counter arguing with
+ * the customer's own copy.
+ */
+export function taxLabel(gstPaise: number): string {
+  return gstPaise < 0 ? "Tax given back" : "Tax included";
 }
 
 /**

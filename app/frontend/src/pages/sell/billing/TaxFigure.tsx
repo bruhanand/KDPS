@@ -5,7 +5,7 @@ import { Money } from "../../../lib/format";
 import type { PricedBill } from "../../../till/cart";
 import { TAX_KIND_WORDS } from "../../../till/gstin";
 import type { B2bTaxKind } from "../../../till/gstin";
-import { ratePercent, taxBreakup } from "../../../till/tax";
+import { ratePercent, taxBreakup, taxLabel } from "../../../till/tax";
 import { usePositionedPopover } from "../../../shell/usePositionedPopover";
 
 /** The panel's CSS max height, for the hook's first clamp - see
@@ -30,22 +30,28 @@ const PANEL_HEIGHT = 320;
  * Floating, and portaled out (Q11: nothing pushes the layout) - the footer is
  * pinned and every pixel of it is somebody's number.
  */
-export function TaxBreakup({
+export function TaxFigure({
   bill,
   kind,
-  label,
 }: {
   bill: PricedBill;
   /** Exactly what `toDraft`/`receipt.ts` will use, including the counter that
    *  does not know its own state and therefore raises no tax invoice at all. */
   kind: B2bTaxKind;
-  /** "Tax included", or "Tax given back" on a bill that returns more than it
-   *  sells - the receipt's own two words. */
-  label: string;
 }) {
   const [open, setOpen] = useState(false);
-  const panel = usePositionedPopover(open ? "tax" : null, () => setOpen(false), PANEL_HEIGHT);
   const breakup = taxBreakup(bill, kind);
+  const label = taxLabel(bill.gst_paise);
+  // The figures in this band are conditional - "You saved", "Given back" and
+  // "Rounding" appear and disappear as the bill changes - so the trigger slides
+  // sideways while the panel is open and a `position: fixed` panel would stay
+  // pointing at where it used to be. The hook re-places whenever `openKey`
+  // changes, so the key carries the two figures that move it.
+  const panel = usePositionedPopover(
+    open ? `tax:${bill.gst_paise}:${bill.net_paise}:${bill.saved_paise}` : null,
+    () => setOpen(false),
+    PANEL_HEIGHT,
+  );
 
   return (
     <div className="bill-figure">
@@ -62,7 +68,11 @@ export function TaxBreakup({
         aria-label={`${label} - see the breakup`}
         onClick={() => setOpen((was) => !was)}
       >
-        <Money paise={bill.gst_paise} />
+        {/* A magnitude, with the direction in the words above it - the
+            receipt's own presentation (`receipt.ts`: "Tax included ₹-655.78"
+            is arithmetically right and not a sentence anybody puts on a
+            customer's copy). */}
+        <Money paise={breakup.shown_paise} />
       </button>
 
       {open &&
@@ -108,7 +118,11 @@ export function TaxBreakup({
               <div className="bill-tax-split" data-testid="bill-tax-split">
                 {breakup.split.map((head) => (
                   <div className="bill-row" key={head.label}>
-                    <span>{head.label}</span>
+                    {/* Word for word what `receipt.ts` puts on the paper - "CGST
+                        given back" and not a minus sign. */}
+                    <span>
+                      {head.label} {breakup.given_back ? "given back" : "included"}
+                    </span>
                     <Money paise={head.paise} />
                   </div>
                 ))}
