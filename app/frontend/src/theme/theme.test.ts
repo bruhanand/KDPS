@@ -57,6 +57,10 @@ function setupDom(opts: { stored?: string | null; systemDark?: boolean } = {}) {
   vi.stubGlobal("window", win);
   vi.stubGlobal("document", doc);
   vi.stubGlobal("localStorage", localStorage);
+  vi.stubGlobal("getComputedStyle", () => ({
+    getPropertyValue: (name: string) =>
+      name === "--paper" && root.dataset.room === "counter" ? "counter-paper" : "",
+  }));
 
   return {
     setSystemDark: (v: boolean) => {
@@ -137,5 +141,18 @@ describe("theme side effects", () => {
 
     dom.fireStorage("kdps-theme", "dark");
     expect(dom.dataTheme()).toBe("dark");
+  });
+
+  it("keeps the counter room colour while the app theme changes", async () => {
+    const dom = setupDom({ stored: "light", systemDark: false });
+    const m = await import("./theme");
+    m.initTheme();
+    document.documentElement.dataset.room = "counter";
+
+    m.refreshThemeColour();
+    expect(dom.metaColor()).toBe("counter-paper");
+
+    m.setThemePreference("dark");
+    expect(dom.metaColor()).toBe("counter-paper");
   });
 });

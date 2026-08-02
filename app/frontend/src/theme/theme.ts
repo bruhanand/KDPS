@@ -12,6 +12,19 @@ export const THEME_KEY = "kdps-theme";
 const META_LIGHT = "#faf7f2"; // --paper (light)
 const META_DARK = "#201d18"; // --paper (dark)
 
+/** Keep browser chrome in step with the room's paper token. Counter colour is
+ *  read from CSS so its palette still has one source of truth. */
+export function refreshThemeColour(): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  let colour = root.dataset.theme === "dark" ? META_DARK : META_LIGHT;
+  if (root.dataset.room === "counter" && typeof getComputedStyle === "function") {
+    colour = getComputedStyle(root).getPropertyValue("--paper").trim() || colour;
+  }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", colour);
+}
+
 /** Pure resolver — unit-testable, no globals. */
 export function resolveTheme(pref: ThemePreference, systemDark: boolean): ResolvedTheme {
   if (pref === "light") return "light";
@@ -43,8 +56,7 @@ function apply(): void {
   if (typeof document === "undefined") return;
   const resolved = resolveTheme(getThemePreference(), systemPrefersDark());
   document.documentElement.dataset.theme = resolved;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", resolved === "dark" ? META_DARK : META_LIGHT);
+  refreshThemeColour();
 }
 
 const listeners = new Set<() => void>();

@@ -17,8 +17,8 @@ import {
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
 import { Money } from "../../lib/format";
-import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
+import { useCounterRoom } from "../../till/useCounterRoom";
 import {
   addManualPiece,
   emptyCart,
@@ -138,6 +138,7 @@ const NO_CUSTOMER: TillCustomer = { name: "", mobile: "", gstin: "" };
 const SCAN_FLOAT_WIDTH = 380;
 
 export default function BillingPage() {
+  useCounterRoom();
   const { user } = useAuth();
   const { engine, till } = useTill();
 
@@ -1035,7 +1036,7 @@ function Counter({
         <PageHeader
           lead={
             <>
-              {`Next bill ${till?.nextNumber ?? ""}`}
+              Next bill <span className="mono">{till?.nextNumber ?? ""}</span>
               {draftSaved && (
                 <span className="bill-draft-saved muted-cell" data-testid="bill-draft-saved">
                   {" "}
@@ -1046,7 +1047,6 @@ function Counter({
           }
           actions={
             <div className="bill-head">
-              <SyncLight />
               <ScanBox
                 boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
                 value={typed}
@@ -1420,7 +1420,8 @@ function Counter({
             onClick={() => lastBill && void print(lastBill.receipt)}
           >
             <Printer size={15} />
-            {lastBill ? `Reprint ${lastBill.bill.doc_number}` : "Reprint"}
+            Reprint
+            {lastBill && <span className="mono">{lastBill.bill.doc_number}</span>}
           </button>
           <button
             type="button"
@@ -1648,7 +1649,7 @@ function ScanBox({
   return (
     <input
       ref={boxRef}
-      className="input bill-scan"
+      className="input bill-scan mono"
       data-testid="bill-scan"
       autoComplete="off"
       disabled={disabled}
@@ -1788,7 +1789,8 @@ function ExchangeBack({
   return (
     <section className="card section-card bill-exchange" data-testid="bill-exchange">
       <p className="eyebrow">
-        <Undo2 size={14} /> Coming back · against {exchange.original.doc_number}
+        <Undo2 size={14} /> Coming back · against{" "}
+        <span className="mono">{exchange.original.doc_number}</span>
       </p>
       <div className="table-wrap">
         <table className="data" data-testid="bill-exchange-lines">

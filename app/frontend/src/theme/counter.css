@@ -1,0 +1,82 @@
+/* The counter is one dark room. Every colour for it lives in this block so the
+   existing screen and shell repaint entirely through their design tokens. */
+html[data-room="counter"] {
+  --paper: #100d0b;
+  --surface: #171310;
+  --sidebar: #171310;
+  --sidebar-border: #2a231d;
+  --hairline: #2a231d;
+  --inner: #1d1815;
+
+  --navy: #ff9a6b;
+  --navy2: #ffb07a;
+  --rust: #ff7a45;
+  --rust-soft: #ff9a6b;
+  --brand-red: #ff7a45;
+
+  --ink: #f3ede6;
+  --muted: #8c8076;
+  --caption: #6b6058;
+
+  --green: #6fd79b;  --green-bg: #16241c;  --green-bd: #2b4a38;  --green-rgb: 111, 215, 155;
+  --amber: #e5b26a;  --amber-bg: #251d10;  --amber-bd: #5a4622;
+  --blue: #9cc4ff;   --blue-bg: #14243a;   --blue-bd: #2f4a6b;
+  --purple: #c6a6f5; --purple-bg: #261f31; --purple-bd: #49385d;
+  --red: #ff9a8b;    --red-bg: #211311;    --red-bd: #7a342a;
+  --grey: #a3968a;   --grey-bg: #241e19;   --grey-bd: #3a2f27;
+
+  --layer-master: #a3968a;
+  --layer-documents: #ff9a6b;
+  --layer-ledgers: #ff7a45;
+  --layer-controls: #e5b26a;
+  --layer-intelligence: #c6a6f5;
+  --layer-edges: #9cc4ff;
+  --layer-home: #ff7a45;
+  --layer-store: #6fd79b;
+  --layer-outbound: #ff7a45;
+
+  --band-edge-bg: #14243a;   --band-edge-bd: #2f4a6b;
+  --band-ledger-bg: #231c15; --band-ledger-bd: #4a3a1e;
+  --band-ai-bg: #261f31;     --band-ai-bd: #49385d;
+
+  --shadow-rest: 0 3px 14px rgba(0, 0, 0, .35);
+  --shadow-hover: 0 8px 26px rgba(0, 0, 0, .55);
+
+  --hero-navy: #100d0b;
+  --navy-fill: #ff7a45;
+  --navy-fill-hover: #ff9a6b;
+  --navy-rgb: 255, 122, 69;
+  --rust-rgb: 255, 122, 69;
+  --rule: #2a231d;
+  --field-bg: #131010;
+  --row-hover: #191412;
+  --inner-hover: #2a231d;
+  --dropzone-hover: #231c15;
+  --selection: #5a3627;
+  --scrim-nav: rgba(0, 0, 0, .65);
+  --scrim-modal: rgba(0, 0, 0, .72);
+  --drawer-shadow: 0 12px 40px rgba(0, 0, 0, .65);
+  --band-row-bg: rgba(255, 255, 255, .04);
+  --band-row-bd: rgba(255, 255, 255, .08);
+  --ai-fence-bg: rgba(255, 255, 255, .04);
+
+  --accent: #ff7a45;
+  --accent-ink: #1a0e07;
+  --counter-blue: #6ea8ff;
+  --font-counter: "Archivo", system-ui, sans-serif;
+  --mono-counter: "IBM Plex Mono", ui-monospace, monospace;
+  --mono: var(--mono-counter);
+  --tabular-font: var(--mono-counter);
+
+  color-scheme: dark;
+  font-family: var(--font-counter);
+}
+
+/* Browser form controls do not inherit the document font by default. Keep the
+   override room-scoped so every route outside Billing remains untouched. */
+html[data-room="counter"] button:not(.mono):not(.num):not(.tabular),
+html[data-room="counter"] input:not(.mono):not(.num):not(.tabular),
+html[data-room="counter"] select:not(.mono):not(.num):not(.tabular),
+html[data-room="counter"] textarea:not(.mono):not(.num):not(.tabular) {
+  font-family: inherit;
+}

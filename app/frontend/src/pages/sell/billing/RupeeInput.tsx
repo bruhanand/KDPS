@@ -75,7 +75,7 @@ export function RupeeInput({
   return (
     <input
       ref={box}
-      className="input bill-cell"
+      className="input bill-cell mono"
       inputMode="decimal"
       data-testid={testId}
       aria-label={label}
