@@ -307,8 +307,15 @@ export interface ChargeCard {
  * abandons it and starts another. An `unknown` gets the first and never the
  * second - starting a second charge against a payment that may already have gone
  * through is exactly the double-collection this whole state exists to prevent.
+ *
+ * `amountPaise` is here so the card cannot say something the bill does not do.
+ * A `success` the bank cannot fully account for - no figure, a different figure,
+ * no reference - is refused by `chargeStamp` and the row goes up `manual`; a
+ * card that painted it green and said "goes on the bill as confirmed" would have
+ * the cashier believing the bank vouched for money it did not. One function
+ * decides, and both the words and the stamp read it.
  */
-export function chargeCardOf(standing: ChargeStanding): ChargeCard {
+export function chargeCardOf(standing: ChargeStanding, amountPaise: number): ChargeCard {
   switch (standing.state) {
     case "generating":
       return {
@@ -327,14 +334,29 @@ export function chargeCardOf(standing: ChargeStanding): ChargeCard {
         canRetry: false,
         leaves: "cancel",
       };
-    case "success":
+    case "success": {
+      const stamp = chargeStamp(standing, amountPaise);
+      if (!stamp) {
+        // A payment happened; what the counter cannot say is that *this* is the
+        // payment it asked for. Doubt rather than good, and the words send the
+        // cashier to the customer's phone before they save.
+        return {
+          tone: "doubt",
+          says:
+            "The bank says a payment went through, but not one this counter can account for - the amount it answered about is not the amount asked for, or it gave no reference. This bill will record the UPI on your word rather than the bank's. Check what the customer was actually charged.",
+          canCheck: true,
+          canRetry: false,
+          leaves: "close",
+        };
+      }
       return {
         tone: "good",
-        says: `The bank confirmed this payment. Reference ${(standing.reference ?? "").trim()}. It goes on the bill as confirmed.`,
+        says: `The bank confirmed this payment. Reference ${stamp.reference}. It goes on the bill as confirmed.`,
         canCheck: false,
         canRetry: false,
         leaves: "close",
       };
+    }
     case "failed":
       return {
         tone: "bad",

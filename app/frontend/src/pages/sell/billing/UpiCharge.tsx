@@ -62,6 +62,10 @@ export function UpiCharge({
    *  a bill they have already moved to another tender would be money nobody
    *  agreed to. */
   const onScreen = useRef(true);
+  /** Which charge is the live one. Bumped by every start, so an answer to a
+   *  question asked about an earlier charge can be told apart from an answer
+   *  about this one - see `recheck`. */
+  const generation = useRef(0);
 
   useEffect(() => {
     onScreen.current = true;
@@ -70,13 +74,16 @@ export function UpiCharge({
     };
   }, []);
 
-  // Focus the card itself on open. Not a nicety: Escape is one of the ways out
-  // this card promises, and a `keydown` handler on a node nothing has focused
-  // never fires (`ManagerPin` gets away with the same handler because it
-  // focuses its PIN box). Nothing in here is a text box to autofocus instead.
+  // Focus the card itself, on open and again whenever the state changes. Not a
+  // nicety: Escape is one of the ways out this card promises, and a `keydown`
+  // handler on a node nothing has focused never fires (`ManagerPin` gets away
+  // with the same handler because it focuses its PIN box). Re-focusing matters
+  // as much as the first focus, because the buttons come and go with the state
+  // - the one the cashier last pressed can be unmounted by the answer that
+  // arrives, and focus would fall to the body with it.
   useEffect(() => {
     dialog.current?.focus();
-  }, []);
+  }, [standing.state]);
 
   useEffect(() => {
     // `live` as well as `adapter.cancel()`: the cancel stops the mock's own
@@ -84,6 +91,7 @@ export function UpiCharge({
     // on an unmounted card. React's StrictMode runs this twice on mount, which
     // is exactly the race, so it is guarded rather than assumed away.
     let live = true;
+    generation.current += 1;
     setStanding(OPENING);
     void (async () => {
       try {
@@ -116,25 +124,31 @@ export function UpiCharge({
    *  where it stands, and an unknown that stays unknown is the honest answer. */
   async function recheck() {
     if (checking) return;
+    // Which charge this question is about. A cashier can press Check status,
+    // watch that charge fail, press "Show the QR again", and only then have the
+    // bank answer the *first* question - and letting that answer land would
+    // paint a settled card over a second charge still out with the customer,
+    // which is the double collection this card exists to prevent.
+    const mine = generation.current;
     setChecking(true);
     try {
       const now = await adapter.checkStatus();
-      // Both guarded by `onScreen`, and the stamp especially: the cashier can
+      // Guarded on both counts, and the stamp especially: the cashier can also
       // close this card while the bank is being asked, and a confirmation
       // landing after that would write a payment onto a bill they have already
       // taken another way.
-      if (!onScreen.current || !now) return;
+      if (!onScreen.current || mine !== generation.current || !now) return;
       setStanding(now);
       const charged = chargeStamp(now, amountPaise);
       if (charged) onConfirmed(charged);
     } catch (error) {
-      if (onScreen.current) setStanding(brokeDown(error));
+      if (onScreen.current && mine === generation.current) setStanding(brokeDown(error));
     } finally {
       if (onScreen.current) setChecking(false);
     }
   }
 
-  const card = chargeCardOf(standing);
+  const card = chargeCardOf(standing, amountPaise);
 
   return (
     <div className="modal-backdrop" data-testid="bill-upi-modal" onClick={onClose}>
@@ -168,7 +182,7 @@ export function UpiCharge({
         </p>
 
         {card.tone === "waiting" ? (
-          <Waiting standing={standing} />
+          <Waiting standing={standing} says={card.says} />
         ) : (
           <Answer card={card} />
         )}
@@ -210,7 +224,7 @@ export function UpiCharge({
 }
 
 /** Generating and awaiting: the QR, and what the counter is waiting for. */
-function Waiting({ standing }: { standing: ChargeStanding }) {
+function Waiting({ standing, says }: { standing: ChargeStanding; says: string }) {
   const generating = standing.state === "generating";
   return (
     <>
@@ -229,7 +243,7 @@ function Waiting({ standing }: { standing: ChargeStanding }) {
         </span>
       </div>
       <p className="bill-upi-says" data-testid="bill-upi-says">
-        {chargeCardOf(standing).says}
+        {says}
       </p>
     </>
   );

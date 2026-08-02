@@ -182,7 +182,7 @@ describe("cancelling", () => {
 
 describe("what the card is showing", () => {
   const card = (state: ChargeStanding["state"], over: Partial<ChargeStanding> = {}) =>
-    chargeCardOf({ state, reason: "the bank said so", qr: "", ...over });
+    chargeCardOf({ state, reason: "the bank said so", qr: "", ...over }, BILL);
 
   it("waits, and calls the way out Cancel, while a charge is still running", () => {
     for (const state of ["generating", "awaiting"] as const) {
@@ -218,11 +218,30 @@ describe("what the card is showing", () => {
   });
 
   it("reads the reference back on a success, and offers nothing further", () => {
-    const good = card("success", { reference: "417223918811" });
+    const good = card("success", { reference: "417223918811", amount_paise: BILL });
 
     expect(good.tone).toBe("good");
     expect(good.says).toContain("417223918811");
     expect(good).toMatchObject({ canCheck: false, canRetry: false, leaves: "close" });
+  });
+
+  it("never says confirmed about a success the bill will record as manual", () => {
+    // The card and the stamp read the same rule, so the words cannot promise
+    // what `chargeStamp` is about to refuse - a cashier told "it goes on the
+    // bill as confirmed" would never look again at a row going up on their own
+    // word.
+    for (const over of [
+      { reference: "417223918811", amount_paise: undefined },
+      { reference: "417223918811", amount_paise: BILL - 100 },
+      { reference: "  ", amount_paise: BILL },
+    ]) {
+      const shown = card("success", over);
+
+      expect(chargeStamp({ state: "success", reason: "", qr: "", ...over }, BILL)).toBeNull();
+      expect(shown.tone).toBe("doubt");
+      expect(shown.says).not.toContain("confirmed this payment");
+      expect(shown.says).toMatch(/on your word/);
+    }
   });
 });
 
@@ -231,7 +250,11 @@ describe("the terminal itself giving up", () => {
     const standing = brokeDown(new Error("no reader attached"));
 
     expect(standing.state).toBe("unknown");
-    expect(chargeCardOf(standing)).toMatchObject({ tone: "doubt", canCheck: true, canRetry: false });
+    expect(chargeCardOf(standing, BILL)).toMatchObject({
+      tone: "doubt",
+      canCheck: true,
+      canRetry: false,
+    });
   });
 
   it("says what the machine said, and what to do about it", () => {
