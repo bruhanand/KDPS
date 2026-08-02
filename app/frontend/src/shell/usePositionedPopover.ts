@@ -38,6 +38,30 @@ import type { RefObject } from "react";
  * sidebar flyout and the profile panel, which pass neither, get back exactly
  * the behaviour they had.
  */
+/** Pure placement math for {@link usePositionedPopover}, pulled out so it can
+ *  be pinned down in a test without a DOM: the two bugs this has already had
+ *  (round 2 clamped the wrong axis, round 3's `maxHeight` formula never fired)
+ *  were both placement-formula mistakes a plain unit test would have caught. */
+export function placePopover(
+  trigger: { top: number; bottom: number; left: number; right: number },
+  viewport: { width: number; height: number },
+  popoverSize: number,
+  side: "right" | "below",
+  margin = 8,
+): { top: number; left: number; maxHeight?: number } {
+  if (side === "below") {
+    const maxLeft = viewport.width - popoverSize - margin;
+    const top = trigger.bottom + margin;
+    const left = Math.max(margin, Math.min(trigger.left, maxLeft));
+    const maxHeight = Math.max(120, viewport.height - top - margin);
+    return { top, left, maxHeight };
+  }
+  const maxTop = viewport.height - popoverSize - margin;
+  const top = Math.max(margin, Math.min(trigger.top, maxTop));
+  const left = trigger.right + margin;
+  return { top, left };
+}
+
 export interface PositionedPopover<T extends HTMLElement = HTMLButtonElement> {
   /** Where to render it, in viewport coordinates. `null` until it has been
    *  placed - render nothing before that, or it flashes at the top-left
@@ -87,23 +111,17 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
   const place = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    const margin = 8;
     const rect = trigger.getBoundingClientRect();
-    let top: number;
-    let left: number;
-    let maxHeight: number | undefined;
-    if (side === "below") {
-      const width = popoverRef.current?.offsetWidth ?? fallbackSize;
-      const maxLeft = window.innerWidth - width - margin;
-      top = rect.bottom + margin;
-      left = Math.max(margin, Math.min(rect.left, maxLeft));
-      maxHeight = window.innerHeight - top - margin;
-    } else {
-      const height = popoverRef.current?.offsetHeight ?? fallbackSize;
-      const maxTop = window.innerHeight - height - margin;
-      top = Math.max(margin, Math.min(rect.top, maxTop));
-      left = rect.right + margin;
-    }
+    const popoverSize =
+      side === "below"
+        ? (popoverRef.current?.offsetWidth ?? fallbackSize)
+        : (popoverRef.current?.offsetHeight ?? fallbackSize);
+    const { top, left, maxHeight } = placePopover(
+      rect,
+      { width: window.innerWidth, height: window.innerHeight },
+      popoverSize,
+      side,
+    );
     setAt((current) =>
       current &&
       current.top === top &&
