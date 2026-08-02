@@ -29,6 +29,7 @@ import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/O
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
 import { AlertsPage } from "./pages/Alerts";
+import { MailPage } from "./pages/Mail";
 import { OffersPage } from "./pages/Offers";
 import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
@@ -61,6 +62,10 @@ const BUILT: Screen[] = [
   { id: "approvals", path: "/approvals", element: <ApprovalsPage /> },
   // Home's Alerts surface — in-transit aging + return-window 30/15/7 (#77)
   { id: "alerts", path: "/alerts", element: <AlertsPage /> },
+  // The person's own mailbox, reached from the top bar rather than the sidebar:
+  // mail belongs to a person, not to a section, so it has no menu entry and no
+  // RBAC cell — every logged-in person has exactly one, and it is theirs.
+  { id: "mail", path: "/mail", element: <MailPage /> },
   // Offers & Price - the store's read-only view of the rulebook (#183). The
   // three authoring screens beside it in the nav are still planned.
   { id: "offers", path: "/offers", element: <OffersPage /> },

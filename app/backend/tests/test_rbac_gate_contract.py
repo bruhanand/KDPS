@@ -651,6 +651,36 @@ UNGATED_VIEWS = {
     "inbound/views.py:InvoiceDraftView",
     "inbound/views.py:GrnListCreateView",
     "inbound/views.py:GrnDetailView",
+    # --- mail: ungated by design, and the only family here that is ----------
+    #
+    # Every other entry in this list is a view whose *rows* are protected some
+    # other way. Mail is different in kind: there is no section to gate it on,
+    # and there should not be one.
+    #
+    # A section cell answers "may this role reach this part of the business".
+    # Mail is not part of the business — it is the caller's own inbox, and no
+    # role in KDPS should be denied its own mail. Adding a fourteenth section
+    # would have meant editing the ratified SIDEBAR RBAC sheet to add a row
+    # whose every cell reads "yes", which is a change to a ratified artefact
+    # that buys nothing.
+    #
+    # What replaces the gate is a stricter rule, not a looser one. Every read
+    # starts at `request.user` and reaches a message only through that person's
+    # own account (`mail/views.py:my_messages`), so the answer is not "the rows
+    # this section allows" but "the rows that are yours" — a boundary per
+    # person rather than per store, which is tighter than any cell could be.
+    # It is enforced from the outside in `tests/test_mail_inbox.py`, including
+    # the case where one person asks for another's message by its real id.
+    "mail/views.py:MailStatusView",
+    "mail/views.py:MailConnectView",
+    "mail/views.py:MailCompleteView",
+    "mail/views.py:MailDisconnectView",
+    "mail/views.py:MailMessagesView",
+    "mail/views.py:MailMessageView",
+    "mail/views.py:MailReadView",
+    "mail/views.py:MailUnreadView",
+    "mail/views.py:MailAttachmentView",
+    "mail/views.py:MailSendView",
     "masters/views.py:LegalEntityListView",
     # #147: the list of places stock may be *sent* to. Open on purpose, and the
     # one entry here that is a decision rather than a baseline. A store person

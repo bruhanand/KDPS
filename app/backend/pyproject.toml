@@ -13,6 +13,10 @@ dependencies = [
     "django-cors-headers>=4.4",
     "python-dotenv>=1.0",
     "bcrypt>=4.0",
+    # Fernet, for the Google refresh tokens the `mail` app stores. Already
+    # present transitively via simplejwt; declared because we import it directly
+    # and a transitive dependency is not a promise.
+    "cryptography>=42.0",
     "requests>=2.34.2",
     "openpyxl>=3.1",
     "xlrd>=2.0",
@@ -111,7 +115,13 @@ markers = [
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
 root_packages = [
+    # `mail` is a root package for a reason worth knowing: nothing imports it.
+    # It is mounted by string (`include("mail.urls")`), so it never enters the
+    # graph as a dependency of anything, and a contract naming it as a source
+    # would fail with "module does not exist". Being unimported is exactly the
+    # property the two mail contracts below exist to keep.
     "config", "core", "ptmapper", "approvals", "outbound", "offers", "search", "storefront",
+    "mail",
 ]
 # The domain apps below aren't root packages yet, so they are "external" to the
 # graph; the approvals contract names them explicitly.
@@ -180,8 +190,57 @@ source_modules = [
     "alerts",
     "files",
     "offers",
+    "mail",
 ]
 forbidden_modules = ["search", "storefront"]
+
+[[tool.importlinter.contracts]]
+# Mail is a leaf, and the value of this feature depends on it staying one. It
+# caches a person's Google inbox; it writes no ledger, posts no entry and owns
+# no document. The moment a domain module imports it, mail has become part of
+# the money path by the back door — and the moment it imports a domain module,
+# somebody has started deriving business state from an inbox we do not control
+# and may drop and refill at will. Both directions are forbidden.
+name = "mail must not import any domain module"
+type = "forbidden"
+source_modules = ["mail"]
+forbidden_modules = [
+    "outbound",
+    "inbound",
+    "vendors",
+    "ptmapper",
+    "stockledger",
+    "finledger",
+    "sell",
+    "offers",
+    "approvals",
+    "alerts",
+    "search",
+    "storefront",
+]
+
+[[tool.importlinter.contracts]]
+# The other direction, and the one that actually protects the books.
+name = "no domain module may import mail"
+type = "forbidden"
+source_modules = [
+    "core",
+    "ptmapper",
+    "approvals",
+    "outbound",
+    "masters",
+    "accounts",
+    "inbound",
+    "vendors",
+    "stockledger",
+    "finledger",
+    "alerts",
+    "files",
+    "offers",
+    "search",
+    "storefront",
+]
+forbidden_modules = ["mail"]
 
 [[tool.importlinter.contracts]]
 # The rulebook is a leaf below the counter, and it has to stay one: the engine

@@ -346,10 +346,23 @@ if [ "$SETUP_ONLY" = 1 ]; then
 fi
 
 # --- 8. ports ----------------------------------------------------------------
-# These ports belong to this workspace, so a holder is most likely this
-# workspace's own orphan from a run that was SIGKILLed. Most likely is not
-# certainly, and killing another project's server would be unforgivable, so we
-# report and stop unless explicitly told otherwise.
+# A HOLDER IS NOT NECESSARILY OURS. Conductor allocates a port block to a
+# workspace, and hands the same block to another workspace once the first one is
+# gone - archived, or renamed, which is the same event to the allocator. So the
+# process on this workspace's port can belong to a workspace that no longer
+# exists, whose archive hook never reaped its servers (see scripts/stop-stack.sh
+# for why that keeps happening). Blaming this workspace for it, as this guard
+# used to, sends you looking for a leftover run you never started.
+#
+# The working directory settles it. A deleted worktree's cwd still reads back as
+# its old path, so a holder whose cwd no longer exists belongs to a workspace
+# that is gone: nobody owns it, nothing will ever reclaim it, and Conductor will
+# keep handing its port block out. Those we kill without asking. A holder running
+# from a directory that still exists has an owner - possibly another project
+# entirely - so that one is still only reported, but the report now names the
+# directory instead of guessing.
+holder_cwd() { lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1; }
+
 for port_pair in "$API_PORT:API" "$WEB_PORT:PWA"; do
   port="${port_pair%%:*}"; label="${port_pair##*:}"
   [ "$label" = API ] && [ "$RUN_API" = 0 ] && continue
@@ -365,21 +378,40 @@ for port_pair in "$API_PORT:API" "$WEB_PORT:PWA"; do
   holder="$(printf '%s' "$holder" | xargs)"   # trim to a clean space-joined PID list
   [ -n "$holder" ] || continue
   what="$(ps -o command= -p $holder 2>/dev/null | head -1)"
+
+  # Sort the holders into the abandoned and the owned.
+  stale="" owned="" owner_dir=""
+  for pid in $holder; do
+    cwd="$(holder_cwd "$pid")"
+    if [ -n "$cwd" ] && [ ! -d "$cwd" ]; then
+      stale="$stale $pid"
+    else
+      owned="$owned $pid"
+      [ -n "$owner_dir" ] || owner_dir="$cwd"
+    fi
+  done
+  stale="$(printf '%s' "$stale" | xargs)"; owned="$(printf '%s' "$owned" | xargs)"
+
   if [ "$FREE_PORTS" = 1 ]; then
     warn "Port ${port} (${label}) held by PID ${holder} - freeing (--free-ports): ${what}"
     kill $holder 2>/dev/null || true
-    for _ in $(seq 1 10); do
-      lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || break
-      sleep 0.5
-    done
-    lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 \
-      && die "Port ${port} still has a listener after kill - free it manually."
+  elif [ -n "$stale" ] && [ -z "$owned" ]; then
+    warn "Port ${port} (${label}) held by PID ${stale}, left behind by a workspace that no
+       longer exists - reclaiming it. Sweep the rest with ./scripts/stop-stack.sh --stale"
+    kill $stale 2>/dev/null || true
   else
-    die "Port ${port} (${label}) is already in use by PID ${holder} (${what}).
-       This workspace owns that port, so it is probably its own leftover server.
+    die "Port ${port} (${label}) is already in use by PID ${owned} (${what}),
+       running in ${owner_dir:-an unknown directory}.
        Reclaim it and start: ./scripts/dev.sh --free-ports
        Or stop this workspace safely: ./scripts/stop-stack.sh"
   fi
+
+  for _ in $(seq 1 10); do
+    lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || break
+    sleep 0.5
+  done
+  lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 \
+    && die "Port ${port} still has a listener after kill - free it manually."
 done
 
 # --- 9. run ------------------------------------------------------------------

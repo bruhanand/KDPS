@@ -67,6 +67,9 @@ INSTALLED_APPS = [
     "sell.apps.SellConfig",
     "alerts.apps.AlertsConfig",
     "offers.apps.OffersConfig",
+    # Per-person Google Workspace inbox in the top bar. Reads no other app and
+    # is read by none — mail writes no ledger and no document.
+    "mail.apps.MailConfig",
     # Composition roots: read across the domain apps, imported by none of them.
     "search.apps.SearchConfig",
     "storefront.apps.StorefrontConfig",
