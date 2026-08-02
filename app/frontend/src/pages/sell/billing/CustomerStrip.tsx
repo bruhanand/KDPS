@@ -284,7 +284,12 @@ export function CustomerStrip({
           >
             {rows.length > 0 ? (
               <>
-                <p className="eyebrow">Billed here before</p>
+                {/* Not "billed *here* before": the phone book is all-KDPS by
+                    ruling (grill Q6 - a Deoghar regular must be recognised in
+                    Ranchi), so most of what a counter sees under a number was
+                    billed at some other shop, and a label saying otherwise
+                    tells the cashier something untrue about their own store. */}
+                <p className="eyebrow">Billed before</p>
                 <div className="bill-customer-rows">
                   {rows.map((row) => (
                     <button
