@@ -108,6 +108,7 @@ The bill's commit path is identical in every outcome - the charge card only deci
 - Till: flag-never-block throughout - a failed draft write logs to console and the bill continues (the draft is a safety net, not a gate); a failed sound is ignored; adapter `unknown` is a visible state, never converted to `failed` on the till's own clock.
 - The frame never hides a hard block: `till.blocked` (second window / storage lost) still replaces the whole work area.
 - **Amended (round-2 review, #243):** the alert-strip precedence in `pickBillAlert` ranks `print-problem` ahead of `note`, since `save()` always sets the save-confirmation note before attempting to print - so a print failure never goes silent behind "Bill saved."
+- **Amended (round-2 review, second pass, #243):** ranking `print-problem` above `note` is only safe because `printProblem` cannot outlive the bill it belongs to - `takePiece`/`takeUnknown` clear it on the next scan and `resumeHold` clears it before swapping in a held bill's cart, so `holdBill`'s and `resumeHold`'s own failure notes are never buried behind a stale printer banner from an earlier bill. A live (not stale) print problem still outranks `answerHold`'s note - keeping or letting go a held bill from the review list is independent of the open cart, so that conflict is a real one, not staleness; left as a residual (`deviations.md`).
 
 ## Assumptions made
 

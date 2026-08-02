@@ -300,6 +300,10 @@ function Counter({ storeName }: { storeName?: string }) {
         ],
       }));
       setNote("");
+      // A print failure belongs to the bill that failed to print, never to
+      // whichever bill happens to be open when the cashier next scans - see
+      // the note on `pickBillAlert` (round-2 finding: Billing.tsx:1013).
+      setPrintProblem("");
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
@@ -321,6 +325,9 @@ function Counter({ storeName }: { storeName?: string }) {
         lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
       }));
       setNote("");
+      // See `takePiece` just above: a stale print failure must not outlive
+      // the bill it belongs to.
+      setPrintProblem("");
       clearScan();
       scan.focus();
     },
@@ -465,6 +472,11 @@ function Counter({ storeName }: { storeName?: string }) {
     setCart(restored.cart);
     setCustomer(restored.customer);
     setShowHolds(false);
+    // A held bill can carry lines of its own, so it can put the cart into a
+    // state `holdBill` will happily hold again without a scan ever running
+    // `takePiece`/`takeUnknown` - this is the other "next bill starts" moment
+    // a stale print problem must not survive (round-2 finding: Billing.tsx:1013).
+    setPrintProblem("");
     setNote(
       restored.staleLines
         ? "Bill picked up. Priced at today's rates - check the lines the counter no longer stocks."
@@ -995,10 +1007,16 @@ export interface BillAlertFlags {
  * `print-problem` is second, ahead of `note`: `save()` sets both in the same
  * order every time printing fails after a successful commit (`setNote` then
  * `await print(receipt)`, which is the only place `printProblem` is ever set
- * true) - so whenever the two coincide, `note` is always that save's own "Bill
- * saved" line, never an unrelated error, and letting `note` win would bury the
- * one thing on this screen that tells the cashier the receipt did not print
- * and Reprint is what to press (round-2 finding).
+ * true), so letting `note` win here would bury the one thing on this screen
+ * that tells the cashier the receipt did not print and Reprint is what to
+ * press (round-2 finding). That only stays a safe trade because `printProblem`
+ * cannot outlive the bill it belongs to: `takePiece`/`takeUnknown` clear it on
+ * the next scan and `resumeHold` clears it before swapping the cart for a held
+ * bill's, so `holdBill`'s and `resumeHold`'s own failure notes are never a
+ * *stale* print problem's casualty (round-2 finding, second pass). A live,
+ * still-relevant print problem can still outrank `answerHold`'s note - that is
+ * a genuine conflict between two unrelated live alerts sharing one line, not
+ * staleness, and is left as a residual (see `deviations.md`).
  *
  * `note` is third, ahead of `loading`/`no-price-list`, because it is the one
  * channel every failure on this screen reports through (`save`, `holdBill`,

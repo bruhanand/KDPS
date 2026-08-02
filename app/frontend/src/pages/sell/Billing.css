@@ -106,7 +106,14 @@
    `usePositionedPopover(..., "below")`, hanging under the scan box rather
    than over the grid it used to sit inline above - a fixed width because a
    portaled node answers to no parent's column width, only the viewport's. */
-.bill-float { position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 32px); }
+/* Barcodes are non-unique scan-aliases by design (CONTEXT.md), so a collision
+   can put more candidate rows here than a short viewport has room for below
+   the scan box - `position: fixed` ignores page scroll, so without its own
+   scrollbar the lower rows would be there but unreachable (round-2 finding). */
+.bill-float {
+  position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 16px); overflow-y: auto;
+}
 .bill-float > * + * { margin-top: 10px; }
 
 /* Bills on hold (#185). A panel above the grid rather than a drawer or a modal:
