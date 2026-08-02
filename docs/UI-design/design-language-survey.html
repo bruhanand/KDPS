@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS design survey · Seven directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anek+Devanagari:wght@400;500;600;700&family=Anek+Latin:wght@400;500;600;700&family=Archivo:wght@400;500&family=Bodoni+Moda:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Martel:wght@400;600;800&family=Martel+Sans:wght@400;600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Schibsted+Grotesk:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============ survey scaffolding (neutral so it doesn't bias the vote) ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+body{background:#F1F0EC;color:#2B2A26;font:400 15px/1.65 'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid #35558E;outline-offset:2px}
+a{color:inherit}
+button{cursor:pointer;font:inherit;border:none;background:none;color:inherit}
+input{font:inherit;min-width:0}
+table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.chrome{position:sticky;top:0;z-index:50;background:rgba(241,240,236,.92);backdrop-filter:blur(8px);border-bottom:1px solid #DEDBD3}
+.chrome-in{max-width:1280px;margin:0 auto;padding:10px 32px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.chrome-in strong{font-weight:500;font-size:13px}
+.chrome-nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chrome-nav a{font-size:12px;text-decoration:none;color:#55524B;border:1px solid #D8D5CC;border-radius:20px;padding:3px 11px;background:#FBFAF7;transition:border-color .15s}
+.chrome-nav a:hover{border-color:#8B877D;color:#2B2A26}
+.cover{max-width:1280px;margin:0 auto;padding:84px 32px 24px}
+.cover h1{font:500 clamp(30px,4.4vw,50px)/1.12 'Archivo',sans-serif;letter-spacing:-.02em;max-width:760px}
+.cover .when{margin-top:10px;font-size:13px;color:#757166}
+.cover-grid{margin-top:36px;display:grid;grid-template-columns:1.1fr 1fr;gap:48px}
+.cover-grid p+p{margin-top:14px}
+.cover h3{font-size:13px;font-weight:500;color:#757166;margin-bottom:10px}
+.cover ul{list-style:none}
+.cover li{padding:9px 0;border-bottom:1px solid #E0DDD5;font-size:14.5px}
+.cover li span{color:#757166;font-size:13px;display:block}
+.kitnote{margin-top:22px;font-size:13.5px;color:#757166}
+.lang{max-width:1280px;margin:0 auto;padding:78px 32px 6px}
+.intro{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:44px;margin-bottom:26px;align-items:end}
+.intro-head .num{font-size:12.5px;color:#8B877D}
+.intro-head h2{font:500 clamp(24px,3vw,34px)/1.15 'Archivo',sans-serif;letter-spacing:-.015em;margin-top:6px}
+.story{font-size:15px;color:#4A4841;max-width:58ch}
+.meta{grid-column:1 / -1;display:flex;gap:28px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.meta-line{font-size:12.5px;color:#55524B}
+.meta-k{color:#8B877D;font-size:11px;margin-right:7px}
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#757166;font-family:'Spline Sans Mono',monospace}
+.chip i{width:16px;height:16px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.14)}
+.stage{border-radius:16px;border:1px solid #D9D6CD;overflow:hidden}
+.tail{max-width:1280px;margin:0 auto;padding:88px 32px 72px}
+.tail h2{font:500 24px/1.2 'Archivo',sans-serif;letter-spacing:-.01em}
+.tail-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:48px;margin-top:22px}
+.tail ol{margin-left:18px}
+.tail ol li{padding:4px 0;font-size:14px}
+.tail h3{font-size:12px;font-weight:500;color:#757166;margin-bottom:10px}
+.src{list-style:none}
+.src li{padding:5px 0;font-size:13px;border-bottom:1px solid #E0DDD5}
+.src a{color:#44557E;text-decoration:none}
+.src a:hover{text-decoration:underline}
+@media(max-width:980px){.cover-grid,.tail-grid{grid-template-columns:1fr}.intro{grid-template-columns:1fr;gap:14px}}
+
+/* ================================================================
+   1 · THE DAY BOOK - the whole screen is a ledger page. No cards.
+   ================================================================ */
+.v1 .stage{background:#FCFBF7;color:#1F2B38;font-family:'Newsreader',serif;position:relative;padding:34px 40px 30px 0}
+.v1 .stage::before{content:"";position:absolute;top:0;bottom:0;left:64px;width:1px;background:rgba(194,76,63,.65)}
+.v1 .in{padding-left:96px}
+.v1 .lh{display:flex;justify-content:space-between;align-items:baseline;gap:18px;flex-wrap:wrap}
+.v1 .lh h3{font:500 21px 'Newsreader',serif;letter-spacing:.01em}
+.v1 .lh h3 em{font-style:italic;font-weight:400;color:#5E6E7E}
+.v1 .lh-nav{display:flex;gap:20px}
+.v1 .lh-nav span{font:400 14px 'Newsreader',serif;color:#5E6E7E}
+.v1 .lh-nav .on{color:#1F2B38;border-bottom:2px solid #C24C3F;padding-bottom:1px}
+.v1 .lh-user{font:italic 400 13.5px 'Newsreader',serif;color:#5E6E7E}
+.v1 .carried{display:flex;gap:44px;flex-wrap:wrap;margin:26px 0 8px;align-items:baseline}
+.v1 .cf{display:flex;align-items:baseline;gap:10px}
+.v1 .cf em{font:italic 400 14px 'Newsreader',serif;color:#5E6E7E}
+.v1 .cf b{font:500 22px 'Spline Sans Mono',monospace;letter-spacing:-.02em;font-weight:500}
+.v1 .cf small{font:italic 400 12.5px 'Newsreader',serif;color:#8593A1}
+.v1 .spread{display:grid;grid-template-columns:1fr 300px;gap:36px;align-items:start;margin-top:14px}
+.v1 .rtable{width:100%}
+.v1 .rtable thead th{font:italic 400 13px 'Newsreader',serif;color:#5E6E7E;text-align:left;height:32px;border-bottom:1px solid #1F2B38;padding:0 12px}
+.v1 .rtable thead th.r{text-align:right}
+.v1 .rtable tbody{background:repeating-linear-gradient(#0000 0 31px,#CBD8E5 31px 32px)}
+.v1 .rtable td{height:32px;padding:0 12px;font-size:14.5px;white-space:nowrap}
+.v1 .rtable td.r{text-align:right;font:400 13px 'Spline Sans Mono',monospace}
+.v1 .rtable td+td{border-left:1px solid #E2EAF2}
+.v1 .docnum{font:500 12.5px 'Spline Sans Mono',monospace;letter-spacing:-.02em}
+.v1 .dk{color:#5E6E7E;font-style:italic;font-size:13.5px}
+.v1 .stamp{display:inline-block;border:1px solid currentColor;padding:0 6px;font:500 9.5px/16px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;vertical-align:1px}
+.v1 .sp{color:#33684B;transform:rotate(-2deg)}
+.v1 .sr{color:#96700F}
+.v1 .st{color:#3A5B8C}
+.v1 .sd{color:#77828F}
+.v1 .sf{color:#C24C3F}
+.v1 .memo{background:#FFFEFB;border:1px solid #E3DECE;padding:20px 18px 16px;position:relative;box-shadow:0 1px 3px rgba(31,43,56,.07)}
+.v1 .memo::before{content:"";position:absolute;top:-5px;left:0;right:0;height:9px;background:radial-gradient(circle at 5px 4px,#F1F0EC 3px,#0000 3.5px) 0 0/18px 9px repeat-x}
+.v1 .memo-h{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #1F2B38;padding-bottom:9px}
+.v1 .memo-h b{font:600 15px 'Newsreader',serif}
+.v1 .memo-h span{font:italic 400 12.5px 'Newsreader',serif;color:#5E6E7E}
+.v1 .memo li{list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px dotted #D9D2BE}
+.v1 .mn{font-size:14px}
+.v1 .mv{font:italic 400 12px 'Newsreader',serif;color:#5E6E7E;display:block}
+.v1 .mo{font-size:12px;color:#33684B;display:block;font-style:italic}
+.v1 .ma{font:400 13.5px 'Spline Sans Mono',monospace}
+.v1 .ma s{color:#9AA5B1;margin-right:4px}
+.v1 .mt{display:flex;justify-content:space-between;font-size:13px;color:#5E6E7E;padding:4px 0}
+.v1 .mt span:last-child{font-family:'Spline Sans Mono',monospace}
+.v1 .mg{display:flex;justify-content:space-between;align-items:baseline;margin-top:7px;padding-top:8px;border-top:3px double #1F2B38}
+.v1 .mg em{font:italic 500 14px 'Newsreader',serif}
+.v1 .mg b{font:500 22px 'Spline Sans Mono',monospace}
+.v1 .m-tender{display:flex;gap:7px;margin-top:13px}
+.v1 .m-tender button{flex:1;border:1px solid #C6CFD8;padding:7px 0;font:italic 400 13px 'Newsreader',serif;color:#44525F;background:#FCFBF7}
+.v1 .m-tender button:hover{border-color:#1F2B38;color:#1F2B38}
+.v1 .m-pay{width:100%;margin-top:8px;background:#1F2B38;color:#FCFBF7;padding:11px;font:500 14px 'Newsreader',serif;letter-spacing:.02em}
+.v1 .m-pay:hover{background:#31435A}
+.v1 .pentray{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-top:26px;padding-top:14px;border-top:1px solid #1F2B38}
+.v1 .pentray input{flex:1 1 280px;background:none;border:none;border-bottom:1px solid #9AA5B1;padding:6px 2px;font:italic 400 14.5px 'Newsreader',serif;color:#1F2B38}
+.v1 .pentray input::placeholder{color:#9AA5B1}
+.v1 .b1{background:#1F2B38;color:#FCFBF7;padding:9px 18px;font:500 13.5px 'Newsreader',serif}
+.v1 .b2{border:1px solid #9AA5B1;padding:8px 18px;font:400 13.5px 'Newsreader',serif;color:#44525F;background:#FCFBF7}
+.v1 .b3{font:italic 500 13.5px 'Newsreader',serif;color:#C24C3F;padding:8px 4px;border-bottom:1px solid rgba(194,76,63,.4)}
+.v1 .leg{display:flex;gap:9px;align-items:center;margin-left:auto}
+@media(max-width:920px){.v1 .spread{grid-template-columns:1fr}.v1 .in{padding-left:84px}.v1 .stage{padding-right:20px}}
+
+/* ================================================================
+   2 · THE LOOKBOOK - one enormous Didone numeral; credits, not cards
+   ================================================================ */
+.v2 .stage{background:#FFFFFF;color:#101010;font-family:'Archivo',sans-serif;padding:clamp(28px,4vw,56px) clamp(24px,4vw,60px)}
+.v2 .mast{display:flex;justify-content:space-between;align-items:baseline;gap:18px;flex-wrap:wrap}
+.v2 .mast .wm{font:500 16px 'Bodoni Moda',serif;letter-spacing:.34em}
+.v2 .mast nav{display:flex;gap:22px}
+.v2 .mast nav span{font-size:12.5px;color:#8A8A85}
+.v2 .mast nav .on{color:#101010;border-bottom:1px solid #101010;padding-bottom:2px}
+.v2 .mast .who{font-size:12.5px;color:#8A8A85}
+.v2 .hero{margin-top:clamp(28px,4vw,54px)}
+.v2 .hero .big{font:400 clamp(58px,8.4vw,104px)/1 'Bodoni Moda',serif;letter-spacing:-.01em;font-variant-numeric:lining-nums}
+.v2 .hero .cap{margin-top:14px;font-size:13px;color:#5A5A55;max-width:70ch}
+.v2 .hero .cap b{font-weight:500;color:#101010}
+.v2 .rule{height:1px;background:#101010;margin:clamp(26px,3.4vw,44px) 0}
+.v2 .spread{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,5vw,72px);align-items:start}
+.v2 .lbl{font:italic 400 15px 'Bodoni Moda',serif;color:#101010;margin-bottom:16px}
+.v2 .credits li{list-style:none;display:flex;align-items:baseline;gap:10px;padding:10px 0}
+.v2 .credits .nm{font-size:13.5px;white-space:nowrap}
+.v2 .credits .nm i{font-style:normal;color:#8A8A85}
+.v2 .dots{flex:1;border-bottom:1px dotted #B9B9B2;transform:translateY(-3px)}
+.v2 .credits .pr{font:400 17px 'Bodoni Moda',serif;white-space:nowrap}
+.v2 .credits .pr s{color:#B9B9B2;margin-right:6px;font-size:14px}
+.v2 .credits .free{font-size:11.5px;color:#6B2430;display:block;margin-top:2px}
+.v2 .cred-tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:14px;border-top:1px solid #101010}
+.v2 .cred-tot em{font:italic 400 14px 'Bodoni Moda',serif}
+.v2 .cred-tot b{font:400 34px 'Bodoni Moda',serif;letter-spacing:-.01em}
+.v2 .gst{display:flex;justify-content:space-between;font-size:12px;color:#8A8A85;margin-top:6px}
+.v2 .tender{display:flex;gap:8px;margin-top:18px}
+.v2 .tender button{flex:1;border:1px solid #D9D9D2;padding:9px 0;font-size:12px;color:#5A5A55}
+.v2 .tender button:hover{border-color:#101010;color:#101010}
+.v2 .payb{width:100%;margin-top:9px;background:#101010;color:#fff;padding:13px;font-size:12px;letter-spacing:.18em;text-transform:uppercase}
+.v2 .payb:hover{background:#333}
+.v2 .index li{list-style:none;display:flex;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px solid #ECECE6}
+.v2 .index .doc{font-size:12.5px;white-space:nowrap}
+.v2 .index .doc i{font-style:normal;display:block;color:#8A8A85;font-size:11.5px}
+.v2 .index .rt{font-size:12.5px;color:#5A5A55;white-space:nowrap}
+.v2 .index .val{margin-left:auto;font:400 16px 'Bodoni Moda',serif;white-space:nowrap}
+.v2 .index .st{font:italic 400 13px 'Bodoni Moda',serif;width:74px;text-align:right;white-space:nowrap}
+.v2 .i-post{color:#3D5A43}.v2 .i-rev{color:#96700F}.v2 .i-tr{color:#44506B}.v2 .i-dr{color:#8A8A85}.v2 .i-fl{color:#6B2430}
+.v2 .ctl{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-top:clamp(26px,3.4vw,44px);padding-top:18px;border-top:1px solid #ECECE6}
+.v2 .ctl input{flex:1 1 300px;border:none;border-bottom:1px solid #B9B9B2;padding:8px 2px;font-size:13.5px}
+.v2 .ctl input::placeholder{color:#B9B9B2}
+.v2 .cb1{background:#101010;color:#fff;padding:10px 22px;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.v2 .cb2{border:1px solid #101010;padding:9px 22px;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+.v2 .cb3{font:italic 400 14px 'Bodoni Moda',serif;color:#6B2430;padding:9px 2px}
+@media(max-width:920px){.v2 .spread{grid-template-columns:1fr}}
+
+/* ================================================================
+   3 · COUNTER GLASS - cloth bolts blurred behind a glass counter
+   ================================================================ */
+.v3 .stage{position:relative;background:#E8E9EC;color:#232B35;font-family:'Schibsted Grotesk',sans-serif;padding:clamp(18px,2.6vw,34px)}
+.v3 .bolts{position:absolute;inset:-40px;background:linear-gradient(112deg,#4D5B9E 0 22%,#8FA98D 22% 38%,#D9CFC2 38% 58%,#C4876B 58% 74%,#39508F 74% 100%);filter:blur(58px) saturate(.82);opacity:.5}
+.v3 .lay{position:relative;display:grid;grid-template-columns:200px 1fr minmax(255px,290px);gap:16px;align-items:start}
+.v3 .glass{background:rgba(255,255,255,.52);backdrop-filter:blur(22px) saturate(1.45);-webkit-backdrop-filter:blur(22px) saturate(1.45);border:1px solid rgba(255,255,255,.72);border-radius:14px}
+.v3 .bar{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 18px}
+.v3 .bar .wm{font-weight:600;font-size:16px;letter-spacing:-.01em}
+.v3 .bar .wm span{font-weight:400;color:#525F6E;font-size:13px;margin-left:12px}
+.v3 .bar nav{display:flex;gap:4px}
+.v3 .bar nav span{font-size:13px;padding:6px 13px;border-radius:999px;color:#43505F}
+.v3 .bar nav .on{background:#33427A;color:#F2F4FA}
+.v3 .bar .who{font-size:12.5px;color:#525F6E}
+.v3 .rail{padding:18px;display:flex;flex-direction:column;gap:18px}
+.v3 .rail .g{border-bottom:1px solid rgba(35,43,53,.12);padding-bottom:14px}
+.v3 .rail .g:last-child{border-bottom:none;padding-bottom:0}
+.v3 .rail .gl{font-size:12px;color:#525F6E}
+.v3 .rail .gn{font-weight:600;font-size:25px;letter-spacing:-.02em;margin-top:4px}
+.v3 .rail .gs{font-size:12px;color:#68737F;margin-top:1px}
+.v3 .sheet{background:#FFFFFF;border:1px solid #E1E3E7;border-radius:14px;overflow-x:auto}
+.v3 .sheet .cap{font-weight:600;font-size:14px;padding:13px 16px;border-bottom:1px solid #EEF0F2}
+.v3 table{width:100%}
+.v3 th{font-size:11.5px;font-weight:500;color:#68737F;text-align:left;padding:8px 13px;border-bottom:1px solid #EEF0F2}
+.v3 th.r{text-align:right}
+.v3 td{padding:11px 10px;font-size:13px;border-bottom:1px solid #F4F5F7;white-space:nowrap}
+.v3 tr:last-child td{border-bottom:none}
+.v3 td.r{text-align:right}
+.v3 .doc b{font-weight:600;font-size:12.5px;letter-spacing:-.01em}
+.v3 .doc i{font-style:normal;display:block;font-size:11.5px;color:#68737F}
+.v3 .pill{font-size:11.5px;font-weight:500;padding:3px 10px;border-radius:999px}
+.v3 .pp{background:#DEEFE5;color:#1F6B44}.v3 .pv{background:#F6ECD2;color:#7E611D}.v3 .pt{background:#E0E9F6;color:#2D5788}.v3 .pd{background:#EBEDF0;color:#525F6E}.v3 .pf{background:#F7E3DC;color:#A04430}
+.v3 .till{display:flex;flex-direction:column}
+.v3 .till .list{background:#fff;border:1px solid #E1E3E7;border-bottom:none;border-radius:14px 14px 0 0;padding:16px}
+.v3 .till .cap2{font-weight:600;font-size:14px;padding-bottom:11px;border-bottom:1px solid #EEF0F2}
+.v3 .till li{list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 0;border-bottom:1px solid #F4F5F7}
+.v3 .till .nm{font-size:13.5px;font-weight:500}
+.v3 .till .vr{font-size:12px;color:#68737F;display:block}
+.v3 .till .of{font-size:11.5px;color:#1F6B44;display:block}
+.v3 .till .am{font-size:13.5px;font-weight:500}
+.v3 .till .am s{color:#A6ADB5;font-weight:400;margin-right:4px}
+.v3 .till .gstl{display:flex;justify-content:space-between;font-size:12.5px;color:#68737F;padding-top:10px}
+.v3 .tray{border-radius:0 0 14px 14px;border-top:none;padding:15px 16px}
+.v3 .tray .tot{display:flex;justify-content:space-between;align-items:baseline}
+.v3 .tray .tot em{font-style:normal;font-size:13px;font-weight:500}
+.v3 .tray .tot b{font-weight:600;font-size:24px;letter-spacing:-.02em}
+.v3 .tray .tender{display:flex;gap:8px;margin-top:11px}
+.v3 .tray .tender button{flex:1;background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.9);border-radius:9px;padding:8px 0;font-size:12.5px;font-weight:500;color:#38434F}
+.v3 .tray .tender button:hover{background:#fff}
+.v3 .tray .payb{width:100%;margin-top:9px;background:#33427A;color:#F2F4FA;border-radius:9px;padding:12px;font-size:13.5px;font-weight:600}
+.v3 .tray .payb:hover{background:#28345F}
+.v3 .ctl{grid-column:1 / -1;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px}
+.v3 .ctl input{flex:1 1 280px;background:#fff;border:1px solid #E1E3E7;border-radius:9px;padding:9px 13px;font-size:13.5px}
+.v3 .ctl input::placeholder{color:#9AA3AC}
+.v3 .cb1{background:#33427A;color:#F2F4FA;border-radius:9px;padding:9px 17px;font-size:13px;font-weight:600}
+.v3 .cb2{background:rgba(255,255,255,.66);border:1px solid #D5D9DE;border-radius:9px;padding:8px 17px;font-size:13px;font-weight:500;color:#38434F}
+.v3 .cb3{color:#A04430;font-size:13px;font-weight:500;padding:8px 4px}
+@media(max-width:1040px){.v3 .lay{grid-template-columns:1fr}.v3 .rail{flex-direction:row;flex-wrap:wrap}.v3 .rail .g{border-bottom:none;padding-bottom:0;flex:1}}
+
+/* ================================================================
+   4 · EIGHT O'CLOCK - the screen IS the till; scan feed + huge total
+   ================================================================ */
+.v4 .stage{background:#131519;color:#E9E5DB;font-family:'IBM Plex Sans',sans-serif;padding:clamp(18px,2.6vw,32px)}
+.v4 .top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid #23272E}
+.v4 .top .wm{font:500 13px 'IBM Plex Mono',monospace;color:#8E97A3}
+.v4 .top .wm b{color:#E9E5DB;font-weight:500}
+.v4 .top nav{display:flex;gap:16px}
+.v4 .top nav span{font-size:12.5px;color:#6C7580}
+.v4 .top nav .on{color:#E5A83B}
+.v4 .top .tm{font:400 12.5px 'IBM Plex Mono',monospace;color:#8E97A3}
+.v4 .till{display:grid;grid-template-columns:1.35fr minmax(300px,420px);gap:22px;margin-top:20px;align-items:start}
+.v4 .feed li{list-style:none;display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:13px 14px;border-bottom:1px solid #1E2229}
+.v4 .feed .nm{font-size:15px;font-weight:500}
+.v4 .feed .vr{font-size:12.5px;color:#8E97A3;display:block;margin-top:1px}
+.v4 .feed .of{font-size:12px;color:#63B57F;display:block;margin-top:2px}
+.v4 .feed .am{font:400 18px 'IBM Plex Mono',monospace}
+.v4 .feed .am s{color:#5B636E;font-size:14px;margin-right:5px}
+.v4 .feed .scanned{background:#1B1F26;border-left:3px solid #E5A83B;padding-left:11px}
+.v4 .feed .jt{font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#E5A83B;display:block;margin-top:3px}
+.v4 .feed .gstl{display:flex;justify-content:space-between;font-size:12.5px;color:#8E97A3;padding:12px 14px}
+.v4 .feed .gstl span:last-child{font-family:'IBM Plex Mono',monospace}
+.v4 .paybox{background:#191D23;border:1px solid #2A2F37;border-radius:12px;padding:22px}
+.v4 .paybox .lb{font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#8E97A3}
+.v4 .paybox .tot{font:500 clamp(44px,5vw,64px)/1.1 'IBM Plex Mono',monospace;color:#E5A83B;letter-spacing:-.03em;margin-top:8px}
+.v4 .paybox .sub{font-size:12.5px;color:#8E97A3;margin-top:6px}
+.v4 .tender{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.v4 .tender button{background:#232932;border:1px solid #333B46;border-radius:8px;padding:16px 0;font:500 13px 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase}
+.v4 .tender button:hover{border-color:#E5A83B;color:#E5A83B}
+.v4 .payb{width:100%;margin-top:9px;background:#E5A83B;color:#191307;border-radius:8px;padding:15px;font-size:14.5px;font-weight:600}
+.v4 .payb:hover{background:#F0BA57}
+.v4 .strip{display:flex;gap:22px;align-items:baseline;flex-wrap:wrap;margin-top:22px;padding-top:14px;border-top:1px solid #23272E;font-size:12.5px;color:#8E97A3}
+.v4 .strip b{font:500 14px 'IBM Plex Mono',monospace;color:#E9E5DB;font-weight:500}
+.v4 .strip .warn b{color:#E5A83B}
+.v4 .docline{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-top:12px;font-size:12.5px}
+.v4 .docline .d{font:400 12px 'IBM Plex Mono',monospace;color:#B9BFC8}
+.v4 .docline .s{font:500 10.5px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;border:1px solid currentColor;border-radius:5px;padding:1px 6px}
+.v4 .mp{color:#63B57F}.v4 .mv{color:#E5A83B}.v4 .mt2{color:#6FA7DC}.v4 .md{color:#8E97A3}.v4 .mf{color:#E07856}
+.v4 .ctl{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.v4 .ctl input{flex:1 1 280px;background:#0E1013;border:1px solid #2A2F37;border-radius:8px;padding:10px 13px;font:400 13px 'IBM Plex Mono',monospace;color:#E9E5DB}
+.v4 .ctl input::placeholder{color:#5B636E}
+.v4 .cb1{background:#E5A83B;color:#191307;border-radius:8px;padding:10px 17px;font-size:13px;font-weight:600}
+.v4 .cb2{background:#232932;border:1px solid #333B46;border-radius:8px;padding:9px 17px;font-size:13px}
+.v4 .cb3{color:#E07856;font-size:13px;padding:9px 4px}
+@media(max-width:920px){.v4 .till{grid-template-columns:1fr}}
+
+/* ================================================================
+   5 · THE PAINTED BOARD - indigo signboard, haldi swipe, two scripts
+   ================================================================ */
+.v5 .stage{background:#FFFFFF;color:#1D2440;font-family:'Anek Latin',sans-serif}
+.v5 .hi{font-family:'Anek Devanagari',sans-serif;font-weight:400;display:block;font-size:.78em;line-height:1.45;color:#6A7194}
+.v5 .board{background:#27357E;color:#FFFFFF;padding:20px clamp(20px,3vw,36px) 16px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;border-bottom:6px solid #EFB818}
+.v5 .board .wm{font-weight:700;font-size:27px;letter-spacing:.01em;line-height:1}
+.v5 .board .wm .hi{color:#AEB8E8;margin-top:4px;font-size:13px}
+.v5 .board nav{display:flex;gap:6px;align-items:flex-end}
+.v5 .board nav .it{position:relative;font-weight:500;font-size:14.5px;padding:6px 13px;color:#C9D0F0;text-align:center}
+.v5 .board nav .it .hi{color:#8C97CB;font-size:11px}
+.v5 .board nav .on{color:#fff}
+.v5 .board nav .on svg{position:absolute;left:10px;right:10px;bottom:-2px;width:calc(100% - 20px);height:7px}
+.v5 .board .who{font-size:12.5px;color:#AEB8E8}
+.v5 .body{padding:clamp(20px,3vw,36px)}
+.v5 .glance{display:flex;gap:clamp(24px,4vw,56px);flex-wrap:wrap;align-items:flex-end}
+.v5 .gl .lab{font-weight:500;font-size:14px;color:#27357E}
+.v5 .gl .n{font-weight:700;font-size:34px;letter-spacing:-.01em;line-height:1.15;margin-top:2px}
+.v5 .gl .sub{font-size:12.5px;color:#6A7194}
+.v5 .gl .sw{position:relative;display:inline-block}
+.v5 .gl .sw::before{content:"";position:absolute;inset:6px -10px 2px -8px;background:#F7D34C;transform:rotate(-1.4deg);z-index:0}
+.v5 .gl .sw span{position:relative}
+.v5 .dtab{margin-top:28px;border-top:3px solid #27357E}
+.v5 .dtab .cap{display:flex;gap:10px;align-items:baseline;padding:12px 2px 10px;font-weight:600;font-size:16px}
+.v5 .dtab .cap .hi{display:inline;font-size:12.5px}
+.v5 table{width:100%}
+.v5 th{font-weight:600;font-size:12.5px;color:#27357E;text-align:left;padding:8px 12px;background:#F4F5FB;border-bottom:2px solid #D9DDF0}
+.v5 th.r{text-align:right}
+.v5 td{padding:11px 12px;font-size:14px;border-bottom:1px solid #ECEEF7;white-space:nowrap}
+.v5 td.r{text-align:right}
+.v5 .doc b{font-weight:600;font-size:13.5px}
+.v5 .doc i{font-style:normal;display:block;font-size:12px;color:#6A7194}
+.v5 .ch{font-weight:500;font-size:12px;padding:3px 10px;border-radius:5px}
+.v5 .cp{background:#27357E;color:#fff}.v5 .cv{background:#EFB818;color:#3A2E05}.v5 .ct{background:#D9DDF0;color:#27357E}.v5 .cd{background:#EFF0F6;color:#4B547A}.v5 .cf5{background:#C4432B;color:#fff}
+.v5 .lower{display:grid;grid-template-columns:1fr minmax(300px,360px);gap:28px;margin-top:26px;align-items:start}
+.v5 .ctl{display:flex;flex-direction:column;gap:12px}
+.v5 .ctl input{border:2px solid #D9DDF0;border-radius:8px;padding:11px 14px;font-size:14.5px;color:#1D2440}
+.v5 .ctl input:focus{border-color:#27357E;outline:none}
+.v5 .ctl input::placeholder{color:#9AA0BC}
+.v5 .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+.v5 .cb1{background:#27357E;color:#fff;border-radius:8px;padding:9px 18px;font-weight:500;font-size:14px;line-height:1.25;text-align:center}
+.v5 .cb1 .hi{color:#AEB8E8}
+.v5 .cb2{border:2px solid #27357E;border-radius:8px;padding:7px 18px;font-weight:500;font-size:14px;color:#27357E;line-height:1.25;text-align:center}
+.v5 .cb3{color:#C4432B;font-weight:500;font-size:14px;padding:8px 4px;line-height:1.25;text-align:center}
+.v5 .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.v5 .till{border:2px solid #27357E;border-radius:12px;overflow:hidden}
+.v5 .till .hd{background:#27357E;color:#fff;padding:12px 16px;font-weight:500;font-size:15px}
+.v5 .till .hd .hi{color:#AEB8E8}
+.v5 .till .bd{padding:6px 16px 16px}
+.v5 .till li{list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 0;border-bottom:1px solid #ECEEF7}
+.v5 .till .nm{font-weight:500;font-size:14.5px}
+.v5 .till .vr{font-size:12px;color:#6A7194;display:block}
+.v5 .till .of{font-size:12px;color:#1F6B44;display:block}
+.v5 .till .am{font-weight:500;font-size:14.5px}
+.v5 .till .am s{color:#9AA0BC;font-weight:400;margin-right:4px}
+.v5 .till .gstl{display:flex;justify-content:space-between;font-size:13px;color:#4B547A;padding:8px 0 2px}
+.v5 .till .tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;padding-top:9px;border-top:3px solid #EFB818}
+.v5 .till .tot em{font-style:normal;font-weight:500;font-size:14px}
+.v5 .till .tot b{font-weight:700;font-size:26px}
+.v5 .till .tender{display:flex;gap:8px;margin-top:12px}
+.v5 .till .tender button{flex:1;border:2px solid #D9DDF0;border-radius:8px;padding:7px 0;font-weight:500;font-size:13.5px;color:#27357E}
+.v5 .till .tender button:hover{border-color:#27357E}
+.v5 .till .payb{width:100%;margin-top:9px;background:#27357E;color:#fff;border-radius:8px;padding:10px;font-weight:500;font-size:15px;line-height:1.3}
+.v5 .till .payb .hi{color:#AEB8E8}
+.v5 .till .payb:hover{background:#1D2A66}
+@media(max-width:920px){.v5 .lower{grid-template-columns:1fr}}
+
+/* ================================================================
+   6 · GATEWAY - Tally's muscle memory, redrawn with care
+   ================================================================ */
+.v6 .stage{background:#1D2554;color:#F2F1E9;font-family:'IBM Plex Sans',sans-serif;padding:clamp(18px,2.6vw,30px)}
+.v6 .top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.v6 .top .wm{font-weight:600;font-size:15px}
+.v6 .top .wm span{font-weight:400;color:#9BA3CE;margin-left:10px;font-size:13px}
+.v6 .top .dt{font:400 12.5px 'IBM Plex Mono',monospace;color:#9BA3CE}
+.v6 .grid{display:grid;grid-template-columns:230px 1fr minmax(280px,330px);gap:18px;align-items:start}
+.v6 .tp{position:relative;border:1px solid rgba(232,200,74,.5);background:rgba(11,16,40,.35);padding:20px 16px 14px}
+.v6 .tp .leg{position:absolute;top:-9px;left:12px;background:#1D2554;padding:0 8px;color:#E8C84A;font-weight:500;font-size:12px}
+.v6 .day .row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(155,163,206,.16)}
+.v6 .day .row:last-child{border-bottom:none}
+.v6 .day .k{font-size:12.5px;color:#9BA3CE}
+.v6 .day .v{font:500 15px 'IBM Plex Mono',monospace}
+.v6 .day .v.money{color:#E8C84A}
+.v6 table{width:100%}
+.v6 th{font-size:11px;font-weight:500;color:#9BA3CE;text-align:left;padding:5px 9px;border-bottom:1px solid rgba(155,163,206,.3)}
+.v6 th.r{text-align:right}
+.v6 td{padding:7px 9px;font-size:13px;white-space:nowrap}
+.v6 td.r{text-align:right;font:400 12.5px 'IBM Plex Mono',monospace}
+.v6 .docn{font:400 12.5px 'IBM Plex Mono',monospace}
+.v6 .dk6{color:#9BA3CE;font-size:12px}
+.v6 .sel td{background:#E8C84A;color:#221D06}
+.v6 .sel .dk6{color:#5C511B}
+.v6 .selhint{font-size:11.5px;color:#9BA3CE;margin-top:9px;font-style:italic}
+.v6 .st6{font-size:12px}
+.v6 .qp{color:#8FD1A0}.v6 .qv{color:#E8C84A}.v6 .qt{color:#96BCE8}.v6 .qd{color:#9BA3CE}.v6 .qf{color:#F09A7E}
+.v6 .sel .st6{color:#221D06;font-weight:500}
+.v6 .bill li{list-style:none;display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid rgba(155,163,206,.16)}
+.v6 .bill .nm{font-size:13px}
+.v6 .bill .vr{font-size:11.5px;color:#9BA3CE;display:block}
+.v6 .bill .of{font-size:11.5px;color:#8FD1A0;display:block}
+.v6 .bill .am{font:400 13px 'IBM Plex Mono',monospace}
+.v6 .bill .am s{color:#666F9E;margin-right:4px}
+.v6 .bill .gstl{display:flex;justify-content:space-between;font-size:12px;color:#9BA3CE;padding-top:8px}
+.v6 .bill .tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:7px;padding-top:9px;border-top:1px solid #E8C84A}
+.v6 .bill .tot em{font-style:normal;font-size:12px;color:#E8C84A}
+.v6 .bill .tot b{font:500 22px 'IBM Plex Mono',monospace;color:#E8C84A}
+.v6 .bill .tender{display:flex;gap:7px;margin-top:11px}
+.v6 .bill .tender button{flex:1;border:1px solid rgba(155,163,206,.4);padding:7px 0;font-size:12px;color:#C9CEE8}
+.v6 .bill .tender button:hover{border-color:#E8C84A;color:#E8C84A}
+.v6 .bill .payb{width:100%;margin-top:8px;background:#E8C84A;color:#221D06;padding:10px;font-weight:600;font-size:13.5px}
+.v6 .bill .payb:hover{background:#F2D66A}
+.v6 .fkeys{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:22px;padding-top:14px;border-top:1px solid rgba(155,163,206,.3)}
+.v6 .fk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#C9CEE8}
+.v6 kbd{background:#E9E7DA;color:#1D2554;border-radius:4px;padding:2px 7px;font:500 11px 'IBM Plex Mono',monospace;box-shadow:0 2px 0 #B9B6A4}
+.v6 .ctl{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.v6 .ctl input{flex:1 1 280px;background:#141A3D;border:1px solid rgba(155,163,206,.4);padding:9px 13px;font:400 13px 'IBM Plex Mono',monospace;color:#F2F1E9}
+.v6 .ctl input::placeholder{color:#666F9E}
+.v6 .cb1{background:#E8C84A;color:#221D06;padding:9px 17px;font-weight:600;font-size:13px}
+.v6 .cb2{border:1px solid rgba(232,200,74,.6);padding:8px 17px;font-size:13px;color:#E8C84A}
+.v6 .cb3{color:#F09A7E;font-size:13px;padding:8px 4px}
+@media(max-width:1040px){.v6 .grid{grid-template-columns:1fr}}
+
+/* ================================================================
+   7 · THE INVITATION - fine print, Mithila band, Indian typefaces
+   ================================================================ */
+.v7 .stage{background:#FFFDF8;color:#232323;font-family:'Martel Sans',sans-serif;padding:clamp(16px,2.4vw,28px)}
+.v7 .sheet{border:1px solid #232323;padding:4px}
+.v7 .sheet-in{border:1px solid #232323;padding:clamp(22px,3.4vw,44px)}
+.v7 .band{height:10px;border-top:1px solid #A63A2B;border-bottom:1px solid #A63A2B;background:repeating-linear-gradient(45deg,#C98A2D 0 3px,transparent 3px 7px,#A63A2B 7px 10px,transparent 10px 14px)}
+.v7 .lh7{text-align:center}
+.v7 .lh7 .wm{font:800 30px 'Martel',serif;letter-spacing:.12em;margin-top:18px}
+.v7 .lh7 .sub{font-size:12.5px;color:#6E6A60;margin-top:4px}
+.v7 .lh7 .sub b{color:#A63A2B;font-weight:400;margin:0 8px}
+.v7 nav{display:flex;justify-content:center;gap:26px;margin:18px 0 22px}
+.v7 nav span{font-size:13px;color:#6E6A60}
+.v7 nav .on{color:#A63A2B}
+.v7 nav .on::before{content:"◆";font-size:8px;margin-right:7px;vertical-align:2px}
+.v7 .summary{display:flex;justify-content:center;gap:clamp(30px,5vw,80px);flex-wrap:wrap;text-align:center;margin:24px 0}
+.v7 .sm .n{font:600 27px 'Martel',serif}
+.v7 .sm .l{font-size:12px;color:#6E6A60;margin-top:2px}
+.v7 .cols{display:grid;grid-template-columns:1.25fr minmax(290px,340px);gap:clamp(26px,4vw,52px);margin-top:26px;align-items:start}
+.v7 .cap7{font:600 15px 'Martel',serif;padding-bottom:10px;border-bottom:1px solid #232323}
+.v7 table{width:100%}
+.v7 th{font-size:11.5px;font-weight:600;color:#6E6A60;text-align:left;padding:10px 10px 7px;border-bottom:1px solid #E6E0D2}
+.v7 th.r{text-align:right}
+.v7 td{padding:10px;font-size:13.5px;border-bottom:1px solid #F0EBDE;white-space:nowrap}
+.v7 td.r{text-align:right;font-family:'Martel',serif;font-weight:600;font-size:13px}
+.v7 .doc b{font-weight:600;font-size:12.5px}
+.v7 .doc i{font-style:normal;display:block;font-size:11.5px;color:#6E6A60}
+.v7 .st7{font-size:12px}
+.v7 .st7::before{content:"◆";font-size:7px;margin-right:6px;vertical-align:2px}
+.v7 .wp{color:#3D6647}.v7 .wv{color:#96700F}.v7 .wt{color:#44506B}.v7 .wd{color:#8B867A}.v7 .wf{color:#A63A2B}
+.v7 .card{border:1px solid #232323}
+.v7 .card .hd{padding:0}
+.v7 .card .ttl{font:600 14px 'Martel',serif;padding:12px 16px 9px;display:flex;justify-content:space-between;align-items:baseline}
+.v7 .card .ttl span{font:400 11.5px 'Martel Sans',sans-serif;color:#6E6A60}
+.v7 .card .bd{padding:4px 16px 16px}
+.v7 .card li{list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:10px 0;border-bottom:1px solid #F0EBDE}
+.v7 .card .nm{font-size:13.5px}
+.v7 .card .vr{font-size:11.5px;color:#6E6A60;display:block}
+.v7 .card .of{font-size:11.5px;color:#3D6647;display:block}
+.v7 .card .am{font:600 13px 'Martel',serif}
+.v7 .card .am s{color:#B5AF9F;font-weight:400;margin-right:4px}
+.v7 .card .gstl{display:flex;justify-content:space-between;font-size:12.5px;color:#6E6A60;padding-top:9px}
+.v7 .card .tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:7px;padding-top:10px;border-top:1px solid #232323}
+.v7 .card .tot em{font-style:normal;font-size:13px}
+.v7 .card .tot b{font:600 24px 'Martel',serif}
+.v7 .card .tender{display:flex;gap:8px;margin-top:12px}
+.v7 .card .tender button{flex:1;border:1px solid #D9D2BE;padding:8px 0;font-size:12.5px;color:#55503F}
+.v7 .card .tender button:hover{border-color:#232323;color:#232323}
+.v7 .card .payb{width:100%;margin-top:9px;background:#A63A2B;color:#FFFDF8;padding:12px;font-size:13.5px;font-weight:600}
+.v7 .card .payb:hover{background:#8E2F22}
+.v7 .ctl{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-top:clamp(22px,3vw,36px);padding-top:16px;border-top:1px solid #E6E0D2}
+.v7 .ctl input{flex:1 1 280px;background:none;border:1px solid #D9D2BE;padding:9px 13px;font-size:13.5px}
+.v7 .ctl input::placeholder{color:#B5AF9F}
+.v7 .cb1{background:#232323;color:#FFFDF8;padding:10px 20px;font-size:13px;font-weight:600}
+.v7 .cb2{border:1px solid #232323;padding:9px 20px;font-size:13px}
+.v7 .cb3{color:#A63A2B;font-size:13px;font-weight:600;padding:9px 4px}
+@media(max-width:920px){.v7 .cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="chrome">
+  <div class="chrome-in">
+    <strong>KDPS · design survey</strong>
+    <nav class="chrome-nav">
+      <a href="#d1">1 Day book</a>
+      <a href="#d2">2 Lookbook</a>
+      <a href="#d3">3 Counter glass</a>
+      <a href="#d4">4 Eight o'clock</a>
+      <a href="#d5">5 Painted board</a>
+      <a href="#d6">6 Gateway</a>
+      <a href="#d7">7 Invitation</a>
+    </nav>
+  </div>
+</header>
+
+<section class="cover">
+  <h1>Seven ways the KDPS system could look</h1>
+  <p class="when">A design survey · 30 July 2026</p>
+  <div class="cover-grid">
+    <div>
+      <p>We are choosing the design language for the new KDPS system before we build more screens. This page dresses the same working day in seven different directions. Nothing here is final artwork; it is a taste test with real numbers and real documents.</p>
+      <p>Scroll slowly, and imagine doing your actual work inside each one: billing a customer at eight in the evening, checking a GRN from Ranchi, chasing a transfer stuck between Deoghar and JSL. The right choice is the one that still feels good on a busy Saturday, not the one that is prettiest at first glance.</p>
+      <p>When you are done: pick a first and a second choice, and note one thing you would steal from any of the others. Send your picks on the WhatsApp group. If a direction feels right for the office but wrong for the shop floor, say that too. That is useful.</p>
+    </div>
+    <div>
+      <h3>What each direction shows</h3>
+      <ul>
+        <li>The top of a screen <span>where you are, and where you can go</span></li>
+        <li>Today's numbers <span>the figures a manager glances at</span></li>
+        <li>The documents <span>GRNs, transfers, bookings, sales</span></li>
+        <li>The till <span>a bill in progress, and the payment moment</span></li>
+        <li>The small parts <span>buttons, fields, and status marks</span></li>
+      </ul>
+      <p class="kitnote">Every direction shows the same five things, but arranges them the way that direction wants to. That is deliberate: a design language is not a coat of paint, it changes what the screen puts first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 1 · THE DAY BOOK ============================== -->
+<section class="lang v1" id="d1">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 1</span>
+      <h2>The day book</h2>
+    </div>
+    <p class="story">Before Tally, every counter kept a day book: ruled entries, a red margin, totals ruled twice. Here the whole screen is that page. No cards, no boxes; entries sit directly on the rules, a posted document takes a stamp, and the till writes its bill on a memo slip like the one stapled to the bag.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>the bahi khata KDPS already keeps; the double rule under a settled total</p>
+      <p class="meta-line"><span class="meta-k">Type</span>Newsreader, roman and italic · Spline Sans Mono for figures</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#FCFBF7"></i>#FCFBF7</span>
+        <span class="chip"><i style="background:#1F2B38"></i>#1F2B38</span>
+        <span class="chip"><i style="background:#C24C3F"></i>#C24C3F</span>
+        <span class="chip"><i style="background:#CBD8E5"></i>#CBD8E5</span>
+        <span class="chip"><i style="background:#33684B"></i>#33684B</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="in">
+      <div class="lh">
+        <h3>KDPS <em>· day book · Deoghar showroom · Thursday 30 July 2026</em></h3>
+        <nav class="lh-nav"><span class="on">Sale</span><span>Stock</span><span>Documents</span><span>Reports</span></nav>
+        <span class="lh-user">entered by Priya, counter 1</span>
+      </div>
+      <div class="carried">
+        <p class="cf"><em>Sale today</em><b>₹1,42,650</b><small>23 bills</small></p>
+        <p class="cf"><em>Stock on hand</em><b>12,438</b><small>pieces</small></p>
+        <p class="cf"><em>Waiting</em><b>5</b><small>GRNs · 2 SOR returns due 15 Aug</small></p>
+      </div>
+      <div class="spread">
+        <table class="rtable">
+          <thead><tr><th>Document</th><th>Entry</th><th class="r">Qty</th><th class="r">Value</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="docnum">26-27/RAN/GRN/118</td><td><span class="dk">Goods in,</span> Mufti · Ranchi WH</td><td class="r">240</td><td class="r">4,28,900</td><td><span class="stamp sp">Posted</span></td></tr>
+            <tr><td class="docnum">26-27/RAN/PT/097</td><td><span class="dk">Purchase,</span> Killer · Ranchi WH</td><td class="r">180</td><td class="r">2,12,340</td><td><span class="stamp sr">In review</span></td></tr>
+            <tr><td class="docnum">26-27/DEO/TRF/031</td><td><span class="dk">Transfer,</span> Deoghar to JSL</td><td class="r">96</td><td class="r">1,04,560</td><td><span class="stamp st">In transit</span></td></tr>
+            <tr><td class="docnum">26-27/DEO/SAL/1289</td><td><span class="dk">Sale,</span> counter 1</td><td class="r">3</td><td class="r">4,698</td><td><span class="stamp sp">Posted</span></td></tr>
+            <tr><td class="docnum">26-27/PAT/BKG/054</td><td><span class="dk">Booking,</span> Mufti AW26</td><td class="r">1,200</td><td class="r">18,60,000</td><td><span class="stamp sd">Draft</span></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+          </tbody>
+        </table>
+        <aside class="memo">
+          <div class="memo-h"><b>Cash memo 1289</b><span>counter 1</span></div>
+          <ul>
+            <li><div><p class="mn">Mufti slim shirt<span class="mv">40 · indigo</span></p></div><p class="ma">₹2,199</p></li>
+            <li><div><p class="mn">Killer jeans<span class="mv">32 · black</span></p></div><p class="ma">₹2,499</p></li>
+            <li><div><p class="mn">Being Human tee<span class="mv">M · white</span><span class="mo">buy 2 get 1, lowest free</span></p></div><p class="ma"><s>₹999</s>₹0</p></li>
+          </ul>
+          <p class="mt"><span>Includes GST</span><span>₹503</span></p>
+          <div class="mg"><em>To pay</em><b>₹4,698</b></div>
+          <div class="m-tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+          <button class="m-pay">Take payment</button>
+        </aside>
+      </div>
+      <div class="pentray">
+        <input type="text" placeholder="Scan a barcode, or write a style code…">
+        <button class="b1">Post GRN</button>
+        <button class="b2">Save draft</button>
+        <button class="b3">Flag for review</button>
+        <div class="leg"><span class="stamp sd">Draft</span><span class="stamp sr">In review</span><span class="stamp sp" style="transform:none">Posted</span><span class="stamp st">In transit</span><span class="stamp sf">Flagged</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 2 · THE LOOKBOOK ============================== -->
+<section class="lang v2" id="d2">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 2</span>
+      <h2>The lookbook</h2>
+    </div>
+    <p class="story">Fashion's own typography. The day's sale is set the way a magazine sets a cover line: one enormous numeral, everything else small and quiet. The bill reads like a page of credits, the documents like an index. For people who want the system to feel like the brand, not the back office.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>lookbooks and campaign pages; the credits column of a fashion magazine</p>
+      <p class="meta-line"><span class="meta-k">Type</span>Bodoni Moda for numerals and titles · Archivo for working text</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#FFFFFF"></i>#FFFFFF</span>
+        <span class="chip"><i style="background:#101010"></i>#101010</span>
+        <span class="chip"><i style="background:#6B2430"></i>#6B2430</span>
+        <span class="chip"><i style="background:#B9B9B2"></i>#B9B9B2</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="mast">
+      <span class="wm">KDPS</span>
+      <nav><span class="on">Sale</span><span>Stock</span><span>Documents</span><span>Reports</span></nav>
+      <span class="who">Deoghar · 30 July · Priya</span>
+    </div>
+    <div class="hero">
+      <p class="big">₹1,42,650</p>
+      <p class="cap">Thursday's sale, <b>23 bills</b> · stock on hand <b>12,438 pieces</b> · <b>5 GRNs</b> waiting, 2 SOR returns due 15 August</p>
+    </div>
+    <div class="rule"></div>
+    <div class="spread">
+      <div>
+        <p class="lbl">The bill · 1289, counter 1</p>
+        <ul class="credits">
+          <li><span class="nm">Mufti slim shirt <i>40, indigo</i></span><span class="dots"></span><span class="pr">2,199</span></li>
+          <li><span class="nm">Killer jeans <i>32, black</i></span><span class="dots"></span><span class="pr">2,499</span></li>
+          <li><span class="nm">Being Human tee <i>M, white</i><span class="free">buy 2 get 1, lowest item free</span></span><span class="dots"></span><span class="pr"><s>999</s>0</span></li>
+        </ul>
+        <div class="cred-tot"><em>To pay</em><b>₹4,698</b></div>
+        <p class="gst"><span>Includes GST</span><span>₹503</span></p>
+        <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+        <button class="payb">Take payment</button>
+      </div>
+      <div>
+        <p class="lbl">The documents</p>
+        <ul class="index">
+          <li><span class="doc">26-27/RAN/GRN/118<i>goods in</i></span><span class="rt">Mufti · Ranchi WH</span><span class="val">4,28,900</span><span class="st i-post">posted</span></li>
+          <li><span class="doc">26-27/RAN/PT/097<i>purchase</i></span><span class="rt">Killer · Ranchi WH</span><span class="val">2,12,340</span><span class="st i-rev">in review</span></li>
+          <li><span class="doc">26-27/DEO/TRF/031<i>transfer</i></span><span class="rt">Deoghar to JSL</span><span class="val">1,04,560</span><span class="st i-tr">in transit</span></li>
+          <li><span class="doc">26-27/DEO/SAL/1289<i>sale</i></span><span class="rt">Counter 1</span><span class="val">4,698</span><span class="st i-post">posted</span></li>
+          <li><span class="doc">26-27/PAT/BKG/054<i>booking</i></span><span class="rt">Mufti · AW26</span><span class="val">18,60,000</span><span class="st i-dr">draft</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="ctl">
+      <input type="text" placeholder="Scan a barcode, or type a style code">
+      <button class="cb1">Post GRN</button>
+      <button class="cb2">Save draft</button>
+      <button class="cb3">flag for review</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 3 · COUNTER GLASS ============================== -->
+<section class="lang v3" id="d3">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 3</span>
+      <h2>Counter glass</h2>
+    </div>
+    <p class="story">The frosted one. Bolts of cloth lean behind a glass counter: you can see their colour but not their weave. Navigation and the day's numbers live on the glass; anything you actually read sits on solid paper-white. Calm, current, quietly premium.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>frosted panels on today's operating systems; the rule that glass frames content and never carries it</p>
+      <p class="meta-line"><span class="meta-k">Type</span>Schibsted Grotesk throughout</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#E8E9EC"></i>#E8E9EC</span>
+        <span class="chip"><i style="background:#232B35"></i>#232B35</span>
+        <span class="chip"><i style="background:#33427A"></i>#33427A</span>
+        <span class="chip"><i style="background:#C4876B"></i>#C4876B</span>
+        <span class="chip"><i style="background:#8FA98D"></i>#8FA98D</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="bolts" aria-hidden="true"></div>
+    <div class="lay">
+      <div class="bar glass">
+        <span class="wm">KDPS<span>Deoghar showroom</span></span>
+        <nav><span class="on">Sale</span><span>Stock</span><span>Documents</span><span>Reports</span></nav>
+        <span class="who">Priya · counter · Thu 30 Jul</span>
+      </div>
+      <aside class="rail glass">
+        <div class="g"><p class="gl">Today's sale</p><p class="gn">₹1,42,650</p><p class="gs">23 bills · Deoghar</p></div>
+        <div class="g"><p class="gl">Stock on hand</p><p class="gn">12,438 pcs</p><p class="gs">across sizes and colours</p></div>
+        <div class="g"><p class="gl">Waiting on you</p><p class="gn">5 GRNs</p><p class="gs">2 SOR returns due by 15 Aug</p></div>
+      </aside>
+      <div class="sheet">
+        <p class="cap">Documents</p>
+        <table>
+          <thead><tr><th>Document</th><th>Party / route</th><th class="r">Qty</th><th class="r">Value</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="doc"><b>26-27/RAN/GRN/118</b><i>Goods receipt</i></td><td>Mufti · Ranchi WH</td><td class="r">240 pcs</td><td class="r">₹4,28,900</td><td><span class="pill pp">Posted</span></td></tr>
+            <tr><td class="doc"><b>26-27/RAN/PT/097</b><i>Purchase transfer</i></td><td>Killer · Ranchi WH</td><td class="r">180 pcs</td><td class="r">₹2,12,340</td><td><span class="pill pv">In review</span></td></tr>
+            <tr><td class="doc"><b>26-27/DEO/TRF/031</b><i>Transfer out</i></td><td>Deoghar to JSL</td><td class="r">96 pcs</td><td class="r">₹1,04,560</td><td><span class="pill pt">In transit</span></td></tr>
+            <tr><td class="doc"><b>26-27/DEO/SAL/1289</b><i>Sale</i></td><td>Counter 1 · Deoghar</td><td class="r">3 pcs</td><td class="r">₹4,698</td><td><span class="pill pp">Posted</span></td></tr>
+            <tr><td class="doc"><b>26-27/PAT/BKG/054</b><i>Booking</i></td><td>Mufti · AW26</td><td class="r">1,200 pcs</td><td class="r">₹18,60,000</td><td><span class="pill pd">Draft</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="till">
+        <div class="list">
+          <p class="cap2">Bill 1289 · counter 1</p>
+          <ul>
+            <li><div><p class="nm">Mufti slim shirt<span class="vr">40 · indigo</span></p></div><p class="am">₹2,199</p></li>
+            <li><div><p class="nm">Killer jeans<span class="vr">32 · black</span></p></div><p class="am">₹2,499</p></li>
+            <li><div><p class="nm">Being Human tee<span class="vr">M · white</span><span class="of">Buy 2 get 1 · lowest item free</span></p></div><p class="am"><s>₹999</s>₹0</p></li>
+          </ul>
+          <p class="gstl"><span>Includes GST</span><span>₹503</span></p>
+        </div>
+        <div class="tray glass">
+          <div class="tot"><em>To pay</em><b>₹4,698</b></div>
+          <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+          <button class="payb">Take payment · ₹4,698</button>
+        </div>
+      </aside>
+      <div class="ctl glass">
+        <input type="text" placeholder="Scan a barcode, or type a style code">
+        <button class="cb1">Post GRN</button>
+        <button class="cb2">Save draft</button>
+        <button class="cb3">Flag for review</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 4 · EIGHT O'CLOCK ============================== -->
+<section class="lang v4" id="d4">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 4</span>
+      <h2>Eight o'clock</h2>
+    </div>
+    <p class="story">The till at closing time. The screen is the bill: a scan feed on the left, a total you can read from two metres, tender keys sized for thumbs. Amber on charcoal so a brightly lit shop doesn't wash it out. Everything that is not the sale waits its turn in a thin strip below.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>cash registers and card machines; the dark dashboards of serious finance tools</p>
+      <p class="meta-line"><span class="meta-k">Type</span>IBM Plex Sans for words · IBM Plex Mono for every figure</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#131519"></i>#131519</span>
+        <span class="chip"><i style="background:#191D23"></i>#191D23</span>
+        <span class="chip"><i style="background:#E9E5DB"></i>#E9E5DB</span>
+        <span class="chip"><i style="background:#E5A83B"></i>#E5A83B</span>
+        <span class="chip"><i style="background:#63B57F"></i>#63B57F</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="top">
+      <span class="wm"><b>KDPS</b> · POS · Deoghar · counter 1</span>
+      <nav><span class="on">Sale</span><span>Stock</span><span>Documents</span><span>Reports</span></nav>
+      <span class="tm">Thu 30 Jul · 19:42</span>
+    </div>
+    <div class="till">
+      <ul class="feed">
+        <li><div><p class="nm">Mufti slim shirt<span class="vr">40 · indigo</span></p></div><p class="am">₹2,199</p></li>
+        <li><div><p class="nm">Killer jeans<span class="vr">32 · black</span></p></div><p class="am">₹2,499</p></li>
+        <li class="scanned"><div><p class="nm">Being Human tee<span class="vr">M · white</span><span class="of">Buy 2 get 1 · lowest item free</span><span class="jt">just scanned</span></p></div><p class="am"><s>₹999</s>₹0</p></li>
+        <li class="gstl"><span>Includes GST</span><span>₹503</span></li>
+      </ul>
+      <aside class="paybox">
+        <p class="lb">To pay</p>
+        <p class="tot">₹4,698</p>
+        <p class="sub">3 items · 1 free · bill 1289</p>
+        <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+        <button class="payb">Take payment</button>
+      </aside>
+    </div>
+    <div class="strip">
+      <span>Today <b>₹1,42,650</b> · 23 bills</span>
+      <span>Stock <b>12,438</b> pcs</span>
+      <span class="warn">Waiting <b>5 GRNs</b> · 2 SOR returns due 15 Aug</span>
+    </div>
+    <div class="docline">
+      <span class="d">26-27/RAN/GRN/118 <span class="s mp">posted</span></span>
+      <span class="d">26-27/RAN/PT/097 <span class="s mv">review</span></span>
+      <span class="d">26-27/DEO/TRF/031 <span class="s mt2">transit</span></span>
+      <span class="d">26-27/PAT/BKG/054 <span class="s md">draft</span></span>
+      <span class="d">26-27/DEO/STK/007 <span class="s mf">flagged</span></span>
+    </div>
+    <div class="ctl">
+      <input type="text" placeholder="scan barcode / style code">
+      <button class="cb1">Post GRN</button>
+      <button class="cb2">Save draft</button>
+      <button class="cb3">Flag for review</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 5 · THE PAINTED BOARD ============================== -->
+<section class="lang v5" id="d5">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 5</span>
+      <h2>The painted board</h2>
+    </div>
+    <p class="story">Indigo board, yellow stroke, two scripts: the lettering of every good bazaar, brought indoors and disciplined. English leads, Hindi rides under it, so a new hire in Deoghar reads the same screen as the accountant in Patna. The day's figure gets a haldi swipe, the way a signboard underlines its best price.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>hand-painted shop boards; Ek Type's Anek, one typeface family drawn for both scripts</p>
+      <p class="meta-line"><span class="meta-k">Type</span>Anek Latin · Anek Devanagari</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#FFFFFF"></i>#FFFFFF</span>
+        <span class="chip"><i style="background:#27357E"></i>#27357E</span>
+        <span class="chip"><i style="background:#EFB818"></i>#EFB818</span>
+        <span class="chip"><i style="background:#C4432B"></i>#C4432B</span>
+        <span class="chip"><i style="background:#1D2440"></i>#1D2440</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="wm">KDPS<span class="hi">देवघर शोरूम</span></div>
+      <nav>
+        <span class="it on">Sale<span class="hi">बिक्री</span><svg viewBox="0 0 120 8" preserveAspectRatio="none" aria-hidden="true"><path d="M2 5 C 30 1.5, 62 7, 118 3" stroke="#EFB818" stroke-width="4" fill="none" stroke-linecap="round"/></svg></span>
+        <span class="it">Stock<span class="hi">स्टॉक</span></span>
+        <span class="it">Documents<span class="hi">दस्तावेज़</span></span>
+        <span class="it">Reports<span class="hi">रिपोर्ट</span></span>
+      </nav>
+      <span class="who">Priya · counter · Thu 30 Jul</span>
+    </div>
+    <div class="body">
+      <div class="glance">
+        <div class="gl"><p class="lab">Today's sale<span class="hi">आज की बिक्री</span></p><p class="n sw"><span>₹1,42,650</span></p><p class="sub">23 bills · Deoghar</p></div>
+        <div class="gl"><p class="lab">Stock on hand<span class="hi">मौजूदा स्टॉक</span></p><p class="n">12,438 pcs</p><p class="sub">across sizes and colours</p></div>
+        <div class="gl"><p class="lab">Waiting on you<span class="hi">आपके पास बाकी</span></p><p class="n">5 GRNs</p><p class="sub">2 SOR returns due by 15 Aug</p></div>
+      </div>
+      <div class="dtab">
+        <p class="cap">Documents <span class="hi">दस्तावेज़</span></p>
+        <table>
+          <thead><tr><th>Document</th><th>Party / route</th><th class="r">Qty</th><th class="r">Value</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="doc"><b>26-27/RAN/GRN/118</b><i>Goods receipt</i></td><td>Mufti · Ranchi WH</td><td class="r">240 pcs</td><td class="r">₹4,28,900</td><td><span class="ch cp">Posted</span></td></tr>
+            <tr><td class="doc"><b>26-27/RAN/PT/097</b><i>Purchase transfer</i></td><td>Killer · Ranchi WH</td><td class="r">180 pcs</td><td class="r">₹2,12,340</td><td><span class="ch cv">In review</span></td></tr>
+            <tr><td class="doc"><b>26-27/DEO/TRF/031</b><i>Transfer out</i></td><td>Deoghar to JSL</td><td class="r">96 pcs</td><td class="r">₹1,04,560</td><td><span class="ch ct">In transit</span></td></tr>
+            <tr><td class="doc"><b>26-27/DEO/SAL/1289</b><i>Sale</i></td><td>Counter 1 · Deoghar</td><td class="r">3 pcs</td><td class="r">₹4,698</td><td><span class="ch cp">Posted</span></td></tr>
+            <tr><td class="doc"><b>26-27/PAT/BKG/054</b><i>Booking</i></td><td>Mufti · AW26</td><td class="r">1,200 pcs</td><td class="r">₹18,60,000</td><td><span class="ch cd">Draft</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="lower">
+        <div class="ctl">
+          <input type="text" placeholder="Scan a barcode, or type a style code · बारकोड स्कैन करें">
+          <div class="btnrow">
+            <button class="cb1">Post GRN<span class="hi">जीआरएन पोस्ट करें</span></button>
+            <button class="cb2">Save draft<span class="hi">ड्राफ़्ट सेव करें</span></button>
+            <button class="cb3">Flag for review<span class="hi">जाँच के लिए भेजें</span></button>
+          </div>
+          <div class="badges">
+            <span class="ch cd">Draft</span><span class="ch cv">In review</span><span class="ch cp">Posted</span><span class="ch ct">In transit</span><span class="ch cf5">Flagged</span>
+          </div>
+        </div>
+        <aside class="till">
+          <p class="hd">Bill 1289 · counter 1<span class="hi">बिल १२८९</span></p>
+          <div class="bd">
+            <ul>
+              <li><div><p class="nm">Mufti slim shirt<span class="vr">40 · indigo</span></p></div><p class="am">₹2,199</p></li>
+              <li><div><p class="nm">Killer jeans<span class="vr">32 · black</span></p></div><p class="am">₹2,499</p></li>
+              <li><div><p class="nm">Being Human tee<span class="vr">M · white</span><span class="of">Buy 2 get 1 · lowest item free</span></p></div><p class="am"><s>₹999</s>₹0</p></li>
+            </ul>
+            <p class="gstl"><span>Includes GST</span><span>₹503</span></p>
+            <div class="tot"><em>To pay</em><b>₹4,698</b></div>
+            <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+            <button class="payb">Take payment · ₹4,698<span class="hi">भुगतान लें</span></button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 6 · GATEWAY ============================== -->
+<section class="lang v6" id="d6">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 6</span>
+      <h2>Gateway</h2>
+    </div>
+    <p class="story">Everyone in the Patna office already speaks Tally. This direction keeps that muscle memory: a navy screen, panels with their titles set into the border, one yellow selection bar, function keys along the bottom edge. The most familiar direction here, redrawn with care instead of nostalgia.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>the Tally screens KDPS runs today; the keyboard-first habits of its accountants</p>
+      <p class="meta-line"><span class="meta-k">Type</span>IBM Plex Sans · IBM Plex Mono for figures and keys</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#1D2554"></i>#1D2554</span>
+        <span class="chip"><i style="background:#E8C84A"></i>#E8C84A</span>
+        <span class="chip"><i style="background:#F2F1E9"></i>#F2F1E9</span>
+        <span class="chip"><i style="background:#9BA3CE"></i>#9BA3CE</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="top">
+      <span class="wm">KDPS<span>Gateway · Deoghar showroom</span></span>
+      <span class="dt">Thu 30 Jul 2026 · 19:42 · Priya</span>
+    </div>
+    <div class="grid">
+      <div class="tp day">
+        <span class="leg">Day so far</span>
+        <div class="row"><span class="k">Sale</span><span class="v money">₹1,42,650</span></div>
+        <div class="row"><span class="k">Bills</span><span class="v">23</span></div>
+        <div class="row"><span class="k">Stock on hand</span><span class="v">12,438 pcs</span></div>
+        <div class="row"><span class="k">GRNs waiting</span><span class="v">5</span></div>
+        <div class="row"><span class="k">SOR returns due</span><span class="v">15 Aug</span></div>
+      </div>
+      <div class="tp">
+        <span class="leg">Documents</span>
+        <table>
+          <thead><tr><th>Voucher</th><th>Entry</th><th class="r">Qty</th><th class="r">Value</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="docn">26-27/RAN/GRN/118</td><td><span class="dk6">Goods in ·</span> Mufti</td><td class="r">240</td><td class="r">4,28,900</td><td><span class="st6 qp">Posted</span></td></tr>
+            <tr class="sel"><td class="docn">26-27/RAN/PT/097</td><td><span class="dk6">Purchase ·</span> Killer</td><td class="r">180</td><td class="r">2,12,340</td><td><span class="st6">In review</span></td></tr>
+            <tr><td class="docn">26-27/DEO/TRF/031</td><td><span class="dk6">Transfer ·</span> to JSL</td><td class="r">96</td><td class="r">1,04,560</td><td><span class="st6 qt">In transit</span></td></tr>
+            <tr><td class="docn">26-27/DEO/SAL/1289</td><td><span class="dk6">Sale ·</span> counter 1</td><td class="r">3</td><td class="r">4,698</td><td><span class="st6 qp">Posted</span></td></tr>
+            <tr><td class="docn">26-27/PAT/BKG/054</td><td><span class="dk6">Booking ·</span> Mufti AW26</td><td class="r">1,200</td><td class="r">18,60,000</td><td><span class="st6 qd">Draft</span></td></tr>
+          </tbody>
+        </table>
+        <p class="selhint">Enter opens the selected voucher · arrows move the bar, exactly as your hands expect</p>
+      </div>
+      <div class="tp bill">
+        <span class="leg">Bill 1289 · counter 1</span>
+        <ul>
+          <li><div><p class="nm">Mufti slim shirt<span class="vr">40 · indigo</span></p></div><p class="am">₹2,199</p></li>
+          <li><div><p class="nm">Killer jeans<span class="vr">32 · black</span></p></div><p class="am">₹2,499</p></li>
+          <li><div><p class="nm">Being Human tee<span class="vr">M · white</span><span class="of">Buy 2 get 1 · lowest free</span></p></div><p class="am"><s>₹999</s>₹0</p></li>
+        </ul>
+        <p class="gstl"><span>Includes GST</span><span>₹503</span></p>
+        <div class="tot"><em>To pay</em><b>₹4,698</b></div>
+        <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+        <button class="payb">Take payment</button>
+      </div>
+    </div>
+    <div class="fkeys">
+      <span class="fk"><kbd>F4</kbd> New sale</span>
+      <span class="fk"><kbd>F5</kbd> Post GRN</span>
+      <span class="fk"><kbd>F6</kbd> Transfer</span>
+      <span class="fk"><kbd>F7</kbd> Stock count</span>
+      <span class="fk"><kbd>F9</kbd> Reports</span>
+      <span class="fk"><kbd>Esc</kbd> Back</span>
+    </div>
+    <div class="ctl">
+      <input type="text" placeholder="Scan a barcode, or type a style code">
+      <button class="cb1">Post GRN</button>
+      <button class="cb2">Save draft</button>
+      <button class="cb3">Flag for review</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 7 · THE INVITATION ============================== -->
+<section class="lang v7" id="d7">
+  <div class="intro">
+    <div class="intro-head">
+      <span class="num">DIRECTION 7</span>
+      <h2>The invitation</h2>
+    </div>
+    <p class="story">Indian premium is printed: fine double rules, a Mithila-style band, margins that don't hurry. This is the language of a beautifully printed card from Patna, set to work as software, in typefaces drawn for Indian publishing. The boldest direction here, and the most rooted in where KDPS is from.</p>
+    <div class="meta">
+      <p class="meta-line"><span class="meta-k">Borrowed from</span>fine wedding stationery; the double-rule borders of Mithila painting, Bihar's own line art</p>
+      <p class="meta-line"><span class="meta-k">Type</span>Martel for headings and figures · Martel Sans for text, both designed for India</p>
+      <div class="chips">
+        <span class="chip"><i style="background:#FFFDF8"></i>#FFFDF8</span>
+        <span class="chip"><i style="background:#232323"></i>#232323</span>
+        <span class="chip"><i style="background:#A63A2B"></i>#A63A2B</span>
+        <span class="chip"><i style="background:#C98A2D"></i>#C98A2D</span>
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="sheet"><div class="sheet-in">
+      <div class="band" aria-hidden="true"></div>
+      <div class="lh7">
+        <p class="wm">KDPS</p>
+        <p class="sub">Deoghar showroom<b>◆</b>Thursday 30 July 2026<b>◆</b>Priya at the counter</p>
+      </div>
+      <nav><span class="on">Sale</span><span>Stock</span><span>Documents</span><span>Reports</span></nav>
+      <div class="summary">
+        <div class="sm"><p class="n">₹1,42,650</p><p class="l">today's sale · 23 bills</p></div>
+        <div class="sm"><p class="n">12,438</p><p class="l">pieces on hand</p></div>
+        <div class="sm"><p class="n">5</p><p class="l">GRNs waiting · 2 SOR returns due 15 Aug</p></div>
+      </div>
+      <div class="band" aria-hidden="true"></div>
+      <div class="cols">
+        <div>
+          <p class="cap7">Documents</p>
+          <table>
+            <thead><tr><th>Document</th><th>Party / route</th><th class="r">Qty</th><th class="r">Value</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="doc"><b>26-27/RAN/GRN/118</b><i>Goods receipt</i></td><td>Mufti · Ranchi WH</td><td class="r">240</td><td class="r">4,28,900</td><td><span class="st7 wp">Posted</span></td></tr>
+              <tr><td class="doc"><b>26-27/RAN/PT/097</b><i>Purchase transfer</i></td><td>Killer · Ranchi WH</td><td class="r">180</td><td class="r">2,12,340</td><td><span class="st7 wv">In review</span></td></tr>
+              <tr><td class="doc"><b>26-27/DEO/TRF/031</b><i>Transfer out</i></td><td>Deoghar to JSL</td><td class="r">96</td><td class="r">1,04,560</td><td><span class="st7 wt">In transit</span></td></tr>
+              <tr><td class="doc"><b>26-27/DEO/SAL/1289</b><i>Sale</i></td><td>Counter 1 · Deoghar</td><td class="r">3</td><td class="r">4,698</td><td><span class="st7 wp">Posted</span></td></tr>
+              <tr><td class="doc"><b>26-27/PAT/BKG/054</b><i>Booking</i></td><td>Mufti · AW26</td><td class="r">1,200</td><td class="r">18,60,000</td><td><span class="st7 wd">Draft</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="card">
+          <div class="ttl">Bill 1289<span>counter 1</span></div>
+          <div class="band" aria-hidden="true" style="border-left:none;border-right:none"></div>
+          <div class="bd">
+            <ul>
+              <li><div><p class="nm">Mufti slim shirt<span class="vr">40 · indigo</span></p></div><p class="am">₹2,199</p></li>
+              <li><div><p class="nm">Killer jeans<span class="vr">32 · black</span></p></div><p class="am">₹2,499</p></li>
+              <li><div><p class="nm">Being Human tee<span class="vr">M · white</span><span class="of">Buy 2 get 1 · lowest item free</span></p></div><p class="am"><s>₹999</s>₹0</p></li>
+            </ul>
+            <p class="gstl"><span>Includes GST</span><span>₹503</span></p>
+            <div class="tot"><em>To pay</em><b>₹4,698</b></div>
+            <div class="tender"><button>Cash</button><button>UPI</button><button>Card</button></div>
+            <button class="payb">Take payment</button>
+          </div>
+        </aside>
+      </div>
+      <div class="ctl">
+        <input type="text" placeholder="Scan a barcode, or type a style code">
+        <button class="cb1">Post GRN</button>
+        <button class="cb2">Save draft</button>
+        <button class="cb3">Flag for review</button>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<section class="tail">
+  <h2>How to vote</h2>
+  <div class="tail-grid">
+    <div>
+      <ol>
+        <li>Scroll through all seven once, without judging.</li>
+        <li>Go back to the two or three that pulled you in, and imagine a full day's work inside them.</li>
+        <li>Pick a first and a second choice.</li>
+        <li>Note one thing you would steal from any other direction, even one you rejected.</li>
+        <li>Send your picks and your one steal on the WhatsApp group.</li>
+      </ol>
+      <p style="margin-top:16px;color:#757166;font-size:13.5px">A note on mixing: directions blend after the vote. The day book's stamp could live inside Counter glass; the painted board's Hindi labels could ride on almost any of these; Gateway's function keys work anywhere. The vote sets the base, not a prison.</p>
+    </div>
+    <div>
+      <h3>What informed these directions</h3>
+      <ul class="src">
+        <li><a href="https://www.shopify.com/blog/pos-ui">Shopify: POS UI design principles</a></li>
+        <li><a href="https://medium.com/design-bootcamp/designing-digital-luxury-how-to-design-interfaces-that-feel-expensive-f8c14a220b80">Designing digital luxury: interfaces that feel expensive</a></li>
+        <li><a href="https://premiumcoding.com/the-new-language-of-luxury-website-design-how-digital-experiences-shape-desire-in-2025/">The new language of luxury web design</a></li>
+        <li><a href="https://www.themasterly.com/blog/fintech-design-guide">Fintech design 2026: why most apps look the same</a></li>
+        <li><a href="https://www.orizon.co/blog/glassmorphism-in-2026-how-to-use-frosted-glass-without-killing-ux">Frosted glass without killing UX (2026 guidance)</a></li>
+        <li><a href="https://design.google/library/new-wave-indian-type-design">Google Design: the new wave of Indian type design</a></li>
+        <li><a href="https://fonts.google.com/specimen/Martel">Martel, a typeface designed for Indian publishing</a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
