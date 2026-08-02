@@ -22,6 +22,7 @@ export function RupeeInput({
   paise,
   locked,
   placeholder,
+  prefillPaise = null,
   onChange,
 }: {
   testId: string;
@@ -29,10 +30,31 @@ export function RupeeInput({
   paise: number;
   locked: boolean;
   placeholder: string;
+  /**
+   * What this box adopts if the cashier **taps** it while it is standing empty
+   * - `null` when it is already filled, or when there is nothing left to offer
+   * (#246: "tapping into an empty amount box pre-fills whatever is still owed").
+   *
+   * Whether the box is empty is the **caller's** judgement, not this box's text.
+   * The cash row displays the balance it is about to absorb while nobody has yet
+   * typed in it, and that row is the one the prefill exists for; a rule based on
+   * the text being blank would skip exactly it.
+   *
+   * Adopting a figure is an ordinary edit - it goes out through `onChange` like
+   * any keystroke and can be typed straight over, which is what makes a split a
+   * split.
+   */
+  prefillPaise?: number | null;
   onChange: (paise: number | null) => void;
 }) {
   const [text, setText] = useState(paise ? paiseToRupees(paise) : "");
   const shown = useRef(paise);
+  const box = useRef<HTMLInputElement>(null);
+  // Counted rather than flagged: a prefill that lands on the figure already
+  // shown - the cash row adopting the balance it was displaying anyway - leaves
+  // `text` identical, so an effect watching the text would not run on the one
+  // row this matters most for.
+  const [prefills, setPrefills] = useState(0);
 
   useEffect(() => {
     // Follow the cart when something other than this box moved the number - a
@@ -42,8 +64,17 @@ export function RupeeInput({
     setText(paise ? paiseToRupees(paise) : "");
   }, [paise]);
 
+  useEffect(() => {
+    // A box that just adopted the balance is selected whole, so the next
+    // keystroke replaces it: the ticket's flow is "tap UPI, it offers ₹2,848,
+    // overtype ₹2,000", and a cashier who has to clear the offer first would
+    // rather it had never been made.
+    if (prefills > 0) box.current?.select();
+  }, [prefills]);
+
   return (
     <input
+      ref={box}
       className="input bill-cell"
       inputMode="decimal"
       data-testid={testId}
@@ -51,6 +82,21 @@ export function RupeeInput({
       disabled={locked}
       placeholder={placeholder}
       value={text}
+      // `onClick`, deliberately not `onFocus`. Focus is not intent: a Tab
+      // through the panel, or any focus the page restores on its own, would
+      // otherwise put the whole balance into whichever box it landed on. On an
+      // all-cash bill that means Card silently takes the lot, cash falls to
+      // nought and is dropped from the tenders, the balance closes to zero and
+      // nothing flags it - a card sale posted for money that went in the
+      // drawer, found at the day close if at all. Grill Q1 settles it too:
+      // "everything is a scan or a click", and this is the click.
+      onClick={() => {
+        if (locked || prefillPaise === null || prefillPaise <= 0) return;
+        shown.current = prefillPaise;
+        setText(paiseToRupees(prefillPaise));
+        setPrefills((n) => n + 1);
+        onChange(prefillPaise);
+      }}
       onChange={(e) => {
         setText(e.target.value);
         if (e.target.value.trim() === "") {

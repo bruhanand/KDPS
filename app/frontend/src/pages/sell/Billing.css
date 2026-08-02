@@ -258,20 +258,30 @@ select.bill-season { min-width: 0; }
    `.bill-lines` gets the same treatment (`min-height: 0` + its own
    `overflow-y: auto`) for the identical reason. */
 .bill-pay { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
-.bill-panel { padding: 16px 18px; }
+.bill-panel { padding: 14px 16px; }
 .bill-panel .field { margin-top: 10px; }
 .bill-panel .muted-cell { display: block; margin-top: 10px; font-size: 12px; }
-.bill-due { font-size: 30px; font-weight: 700; color: var(--ink); margin: 4px 0 0; }
-.bill-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  margin-top: 10px; font-size: 13.5px; font-weight: 600;
-}
+/* 26px rather than the 30px it shipped at (#246): the hero has to be the first
+   thing read, not the tallest thing on the rail, and four pixels here is four
+   pixels the rail does not have to scroll for. */
+.bill-due { font-size: 26px; font-weight: 700; color: var(--ink); margin: 2px 0 0; }
 
 /* The payment panel (#182): four modes, the notes among them, and the manager's
    tap. One column of label-then-amount rows, so a cashier's eye runs down the
    amounts rather than hunting for them. */
-.bill-tenders { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.bill-tenders { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
 .bill-tender { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 10px; }
+/* Cash, its chips and the cash-received box read as one block (#246): they are
+   three parts of one question - how much of this bill is cash, what did the
+   customer hand over, what goes back - and grouping them is what let the panel
+   drop the separate "Cash received" field and "Change" row that were sitting at
+   the bottom, well away from the row they belong to. */
+.bill-cash-block { display: flex; flex-direction: column; gap: 6px; }
+/* Cash received is a note to self about the drawer, not a tender: it is indented
+   under Cash and set quieter, so an eye running down the amounts reads three
+   tenders, not four. */
+.bill-tender.is-quiet { padding-left: 12px; }
+.bill-tender.is-quiet > label { font-size: 12px; font-weight: 500; color: var(--caption); }
 .bill-tender > label {
   display: flex; align-items: baseline; gap: 6px;
   font-size: 13px; font-weight: 600; color: var(--ink);
@@ -284,16 +294,61 @@ select.bill-season { min-width: 0; }
 }
 .bill-tender .bill-cell { text-align: right; }
 
-.bill-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+/* The quick-cash chips (#246, grill Q4). Indented to the same rule as the
+   cash-received row above, so the whole cash block hangs off the Cash label.
+   They wrap rather than shrink: "₹4,848" is a figure a cashier reads at a
+   glance and a chip that clipped it would be worse than no chip. */
+.bill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 12px; }
+.bill-chip {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 3px 9px; font-size: 12px; font-weight: 600;
+}
+.bill-chip-tag {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--caption);
+}
+
+/* The one balance line (#246). It says exactly one thing at a time, because the
+   two rows it replaced were both on screen reading ₹0 for most of a bill's
+   life, which teaches a cashier to stop looking at the one number that matters.
+   Which of the five states it is in is `balanceStandingOf`'s decision (tender.ts,
+   where it has tests); this only paints them. Tokens only, per the dark theme's
+   standing constraint.
+
+   Three of the five are red, and they get three class names rather than one
+   shared one: `short`, `over` and `stranded` are different problems with
+   different fixes, and a class called `is-short` on an over-tendered bill would
+   be a lie the next person reading the DOM has to unpick. */
+.bill-balance-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  margin: 12px 0 0; padding: 8px 11px; border-radius: 9px;
+  font-size: 14px; font-weight: 700;
+}
+.bill-balance-line.is-short,
+.bill-balance-line.is-over,
+.bill-balance-line.is-stranded {
+  color: var(--red); background: var(--red-bg); border: 1px solid var(--red-bd);
+}
+/* The one red state whose words are a sentence rather than a label, so it is the
+   one that needs room to wrap in a 340px rail. */
+.bill-balance-line.is-stranded { font-size: 13px; align-items: center; }
+.bill-balance-line.is-change {
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+.bill-balance-line.is-settled {
+  color: var(--caption); background: var(--band-edge-bg); border: 1px solid var(--band-edge-bd);
+  font-weight: 600;
+}
+
+.bill-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
 .bill-note { display: flex; flex-direction: column; gap: 4px; }
 .bill-note-row { display: grid; grid-template-columns: 1fr 100px 24px; align-items: center; gap: 8px; }
 .bill-note-row .bill-cell { padding: 6px 8px; }
 .bill-note .muted-cell { margin-top: 0; }
 .bill-note-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
 
-.bill-unpaid { color: var(--red); }
 .bill-authorised {
-  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline);
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline);
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
 }
 .bill-authorised .btn { display: inline-flex; align-items: center; gap: 7px; }
