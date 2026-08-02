@@ -244,7 +244,6 @@ function Counter({ storeName }: { storeName?: string }) {
           ...onScreenRef.current,
           cart: { ...onScreenRef.current.cart, exchange: parked },
         };
-        setPendingDraft(null);
         setCart((current) => ({ ...current, exchange: parked }));
         setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
       }
@@ -289,30 +288,45 @@ function Counter({ storeName }: { storeName?: string }) {
    *
    * Paper mode restores by putting `paper=N` back in the address bar, never by
    * holding a state flag (`Billing.tsx`'s own paper mode is always re-derived
-   * from the URL) - and only when it is still outstanding: a number that has
-   * since synced or gone to someone else is left alone, with a note rather
-   * than a silent drop of the rest of the bill.
+   * from the URL) - and only when it is still outstanding.
+   *
+   * A paper claim that can no longer be honoured refuses the **whole** restore
+   * and returns false, rather than landing the cart and customer with a note
+   * about the missing half (round-2 finding). The 2 Aug 2026 ruling is that
+   * the snapshot restores as one or not at all, and this is the case where
+   * the halves differ in kind: a bill saved as a re-entry of printed bill N,
+   * landed without its paper claim, is no longer a re-entry at all - Save &
+   * Print would draw it a fresh number and print a second receipt for a bill
+   * the customer is already holding. There is nothing safe to keep, so the
+   * cashier is told and the draft is left standing for them to discard.
    */
   const applyDraft = useCallback(
-    (payload: DraftPayload, snapshotTill: TillSnapshot | null) => {
+    (payload: DraftPayload, snapshotTill: TillSnapshot | null): boolean => {
+      const claimsPaper = payload.paper !== null;
+      if (
+        claimsPaper &&
+        outstandingPaperSeq(paperParams(payload.paper as number), snapshotTill) !== payload.paper
+      ) {
+        setNote(
+          `That bill was a re-entry of printed bill ${payload.paper}, and the counter no longer ` +
+            "regards that number as outstanding - so none of it has been restored. It cannot be " +
+            "keyed in again under that number. Discard it, or check the number before starting over.",
+        );
+        return false;
+      }
       onScreenRef.current = { cart: payload.cart, customer: payload.customer };
       setCart(payload.cart);
       setCustomer(payload.customer);
+      setUndoStack(emptyUndo());
       setPendingDraft(null);
-      if (payload.paper === null) return;
-      if (outstandingPaperSeq(paperParams(payload.paper), snapshotTill) !== payload.paper) {
-        setNote(
-          `The rest of the bill is back, but its paper re-entry (bill ${payload.paper}) could not be ` +
-            "restored - the counter no longer regards that number as outstanding. Check it before saving.",
-        );
-        return;
-      }
+      if (!claimsPaper) return true;
       setPaperAt(payload.paperAt ?? localNow());
       if (params.get("paper") !== String(payload.paper)) {
         const next = new URLSearchParams(params);
         next.set("paper", String(payload.paper));
         setParams(next, { replace: true });
       }
+      return true;
     },
     [params, setParams],
   );
@@ -372,20 +386,40 @@ function Counter({ storeName }: { storeName?: string }) {
     };
   }, [engine]);
 
+  /** Is there a bill on this screen at all? Customer fields count: a name and
+   *  a GSTIN typed before the first scan are as much a part of the snapshot as
+   *  a line is (the 2 Aug 2026 atomic ruling), and a crash between the two
+   *  would otherwise lose them. */
+  const billStarted =
+    cart.lines.length > 0 ||
+    Boolean(cart.exchange) ||
+    Boolean(customer.name || customer.mobile || customer.gstin);
+
   /**
    * Write-through: every cart or customer-field change lands here (#244).
    *
-   * Held off until the mount read above has landed - see `restored` - and
-   * while a flagged draft is still waiting on the cashier (`pendingDraft`):
-   * writing the still-empty screen through in that window would overwrite the
-   * very row the notice is offering to resume before they get to answer it.
+   * Held off until the mount read above has landed (see `restored`), and while
+   * a flagged draft is still waiting on the cashier *and the counter is still
+   * empty*: writing the empty screen through in that window would overwrite
+   * the very row the notice is offering to resume before they get to answer
+   * it.
+   *
+   * It deliberately does *not* stay held once they start billing (round-2
+   * finding). The gate used to be `pendingDraft` alone, which made every
+   * mutator clear the notice to get autosave back - so one scan silently
+   * dropped a question the 2 Aug 2026 ruling says only Resume or Discard may
+   * answer. Suspending on emptiness instead lets the notice stand while the
+   * new bill is protected, and costs nothing: `pendingDraft` holds the payload
+   * in memory, so Resume no longer depends on the stored row surviving.
+   *
    * `persistDraft` never throws (flag, never block): a failed write is a
    * console line, and the bill carries on regardless.
    */
   useEffect(() => {
-    if (!engine || !restored || pendingDraft) return;
+    if (!engine || !restored) return;
+    if (pendingDraft && !billStarted) return;
     void persistDraft(engine.db, cart, customer, paper, paper === null ? null : paperAt);
-  }, [engine, restored, pendingDraft, cart, customer, paper, paperAt]);
+  }, [engine, restored, pendingDraft, billStarted, cart, customer, paper, paperAt]);
 
   const leavePaperMode = useCallback(() => {
     if (!params.has("paper")) return;
@@ -420,7 +454,7 @@ function Counter({ storeName }: { storeName?: string }) {
 
   // Quiet, and only once there is a bill on screen worth saving - an empty
   // counter has nothing autosave is protecting yet.
-  const draftSaved = restored && (cart.lines.length > 0 || Boolean(cart.exchange));
+  const draftSaved = restored && billStarted;
 
   const suggestions = useMemo(
     () =>
@@ -460,8 +494,8 @@ function Counter({ storeName }: { storeName?: string }) {
 
   /** Remember the cart as it stood before a mutator lands - one step for the
    *  Undo button (#244). */
-  const pushCartUndo = useCallback((snapshot: Cart) => {
-    setUndoStack((stack) => pushUndo(stack, snapshot));
+  const pushCartUndo = useCallback((snapshot: Cart, run?: string) => {
+    setUndoStack((stack) => pushUndo(stack, snapshot, run));
   }, []);
 
   const takePiece = useCallback(
@@ -481,7 +515,6 @@ function Counter({ storeName }: { storeName?: string }) {
       // closes - just against the very next scan instead of a crash restore.
       const next = scanPiece(cart, piece, { stock, alternatives }, defaultSalesman);
       onScreenRef.current = { ...onScreenRef.current, cart: next };
-      setPendingDraft(null);
       setCart(next);
       startingANewBill();
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
@@ -509,7 +542,6 @@ function Counter({ storeName }: { storeName?: string }) {
         ...onScreenRef.current,
         cart: { ...cart, lines: [...cart.lines, manualLine] },
       };
-      setPendingDraft(null);
       setCart((current) => ({ ...current, lines: [...current.lines, manualLine] }));
       startingANewBill();
       clearScan();
@@ -537,7 +569,9 @@ function Counter({ storeName }: { storeName?: string }) {
   );
 
   function editLine(key: string, patch: Partial<CartLine>) {
-    pushCartUndo(cart);
+    // One line's one field is one undo step, however many keystrokes it took:
+    // the grid's cells fire this on every character (round-2 finding).
+    pushCartUndo(cart, `${key}:${Object.keys(patch).sort().join(",")}`);
     setCart((current) => ({
       ...current,
       lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
@@ -601,7 +635,6 @@ function Counter({ storeName }: { storeName?: string }) {
    *  and the exchange hand-off) that can race the mount-time draft read. */
   function editCustomer(next: TillCustomer) {
     onScreenRef.current = { ...onScreenRef.current, customer: next };
-    setPendingDraft(null);
     setCustomer(next);
   }
 
@@ -699,9 +732,25 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Pick a parked bill back up, at today's prices. */
   async function resumeHold(hold: HeldBill) {
     if (!engine || holdsBlocked) return;
-    const restored = restoreHold(hold, world);
-    setCart(restored.cart);
-    setCustomer(restored.customer);
+    const picked = restoreHold(hold, world);
+    // A hold landing on the counter is a bill starting, so it takes the same
+    // three guards every other such moment takes (round-2 finding - this was
+    // the one path with none of them).
+    //
+    // `skipRestore` + the `onScreenRef` mirror, because this is a fourth
+    // source that can race the mount-time draft read: without them a hold
+    // resumed before that read lands is overwritten by the crashed draft,
+    // with the hold already released - the atomic-restore failure the 2 Aug
+    // 2026 ruling forbids, in the one shape where the evidence is gone too.
+    //
+    // `emptyUndo`, because the undo stack belongs to the bill that built it:
+    // popping it onto a resumed hold would put the previous customer's lines
+    // and prices on a bill that is about to be printed and posted.
+    skipRestore.current = true;
+    onScreenRef.current = { cart: picked.cart, customer: picked.customer };
+    setCart(picked.cart);
+    setCustomer(picked.customer);
+    setUndoStack(emptyUndo());
     setPendingDraft(null);
     setShowHolds(false);
     // A held bill can carry lines of its own, so it can put the cart into a
@@ -710,7 +759,7 @@ function Counter({ storeName }: { storeName?: string }) {
     // a stale print problem must not survive (round-2 finding: Billing.tsx:1013).
     setPrintProblem("");
     setNote(
-      restored.staleLines
+      picked.staleLines
         ? "Bill picked up. Priced at today's rates - check the lines the counter no longer stocks."
         : "Bill picked up, priced at today's rates.",
     );
@@ -1370,7 +1419,7 @@ function paperParams(paper: number): URLSearchParams {
  * a number that has since synced, or been keyed in by somebody else, is no
  * longer this draft's to restore.
  */
-function paperConsistent(
+export function paperConsistent(
   draftPaper: number | null,
   params: URLSearchParams,
   till: TillSnapshot | null,

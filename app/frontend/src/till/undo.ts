@@ -19,18 +19,39 @@ import type { Cart } from "./cart";
  *  feature with a dial on it. */
 export const UNDO_LIMIT = 50;
 
-export type UndoStack = Cart[];
+/** One step back, and - for a step that came from typing - what was being
+ *  typed into, so a run of keystrokes in one box collapses into one step.
+ *  `run` is absent on discrete actions (a scan, a delete), which never
+ *  collapse into anything. */
+export interface UndoStep {
+  cart: Cart;
+  run?: string;
+}
+
+export type UndoStack = UndoStep[];
 
 export function emptyUndo(): UndoStack {
   return [];
 }
 
-/** Remember `snapshot`, the cart as it stood immediately before the change
- *  that is about to land. The oldest step falls off once the stack is past
- *  `UNDO_LIMIT`, so a long bill's undo depth is bounded rather than growing
- *  into a second history of the whole day. */
-export function pushUndo(stack: UndoStack, snapshot: Cart): UndoStack {
-  const next = [...stack, snapshot];
+/**
+ * Remember `snapshot`, the cart as it stood immediately before the change that
+ * is about to land. The oldest step falls off once the stack is past
+ * `UNDO_LIMIT`, so a long bill's undo depth is bounded rather than growing into
+ * a second history of the whole day.
+ *
+ * `run` names what is being edited - one line's one field. The grid's cells
+ * fire on every keystroke, so without it a ₹150 discount is three steps and
+ * Undo walks back through "₹15" and "₹1" before reaching the price the line
+ * actually had (round-2 finding). Consecutive pushes under the same `run`
+ * keep the *first* snapshot and add nothing: the state before the typing
+ * started is the one worth going back to, and the 50-step limit stays a
+ * budget for actions rather than characters.
+ */
+export function pushUndo(stack: UndoStack, snapshot: Cart, run?: string): UndoStack {
+  const top = stack[stack.length - 1];
+  if (run !== undefined && top?.run === run) return stack;
+  const next = [...stack, { cart: snapshot, ...(run === undefined ? {} : { run }) }];
   return next.length > UNDO_LIMIT ? next.slice(next.length - UNDO_LIMIT) : next;
 }
 
@@ -38,5 +59,5 @@ export function pushUndo(stack: UndoStack, snapshot: Cart): UndoStack {
  *  taken off. `null` once there is nothing left to undo. */
 export function popUndo(stack: UndoStack): { cart: Cart; stack: UndoStack } | null {
   if (!stack.length) return null;
-  return { cart: stack[stack.length - 1], stack: stack.slice(0, -1) };
+  return { cart: stack[stack.length - 1].cart, stack: stack.slice(0, -1) };
 }

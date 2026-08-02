@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TillSnapshot } from "../../till/engine";
 
-import { outstandingPaperSeq, pickBillAlert } from "./Billing";
+import { outstandingPaperSeq, paperConsistent, pickBillAlert } from "./Billing";
 import type { BillAlertFlags } from "./Billing";
 
 /** Only the four fields this rule reads; the snapshot has two dozen. */
@@ -174,3 +174,50 @@ describe("which one banner the counter shows", () => {
 function kebabOf(key: keyof BillAlertFlags): string {
   return key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
+
+// Whether a crashed draft's paper claim may be restored (#244). The same class
+// of rule as `outstandingPaperSeq` above, and the same cost of getting it
+// wrong: a re-entry restored as an ordinary bill takes a new number and prints
+// a second receipt, and an ordinary cart restored onto a re-entry keys the
+// wrong lines in under a number head office is waiting on.
+describe("whether a draft's paper claim is safe to restore", () => {
+  it("restores an ordinary draft onto an ordinary counter", () => {
+    expect(paperConsistent(null, asked(""), counter())).toBe(true);
+  });
+
+  it("refuses an ordinary draft while the address bar is mid a re-entry", () => {
+    // The cashier navigated here to key in bill 61. Landing an unrelated
+    // crashed cart on it is the mixed-halves failure the atomic ruling names.
+    expect(paperConsistent(null, asked("61"), counter())).toBe(false);
+  });
+
+  it("restores a paper draft onto the same re-entry", () => {
+    expect(paperConsistent(61, asked("61"), counter())).toBe(true);
+  });
+
+  it("restores a paper draft onto a bare counter, since it carries its own number", () => {
+    expect(paperConsistent(61, asked(""), counter())).toBe(true);
+  });
+
+  it("refuses a paper draft that contradicts the number in the address bar", () => {
+    expect(paperConsistent(61, asked("62"), counter())).toBe(false);
+  });
+
+  it("refuses a paper draft whose number has since been keyed in", () => {
+    expect(paperConsistent(61, asked(""), counter({ paperEntered: [61] }))).toBe(false);
+  });
+
+  it("refuses a paper draft whose number has since synced", () => {
+    // 61 is no longer a hole - somebody else's bill closed it.
+    const synced = counter({
+      register: {
+        fy: "26-27",
+        last_accepted_seq: 73,
+        holes: [62],
+        hole_count: 1,
+        series_open: true,
+      },
+    } as Partial<TillSnapshot>);
+    expect(paperConsistent(61, asked(""), synced)).toBe(false);
+  });
+});
