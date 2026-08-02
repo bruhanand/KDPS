@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { Compass } from "lucide-react";
 
+import { PageHeader } from "../components/PageHeader";
 import { NAV_ITEMS, SECTIONS, itemPath, normalizePath } from "../shell/navConfig";
 import { PLANNED_PAGES, STAGE_LABEL, STAGE_TONE } from "./plannedPages";
 import "./PlannedPage.css";
@@ -31,13 +32,14 @@ export function PlannedPage() {
 
   return (
     <div className="page-pad">
-      <p className="eyebrow">{section?.label}</p>
-      <div className="planned-head">
-        <h1 className="h1">{screen?.label}</h1>
-        <span className={`chip chip-${STAGE_TONE[planned.module.stage]}`}>
-          {STAGE_LABEL[planned.module.stage]}
-        </span>
-      </div>
+      <PageHeader
+        title={screen?.label}
+        actions={
+          <span className={`chip chip-${STAGE_TONE[planned.module.stage]}`}>
+            {STAGE_LABEL[planned.module.stage]}
+          </span>
+        }
+      />
       <p className="lead planned-summary">{planned.summary}</p>
 
       <div

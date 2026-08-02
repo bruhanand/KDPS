@@ -13,6 +13,7 @@ import type {
   AcceptedBill,
   BillDraft,
   DatasetPayload,
+  HandoverPayload,
   QueuedBill,
   RegisterPayload,
 } from "./types";
@@ -89,9 +90,16 @@ export function dataset(over: Partial<DatasetPayload> = {}): DatasetPayload {
     credit_notes: [],
     salesmen: [],
     managers: [],
+    seasons: [],
+    policy: { manual_discount_cap_percent: "0.00" },
     deleted: { items: [], offers: [], credit_notes: [] },
     ...over,
   };
+}
+
+/** A season, with the master's own ordering. Lower `sort_order` is older. */
+export function season(code: string, sort_order: number, status = "open") {
+  return { code, name: `Season ${code}`, status, sort_order };
 }
 
 export function item(barcode: string, season = "FW25", mrp: number | null = 149900) {
@@ -163,6 +171,10 @@ export interface FakeServer extends TillTransport {
   registers: RegisterPayload[];
   /** Cursors the till asked from, in order. */
   asked: string[];
+  /** Every held-bill push, in order - each one the whole list as it stood. */
+  heldPushes: Record<string, unknown>[][];
+  /** Every register handover asked for, by reason (#189). */
+  handovers: string[];
 }
 
 /** A server that takes every bill, unless a test says otherwise. */
@@ -173,6 +185,8 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
     datasets: [],
     registers: [],
     asked: [],
+    heldPushes: [],
+    handovers: [],
     answer: (bill) => ({ doc_number: bill.doc_number, id: bill.till_seq, flags: [] }),
     async dataset(since: string) {
       server.asked.push(since);
@@ -189,6 +203,17 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
       const accepted = server.answer(bill);
       landed.push(bill.till_seq);
       return accepted;
+    },
+    async putHeld(held: Record<string, unknown>[]) {
+      server.heldPushes.push(held);
+      return { count: held.length };
+    },
+    async handover(reason: string): Promise<HandoverPayload> {
+      server.handovers.push(reason);
+      const last = landed.length ? Math.max(...landed) : 0;
+      const holes = [];
+      for (let seq = 1; seq < last; seq += 1) if (!landed.includes(seq)) holes.push(seq);
+      return { resume_from_seq: last + 1, unsynced_hint: holes, hole_count: holes.length };
     },
     ...over,
   };

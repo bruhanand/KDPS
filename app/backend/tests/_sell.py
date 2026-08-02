@@ -28,6 +28,7 @@ from accounts.models import ScopeType, User
 from accounts.sections import CAP_APPROVE
 from core.documents import VoucherSeries
 from masters.models import Brand, Cohort, Gstin, GstSlab, LegalEntity, Season, Sku, Store
+from sell.gstin import check_digit
 from sell.models import Salesman
 from stockledger.models import StockLedgerEntry
 from stockledger.projections import post_on_hand_movement
@@ -63,8 +64,13 @@ def build_store(code: str = "SEL-DEO", state: str = "10") -> Store:
     entity, _ = LegalEntity.objects.get_or_create(
         code="sell-ent", defaults={"name": "Sell Entity", "pan": "AAACS1234B"}
     )
+    # A registration that passes its own check digit, computed rather than
+    # invented: the sale pipeline flags a malformed buyer GSTIN (#187), and a
+    # fixture whose registrations would not survive that check is a fixture
+    # quietly asserting something untrue about the shop it builds.
+    stem = f"{state}AAACS1234B1Z"
     gstin, _ = Gstin.objects.get_or_create(
-        gstin=f"{state}AAACS1234B1Z{state[0]}",
+        gstin=stem + check_digit(stem[:14]),
         defaults={
             "state_code": state,
             "state_name": "Bihar" if state == "10" else "Jharkhand",
@@ -233,6 +239,21 @@ def build_manager(store: Store, username: str = "sell_manager") -> User:
     return user
 
 
+def build_accountant(username: str = "sell_accounts") -> User:
+    """Head office's finance seat - `money: manage`, the whole network.
+
+    The audience for the IRN queue (#187), and taken from the ratified sheet
+    rather than granted here: Accounts holds `money: manage` in the matrix
+    already, which is the whole reason that is the rung the queue is gated at.
+    """
+    return User.objects.create_user(
+        username=username,
+        password=TEST_PASSWORD,
+        role=make_role("accounts", "Accounts (sell tests)"),
+        scope_type=ScopeType.ALL,
+    )
+
+
 def build_salesman(store: Store, code: str = "ALIE") -> Salesman:
     salesman, _ = Salesman.objects.get_or_create(
         store=store, code=code, defaults={"name": "Ali E."}
@@ -244,6 +265,17 @@ def client_for(user: User) -> APIClient:
     client = APIClient()
     client.force_authenticate(user)
     return client
+
+
+def upi_tender(amount_paise: int, *, state: str = "manual", reference: str = "") -> dict[str, Any]:
+    """One UPI row, stamped - the shape every UPI-tender test starts from.
+
+    `manual` by default: it is the only stamp the till can legitimately send
+    until the QR charge card (#248) lands."""
+    row: dict[str, Any] = {"mode": "upi", "amount_paise": amount_paise, "upi_state": state}
+    if reference:
+        row["upi_reference"] = reference
+    return row
 
 
 def bill_payload(

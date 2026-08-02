@@ -78,6 +78,9 @@ def test_the_detail_is_the_whole_bill_for_reprint(counter):
     body = response.json()
     assert body["doc_number"] == counter["sale"].doc_number
     assert body["store_code"] == counter["store"].code
+    # The paper is a tax invoice, and the screen that reprints it has no till
+    # behind it to borrow a registration from (#185).
+    assert body["store_gstin"] == counter["store"].gstin.gstin
     assert body["lines"][0]["barcode"] == "8901000000011"
     assert body["lines"][0]["salesman_code"] == "ALIE"
     assert body["tenders"][0]["mode"] == "cash"

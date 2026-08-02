@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
+import { KdpsLogo } from "../components/KdpsLogo";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import "./Login.css";
 
@@ -49,8 +50,10 @@ export function Login() {
     <div className="login">
       <aside className="login-brand">
         <div className="login-brand-inner">
-          <span className="brand-mark login-mark">K</span>
-          <h1 className="login-title">KDPS Operating System</h1>
+          {/* The hero stays deep navy in both themes, so the lockup's
+              `currentColor` lettering is simply white here. */}
+          <KdpsLogo className="login-logo" />
+          <h1 className="login-title">Operating System</h1>
         </div>
       </aside>
 

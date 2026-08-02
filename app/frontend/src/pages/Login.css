@@ -6,14 +6,18 @@
   background-image: radial-gradient(900px 500px at 18% 12%, rgba(196, 98, 63, 0.35), transparent 60%),
     radial-gradient(700px 500px at 90% 90%, rgba(44, 62, 99, 0.6), transparent 55%);
 }
-.login-brand-inner { max-width: 440px; }
-.login-mark { width: 52px; height: 52px; border-radius: 13px; font-size: 27px; margin-bottom: 26px; }
-.login-title { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; margin: 0 0 14px; }
-.login-sub { font-size: 15.5px; line-height: 1.65; color: #cdd4e2; margin: 0 0 30px; }
-.login-layers { display: flex; flex-wrap: wrap; gap: 8px; }
-.login-layer {
-  font-size: 12px; font-weight: 700; letter-spacing: .3px; padding: 6px 12px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); color: #e7ecf5;
+/* A width, not a max-width: this is a flex item, so left to itself it shrinks
+   to whatever the lockup and the sub-line happen to measure. */
+.login-brand-inner { width: 320px; max-width: 100%; }
+/* The lockup at its own ratio (width wins over the component's height prop),
+   with "Operating System" as a quiet sub-line under it. `.login-brand` is
+   white text on the navy hero, so the logo's `currentColor` lettering and
+   needle come out white here - in both themes, since the hero is deliberately
+   not re-valued in dark mode (index.css). */
+.login-logo { display: block; width: 100%; height: auto; }
+.login-title {
+  font-size: 15px; font-weight: 600; letter-spacing: 3.4px; text-transform: uppercase;
+  color: #cdd4e2; margin: 20px 0 0 4px;
 }
 
 .login-panel {

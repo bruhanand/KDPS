@@ -34,16 +34,19 @@ from core.money import MoneyField
 from masters.models import Gstin
 
 #: Doc types this app mints. `SAL` is till-assigned (see the kernel's
-#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` is an ordinary server-allocated counter.
+#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` are ordinary server-allocated
+#: counters - a plain return needs the network by design (grill Q7), so there is
+#: nothing offline about its number.
 SALE_DOC_TYPE = "SAL"
 CREDIT_NOTE_DOC_TYPE = "CRN"
+RETURN_DOC_TYPE = "SRT"
 
 
 class SellPolicy(TimeStampedModel):
     """The shop floor's money dials, as data rather than as constants (Rule 12).
 
-    One row, because both dials are one decision head office makes for the chain
-    and neither varies by store today. It is read on every accept, so it is
+    One row, because each dial is one decision head office makes for the chain and
+    none of them varies by store today. It is read on every accept, so it is
     deliberately tiny.
 
     ``manual_discount_cap_percent`` is the B2 rule: a discount the rulebook did
@@ -56,6 +59,31 @@ class SellPolicy(TimeStampedModel):
 
     ``credit_note_validity_days`` is how long a note issued here stays spendable.
     Six months is the Indian norm and the grill recorded it as data, not a rule.
+
+    ``uncosted_aging_days`` is how long a line sold before its paperwork may sit in
+    the costing queue before somebody is told about it (#186). The queue drains
+    itself when the PT lands, so the dial is not a deadline - it is the point past
+    which "the paperwork is on its way" stops being a fair description. Three days
+    is a starting number, not a ruling: nothing in the corpus fixes one, and it is
+    a dial precisely so head office can move it without a deploy (Rule 12).
+
+    ``return_window_days`` is how long after a bill a piece may be brought back
+    without a manager saying so explicitly (#184). Grill Q7 puts the window in
+    data rather than in code, and past it the return is not refused - it takes the
+    manager's *second* answer, the window override, and lands flagged. Thirty days
+    is a starting number for the same reason the one above is: nothing in the
+    corpus fixes a customer-facing window (the 60-120 days in the domain facts are
+    the *brand's* return terms, which are a different clock entirely), and head
+    office moves this one without a release.
+
+    ``return_review_count`` is how many pieces one seller may take back in a day
+    before the daily check says so (#188). Returns are the best-documented theft
+    channel at any counter, which is why grill Q7 asks for them to be counted per
+    employee - but counting is not accusing, and the flag it raises is a row on a
+    list, never a refusal. Five is a starting number in exactly the sense the
+    ageing dial's three days is: nothing in the corpus fixes one, and a store with
+    a genuinely returns-heavy Saturday moves it rather than learning to ignore the
+    list.
     """
 
     SINGLETON_PK = 1
@@ -69,6 +97,21 @@ class SellPolicy(TimeStampedModel):
     credit_note_validity_days = models.IntegerField(
         default=180,
         help_text="How many days a credit note issued at the counter stays spendable.",
+    )
+    uncosted_aging_days = models.IntegerField(
+        default=3,
+        help_text="How many days a sold-before-inward line may wait to be costed "
+        "before the store's exception list carries it.",
+    )
+    return_window_days = models.IntegerField(
+        default=30,
+        help_text="How many days after a bill a piece comes back without a manager "
+        "having to override the window.",
+    )
+    return_review_count = models.IntegerField(
+        default=5,
+        help_text="How many pieces one seller may take back in a day before the "
+        "daily check puts their name on the store's exception list.",
     )
 
     class Meta:
@@ -85,12 +128,31 @@ class SellPolicy(TimeStampedModel):
                 condition=models.Q(credit_note_validity_days__gt=0),
                 name="ck_sellpolicy_validity_is_positive",
             ),
+            models.CheckConstraint(
+                condition=models.Q(uncosted_aging_days__gte=0),
+                name="ck_sellpolicy_aging_is_not_negative",
+            ),
+            # Nought is a legitimate setting - "every return needs the window
+            # override" - so the floor is nought and not one.
+            models.CheckConstraint(
+                condition=models.Q(return_window_days__gte=0),
+                name="ck_sellpolicy_window_is_not_negative",
+            ),
+            # Nought would mean "flag every seller who took anything back", which
+            # is a list nobody reads and therefore no control at all.
+            models.CheckConstraint(
+                condition=models.Q(return_review_count__gt=0),
+                name="ck_sellpolicy_return_review_is_positive",
+            ),
         ]
 
     def __str__(self) -> str:
         return (
             f"cap {self.manual_discount_cap_percent}% · "
-            f"credit notes valid {self.credit_note_validity_days}d"
+            f"credit notes valid {self.credit_note_validity_days}d · "
+            f"uncosted flagged after {self.uncosted_aging_days}d · "
+            f"returns inside {self.return_window_days}d · "
+            f"returns reviewed above {self.return_review_count} a seller a day"
         )
 
     @classmethod
@@ -166,6 +228,16 @@ class CreditNote(Document):
         on_delete=models.PROTECT,
         related_name="credit_notes_issued",
         help_text="The bill that issued it - an exchange whose returns exceeded its sales.",
+    )
+    source_return = models.ForeignKey(
+        "sell.Return",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="credit_notes_issued",
+        help_text="The plain return that issued it. Exactly one of the two sources "
+        "is ever set - a note is handed over either at the end of a bill or at the "
+        "end of a return, and never both.",
     )
     created_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
@@ -291,6 +363,34 @@ class Sale(Document):
     )
     salesman_default = models.ForeignKey(
         Salesman, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    # The manager's tap at the counter (#182). It sits on the bill as well as on
+    # the line it excused, because what a manager authorises is not always a line:
+    # an unrecognised credit note is a *tender*, and the lines it helped pay for
+    # are ordinary lines. A daily check reading "somebody took an unknown note
+    # here" with no name against it would be looking at the one place the
+    # counter's second eye was supposed to leave a mark.
+    override_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_authorised",
+        help_text="The manager who authorised whatever on this bill needed it.",
+    )
+    override_kind = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: "
+        "over_cap_discount, credit_note, or over_cap_discount+credit_note when a "
+        "manager was asked both at once.",
+    )
+    override_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The till's clock when the manager's PIN was accepted, which is "
+        "not the same moment as Save & Print.",
     )
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.PROTECT, related_name="sales_billed"
@@ -418,12 +518,22 @@ class SaleLine(TimeStampedModel):
     salesman = models.ForeignKey(
         Salesman, null=True, blank=True, on_delete=models.PROTECT, related_name="lines"
     )
+    offer = models.ForeignKey(
+        "offers.Offer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sale_lines",
+        help_text="The brand-layer rule that won this line. An add-on that stacked "
+        "on top is in the evidence, not here: this is 'which offer was this sold "
+        "under', which has exactly one answer.",
+    )
     offer_evidence = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Which rule won, what it beat, and by how much (B3). The FK onto "
-        "offers.Offer arrives with the offer engine; until then the winner's id "
-        "rides inside this evidence.",
+        help_text="Which rule won, what it beat, and by how much (B3). Kept beside "
+        "the FK rather than replaced by it: the rule can be ended and replaced, and "
+        "what this bill was priced under has to stay readable afterwards (Rule 3).",
     )
     manual_desc = models.CharField(
         max_length=200, blank=True, default="", help_text="A line the scan could not resolve."
@@ -483,6 +593,16 @@ class SaleLine(TimeStampedModel):
         return self.direction == self.Direction.RETURN
 
     @property
+    def value_paise(self) -> int:
+        """What this line is worth on the bill - the price paid, or the refund.
+
+        The same word a plain return's line answers to, so the posting engine can
+        take either without asking which table it came from (#184). `direction`
+        already carries the sign, so this is a magnitude on both.
+        """
+        return int(self.net_paise or 0)
+
+    @property
     def cost_paise(self) -> int:
         """What this line's pieces cost the books, at the rate frozen on it."""
         return int(self.unit_cost_paise or 0) * int(self.qty)
@@ -497,6 +617,10 @@ class SaleTender(TimeStampedModel):
         UPI = "upi", "UPI"
         CREDIT_NOTE = "credit_note", "Credit note"
 
+    class UpiState(models.TextChoices):
+        CONFIRMED = "confirmed", "Confirmed"
+        MANUAL = "manual", "Manual"
+
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="tenders")
     mode = models.CharField(max_length=12, choices=Mode.choices)
     amount_paise = MoneyField()
@@ -509,6 +633,16 @@ class SaleTender(TimeStampedModel):
         help_text="Set when the note was recognised. A note the till could not verify "
         "is taken on a manager's OK and flagged, so this stays empty there.",
     )
+    #: How the money was proven: `confirmed` (the bank answered, and the
+    #: acquirer's reference is stored alongside) or `manual` (the cashier vouched
+    #: - QR soundbox, static QR, no internet - and there is nothing trustworthy to
+    #: record). Blank on every non-UPI tender. `confirmed` cannot legitimately
+    #: reach the server yet - the QR charge card and its mock adapter are #248 -
+    #: but the pipeline accepts it correctly for when they land.
+    upi_state = models.CharField(max_length=10, choices=UpiState.choices, blank=True, default="")
+    #: The acquirer's transaction reference. Only ever set alongside `confirmed`
+    #: - a manual entry has nothing trustworthy to record.
+    upi_reference = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         db_table = "sell_sale_tender"
@@ -523,6 +657,25 @@ class SaleTender(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(credit_note__isnull=True) | models.Q(mode="credit_note"),
                 name="ck_saletender_note_only_on_note_mode",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(upi_state__in=["", "confirmed", "manual"]),
+                name="ck_saletender_upi_state_values",
+            ),
+            # Every UPI tender is stamped, no other tender is - said as an "iff"
+            # rather than two one-way rules so neither half can drift from the
+            # other.
+            models.CheckConstraint(
+                condition=(models.Q(mode="upi") & ~models.Q(upi_state=""))
+                | (~models.Q(mode="upi") & models.Q(upi_state="")),
+                name="ck_saletender_upi_state_iff_upi",
+            ),
+            # A reference can only ride a confirmed stamp. The required-when-
+            # confirmed half (an empty reference on a confirmed tender is also
+            # wrong) is enforced at the API layer, where the human message lives.
+            models.CheckConstraint(
+                condition=models.Q(upi_reference="") | models.Q(upi_state="confirmed"),
+                name="ck_saletender_reference_confirmed_only",
             ),
         ]
 
@@ -553,6 +706,166 @@ class CreditNoteRedemption(TimeStampedModel):
         return f"{self.credit_note_id} −{self.amount_paise}"
 
 
+class Return(Document):
+    """A piece brought back with nothing bought in its place (#184, grill Q7).
+
+    The sibling of the exchange, and everything that differs between the two
+    follows from one sentence: an exchange is a *bill*, and this is not. A bill
+    has a customer paying for something, so it can carry a return leg inside it
+    and net the two. A plain return has no sale to hide behind - the counter is
+    only giving value back - which makes it the best-documented theft channel at
+    any POS, and so:
+
+    * **No cash leg exists on this document by construction.** The customer takes
+      a credit note for what they actually paid, and the money stays inside the
+      system until it is spent on a real bill.
+    * **Every one of them takes a manager's tap.** `override_by` is not nullable
+      in practice - the pipeline refuses a return without a manager of this store
+      behind it - and the column is what a daily check reads.
+    * **The number comes from the server.** Returns are rare and risky, so the
+      till disables the whole flow while it is offline (the in-bill exchange still
+      works). There is nothing to number offline and no queue to replay.
+
+    `original_sale` is PROTECT rather than SET_NULL: what the customer is owed is
+    what they paid on that bill, so a return whose original had gone would be a
+    refund with nothing behind it.
+    """
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="returns")
+    fy = models.CharField(max_length=7)
+    original_sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name="plain_returns")
+    returned_at = models.DateTimeField(help_text="When the counter took the piece back.")
+    customer_name = models.CharField(max_length=120, blank=True, default="")
+    customer_mobile = models.CharField(max_length=15, blank=True, default="")
+    window_override = models.BooleanField(
+        default=False,
+        help_text="The manager took this back past the return window in SellPolicy. "
+        "A second, explicit answer - not something the ordinary override covers.",
+    )
+    override_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="returns_authorised",
+        help_text="The manager who stood behind this return. PROTECT because the "
+        "name is the evidence.",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="returns_taken"
+    )
+
+    class Meta(Document.Meta):
+        db_table = "sell_return"
+        ordering = ["-returned_at", "-id"]
+        constraints = [*Document.Meta.constraints]
+        indexes = [
+            models.Index(fields=["store", "returned_at"], name="return_store_taken_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.doc_number or f"Return(draft #{self.pk})"
+
+    @property
+    def doc_type(self) -> str:
+        return RETURN_DOC_TYPE
+
+    @property
+    def gstin(self) -> Gstin:
+        """The registration the return posts under - the store's, as a sale's is.
+
+        `post_entries` snapshots this onto every leg, and Bihar and Jharkhand are
+        separate registered persons: a reversal of a Bihar sale has to land in
+        Bihar's books whichever counter it was taken at.
+        """
+        return self.store.gstin
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        return self.fy, self.store.code, RETURN_DOC_TYPE
+
+
+class ReturnLine(TimeStampedModel):
+    """One piece off one bill, given back.
+
+    Everything money-shaped here is copied off the line it gives back rather than
+    worked out again (D2, Rule 3). What the customer gets is what they paid -
+    never today's price - and which book the cost came out of is the book the
+    *sale* posted to, whatever the brand's terms have become since.
+    """
+
+    return_doc = models.ForeignKey(Return, on_delete=models.CASCADE, related_name="lines")
+    line_no = models.IntegerField()
+    original_line = models.ForeignKey(
+        SaleLine, on_delete=models.PROTECT, related_name="plain_returned_by"
+    )
+    barcode = models.CharField(max_length=64, db_index=True)
+    season = models.CharField(max_length=120, blank=True, default="")
+    # The same seven merchandising dims a bill line snapshots, for the same
+    # reason: a ledger row read years later must not depend on the masters still
+    # saying what they said.
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    refund_paise = MoneyField(
+        default=0, help_text="What the customer actually paid for this quantity (D2)."
+    )
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gst_paise = MoneyField(
+        default=0, help_text="The tax inside the refund, at the rate the bill charged."
+    )
+    unit_cost_paise = MoneyField(
+        default=0, help_text="The cost frozen on the original line. Zero when it was never priced."
+    )
+    cost_book = models.CharField(
+        max_length=8, choices=SaleLine.CostBook.choices, blank=True, default=""
+    )
+    cost_vendor = models.ForeignKey(
+        "vendors.Vendor",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="return_lines_reversed",
+    )
+    reason = models.CharField(max_length=40, blank=True, default="")
+    condition = models.CharField(
+        max_length=8, choices=SaleLine.Condition.choices, default=SaleLine.Condition.GOOD
+    )
+
+    class Meta:
+        db_table = "sell_return_line"
+        ordering = ["return_doc_id", "line_no"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["return_doc", "line_no"], name="uq_returnline_doc_line_no"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(qty__gt=0), name="ck_returnline_qty_positive"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.return_doc_id}/{self.line_no} · {self.barcode} × {self.qty}"
+
+    @property
+    def is_return(self) -> bool:
+        """Always. It exists so a return line and a bill's own exchange leg can be
+        handed to the same stock and costing code, which asks exactly this."""
+        return True
+
+    @property
+    def value_paise(self) -> int:
+        """What this line is worth - see `SaleLine.value_paise`."""
+        return int(self.refund_paise or 0)
+
+    @property
+    def cost_paise(self) -> int:
+        return int(self.unit_cost_paise or 0) * int(self.qty)
+
+
 class ContinuityFlag(TimeStampedModel):
     """Something a human should look at, on a bill that was taken anyway.
 
@@ -560,7 +873,19 @@ class ContinuityFlag(TimeStampedModel):
     `ReviewItem`). Rule 8 in one table: the counter is never the place a problem
     is argued out, so everything the business can absorb lands here and shows on
     the store's action queue instead of refusing the customer.
+
+    **Which day a flag belongs to.** Most flags are about a bill, and a bill has
+    a day - the one the counter printed it on. The nightly check (#188) raises
+    two that are about no bill at all: a hole is a bill that never arrived, and a
+    seller's return count is about a store's afternoon. Those carry `day` in
+    their details, because the check runs in the small hours of the *next*
+    morning and `created_at` would file yesterday's finding under today. See
+    `for_day`.
     """
+
+    #: The details key a bill-less flag uses to say which day it is about
+    #: (ISO). Nothing with a `sale` needs it - the bill already knows.
+    DAY_KEY = "day"
 
     class Kind(models.TextChoices):
         NUMBER_HOLE = "number_hole", "Bills missing before this one"
@@ -569,6 +894,37 @@ class ContinuityFlag(TimeStampedModel):
         OFFER_MISMATCH = "offer_mismatch", "Offer applied differs from the rulebook"
         GST_MISMATCH = "gst_mismatch", "Tax charged differs from the dated slab"
         AGED_UNCOSTED = "aged_uncosted", "Sold before inward, still unpriced"
+        # #187. Not in db-design's original six: the B2B ticket asks for the
+        # buyer's GSTIN to be "validated softly (flag, not block)", and the five
+        # existing kinds all mean something else. Folding it into GST_MISMATCH
+        # would put "a character of this registration is mistyped" and "the tax
+        # on this bill is not the dated slab's" in one bucket, and head office
+        # answers those two with entirely different work.
+        GSTIN_INVALID = "gstin_invalid", "The buyer's GSTIN is not well formed"
+        # #184. Two things a plain return can be that nothing else here means.
+        #
+        # A **late** return is one taken past the window in `SellPolicy`. The
+        # `window_override` column on the document says a manager answered for
+        # it; this row is what puts it on the store's morning queue, because the
+        # window is the one policy at this counter a manager can set aside on
+        # their own say-so and the whole point of grill Q7 is that returns are
+        # watched.
+        #
+        # An **uncosted** return is a piece given back before the books could
+        # ever price it - sold before its paperwork arrived (#186) and returned
+        # before the PT landed. The money reverses, the stock comes back, and
+        # there is no cost event to unwind because none was ever posted. It is
+        # flagged rather than deferred: `DeferredCosting` hangs off a `SaleLine`
+        # and a plain return has none, and posting a guess at what the piece cost
+        # is the one outcome worse than telling somebody.
+        RETURN_LATE = "return_late", "Taken back after the return window closed"
+        RETURN_UNCOSTED = "return_uncosted", "Given back before the books could price it"
+        # #188. Grill Q7 asks for returns to be counted per employee in the daily
+        # check, and none of the kinds above means "one person took an unusual
+        # number of pieces back today". It is deliberately its own kind rather
+        # than a note on a bill: the finding is about a *pattern across* bills,
+        # so there is no one bill to hang it on and no one bill that answers it.
+        EMPLOYEE_RETURNS = "employee_returns", "One seller took back an unusual number"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -584,6 +940,15 @@ class ContinuityFlag(TimeStampedModel):
     )
     details = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    cleared_note = models.CharField(
+        max_length=240,
+        blank=True,
+        default="",
+        help_text="What the person who cleared this said about it. Its own column "
+        "rather than a key in `details`, because `details` is the finding - "
+        "written by a machine, rewritten on every nightly run - and a person's "
+        "sentence about it must not be something a later pass can overwrite.",
+    )
     resolved_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -599,6 +964,31 @@ class ContinuityFlag(TimeStampedModel):
     def __str__(self) -> str:
         return f"{self.kind} · {self.store_id}"
 
+    @classmethod
+    def for_day(
+        cls, rows: models.QuerySet[ContinuityFlag], day: date
+    ) -> models.QuerySet[ContinuityFlag]:
+        """`rows` narrowed to the flags that belong to `day`.
+
+        A flag about a bill belongs to the day the bill was printed. A flag about
+        no bill says which day it is about in its details (`DAY_KEY`); one that
+        somehow does not is filed by when it was raised, which is all there is to
+        go on.
+
+        The rule lives here rather than in the two screens that ask it, because
+        "which day is this exception about" has to have one answer - the Money
+        section counts them and the Dashboard's queue deliberately does not, and
+        a second copy of the rule is how those two start disagreeing.
+        """
+        return rows.filter(
+            models.Q(sale__billed_at__date=day)
+            | models.Q(sale__isnull=True, **{f"details__{cls.DAY_KEY}": day.isoformat()})
+            | (
+                models.Q(sale__isnull=True, created_at__date=day)
+                & ~models.Q(details__has_key=cls.DAY_KEY)
+            )
+        )
+
 
 class DeferredCosting(TimeStampedModel):
     """A sold line the books cannot price yet (grill Q5, sold-before-inward).
@@ -611,6 +1001,13 @@ class DeferredCosting(TimeStampedModel):
     class Status(models.TextChoices):
         WAITING = "waiting", "Waiting on inward"
         POSTED = "posted", "Posted"
+        # #184. The piece came back before anything ever priced it, so there is
+        # no cost to post and never will be: the sale's cost event and the
+        # return's reversal would be the same figure in opposite directions, and
+        # the honest total of the pair is nothing at all. Left as a row rather
+        # than deleted, because the queue is the record that a bill's cost was
+        # dealt with - and "given back" is one of the ways it can be.
+        RETURNED = "returned", "Given back before it could be priced"
 
     class Reason(models.TextChoices):
         """What the books are actually waiting for.
@@ -623,14 +1020,19 @@ class DeferredCosting(TimeStampedModel):
         only the value is missing, so re-posting the movement would take the piece
         out twice.
 
-        They also drain differently, and only the first one drains today. An
-        `unpriced` row is released by the PT that prices its cohort, which is the
-        hook #186 builds. The other two are waiting on **master data**, not on an
-        inward - somebody adding the brand, or naming its supplier - so no PT will
-        ever release them and #186 needs a masters-side trigger as well. Until it
-        has one they sit in the queue: visible, aged by the daily check, and
-        deliberately not posted, because a guess about whose stock it was is the
-        one outcome worse than a wait.
+        They also drain through different doors, which is why `sell.signals` has
+        two. An `unpriced` row is released by the PT that prices its cohort. The
+        other two are waiting on **master data**, not on an inward - somebody
+        adding the brand, or naming its supplier - so no PT will ever release them
+        and a brand or supplier edit is what does. Until one arrives they sit in
+        the queue: visible, aged by the daily check, and deliberately not posted,
+        because a guess about whose stock it was is the one outcome worse than a
+        wait.
+
+        A reason is not a fact about the past, either. A line waiting for its price
+        can be priced by a PT and still not be placeable, at which point the sweep
+        re-labels it as waiting on the masters instead. What the row *has* moved is
+        never read off here - see `sell.services.costing_sweep`.
         """
 
         UNPRICED = "unpriced", "No cost of record - sold before inward"
@@ -656,6 +1058,109 @@ class DeferredCosting(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.barcode} × {self.qty} ({self.status} · {self.reason})"
+
+
+class HeldBill(TimeStampedModel):
+    """A cart the counter put down to serve the next customer (grill Q13).
+
+    The one row in this app that is **not** a fact about money. A hold moves no
+    stock, takes no bill number and posts nothing: it is a cart, and a cart is
+    just what somebody is thinking about buying.
+
+    It is also the one row the till owns rather than the server. The counter's
+    IndexedDB is authoritative - a hold has to survive a dead line, and the
+    person who parked it is standing in front of it - and this table exists so
+    the Dashboard can say "2 bills on hold" without a manager walking to the
+    counter to look. That is why the push replaces the store's whole list rather
+    than adding to it: a hold resumed at the counter has to *disappear* here, and
+    the till has no per-hold delete to send.
+
+    `payload` is the cart as the till holds it, opaque to the server on purpose.
+    Repricing a kept bill happens at the counter on retrieval, against that day's
+    rules, so the server has no reason to understand what is inside - and reading
+    it as if it meant something would make a mirror into a second opinion.
+    """
+
+    class ExpiresPolicy(models.TextChoices):
+        TODAY = "today", "Expires at day close unless the store keeps it"
+        KEPT = "kept", "The store chose to carry it forward"
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="held_bills")
+    held_uuid = models.UUIDField()
+    label = models.CharField(max_length=120, blank=True, default="")
+    payload = models.JSONField(default=dict, blank=True)
+    held_at = models.DateTimeField()
+    expires_policy = models.CharField(
+        max_length=8, choices=ExpiresPolicy.choices, default=ExpiresPolicy.TODAY
+    )
+
+    class Meta:
+        db_table = "sell_held_bill"
+        ordering = ["held_at", "id"]
+        constraints = [
+            # Unique **per store**, not across the estate. db-design says
+            # "held_uuid UUID unique" and that is a key the till mints, so estate
+            # -wide uniqueness looks free - but it makes the store part of the
+            # key optional at the upsert, and an upsert that finds a row by uuid
+            # alone would move another store's hold onto this counter. Scoping
+            # the constraint is what makes the scoped lookup the only one the
+            # database will accept.
+            models.UniqueConstraint(fields=["store", "held_uuid"], name="uq_heldbill_store_uuid"),
+        ]
+        indexes = [
+            models.Index(fields=["store", "held_at"], name="heldbill_store_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.label or 'Held bill'} · {self.store_id}"
+
+
+class RegisterHandover(TimeStampedModel):
+    """A manager moving a store's bill series onto a different machine (#189).
+
+    The till owns its counter, so a dead or replaced machine takes the counter
+    with it (grill Q1). The recovery is deliberate rather than automatic: a named
+    manager says "this store is billing from a new device now", gives a reason,
+    and the server answers with the number to resume from and the bills it never
+    received - which the store re-enters from their printed copies.
+
+    Why the act is recorded at all, when the numbering would work without it:
+    every hole this leaves behind is a bill somebody has to go and find on paper,
+    and a store that cannot say *when* the machine changed cannot tell a hole
+    that has an explanation from one that does not. So this is an audit row in
+    the `AccessChange` sense - who, when, why, and what the frontier was at the
+    time - and nothing reads it back into a decision.
+
+    It is append-only in practice: nothing in the product updates or deletes a
+    row here, because a handover is something that happened.
+    """
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="register_handovers"
+    )
+    fy = models.CharField(max_length=7)
+    reason = models.CharField(max_length=240)
+    #: The frontier at the moment of the handover - what the server had accepted
+    #: from the old machine. Stored rather than recomputed: the whole value of the
+    #: row is that it says what was true then, and by tomorrow it will not be.
+    last_accepted_seq = models.IntegerField()
+    #: How many numbers below that frontier had never arrived. The list itself is
+    #: not stored - it is derivable, it can be five thousand long, and what a
+    #: person asks of this row a month later is "how bad was it".
+    hole_count = models.IntegerField(default=0)
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="register_handovers"
+    )
+
+    class Meta:
+        db_table = "sell_register_handover"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["store", "-created_at"], name="handover_store_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Handover {self.store_id} · {self.fy} · from {self.last_accepted_seq}"
 
 
 class IrnQueueItem(TimeStampedModel):

@@ -21,10 +21,17 @@ import { financialYear } from "../lib/fiscal";
 
 import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
+import { mirrorRow } from "./held";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
-import { fastForwardTo } from "./numbering";
-import type { DatasetPayload, QueueHalt, RegisterPayload } from "./types";
+import { drawDownNotes, fastForwardTo } from "./numbering";
+import { notesSpentBy } from "./tender";
+import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
+
+/** What the counter assumes before a server has told it otherwise: no keyed-in
+ *  discount at all without a manager. The strict end of the dial, because a
+ *  default that guessed generously would be a cap this file invented. */
+export const DEFAULT_POLICY: TillPolicy = { manual_discount_cap_percent: "0.00" };
 
 /** Slowest a failing queue will retry, and the plain interval it drains on
  *  anyway. A minute is the contract's number: fast enough that a shop with a
@@ -70,6 +77,7 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       db.salesmen,
       db.managers,
       db.gstSlabs,
+      db.seasons,
       db.meta,
       db.queue,
     ],
@@ -95,6 +103,17 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.managers.bulkPut(payload.managers);
       await db.gstSlabs.clear();
       await db.gstSlabs.bulkPut(payload.gst_slabs);
+      // Seasons and the policy arrived after the till spine did (#181), so a
+      // server that predates them - a rolling deploy is exactly that, for a few
+      // minutes - answers without the key. Absent means "this server has nothing
+      // to say", not "the master is empty": wiping it would drop scan resolution
+      // back to sorting names, where "FW25 before SS26" is true only by the
+      // accident of the alphabet, and the till would write a season onto the
+      // line that the server would never have chosen.
+      if (payload.seasons) {
+        await db.seasons.clear();
+        await db.seasons.bulkPut(payload.seasons);
+      }
 
       // A withdrawal names a barcode and takes every season of that piece with
       // it: a cohort is a record of a purchase and is never unmade, so the only
@@ -107,10 +126,12 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.creditNotes.bulkDelete(payload.deleted.credit_notes);
 
       await replayQueuedStock(db, payload);
+      await replayQueuedNotes(db, payload);
 
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
         { key: META.store, value: payload.store },
+        { key: META.policy, value: payload.policy ?? DEFAULT_POLICY },
         { key: META.syncedAt, value: new Date().toISOString() },
       ]);
     },
@@ -151,6 +172,36 @@ async function replayQueuedStock(db: TillDb, payload: DatasetPayload): Promise<v
     // this.
     if (row) await db.stock.put({ barcode, qty: row.qty + delta });
   }
+}
+
+/**
+ * Take the queue's credit-note spending back off the balances the dataset just
+ * re-stated - the shelf's problem again, in money (#182).
+ *
+ * The server's `remaining_paise` counts only the redemptions it has *received*,
+ * so every note row it sends is worth more than it really is by whatever this
+ * till has spent and not yet synced. Writing it straight over the local copy
+ * hands a customer their credit note back: a ₹1,200 note spent to nought this
+ * morning reads ₹1,200 again after the next sync, and pays for a second bill
+ * that head office will refuse - by which time it has been printed twice.
+ *
+ * Only notes this payload actually re-stated are adjusted, exactly as with
+ * stock: a delta that did not mention a note left the local row alone, and that
+ * row already carries the draw-down.
+ */
+async function replayQueuedNotes(db: TillDb, payload: DatasetPayload): Promise<void> {
+  const pending = await db.queue.toArray();
+  if (!pending.length) return;
+  const restated = new Set(payload.credit_notes.map((row) => row.number));
+
+  const spent = new Map<string, number>();
+  for (const bill of pending) {
+    for (const [number, amount] of notesSpentBy(bill.tenders)) {
+      if (!restated.has(number)) continue;
+      spent.set(number, (spent.get(number) ?? 0) + amount);
+    }
+  }
+  await drawDownNotes(db, spent);
 }
 
 /** Pull whatever has changed since the last cursor (everything, the first time). */
@@ -315,6 +366,26 @@ function asRefusal(error: unknown): TillHttpError {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "";
+}
+
+// --------------------------------------------------------------- holds -------
+
+/**
+ * Tell head office what is parked at this counter (#185, grill Q13).
+ *
+ * The whole list every time, because the till is authoritative and there is no
+ * per-hold delete to replay: a hold resumed at the counter disappears from the
+ * store's Dashboard by not being in the next push.
+ *
+ * Deliberately **not** part of the queue. Nothing here is money - a hold moves no
+ * stock, no number and no value - so a failure has nothing to halt over and no
+ * bill to name. It is offered again on the next sync, and in the meantime the
+ * only thing that is wrong is a count on somebody else's screen.
+ */
+export async function pushHeld(db: TillDb, transport: TillTransport): Promise<number> {
+  const rows = await db.held.toArray();
+  const answer = await transport.putHeld(rows.map(mirrorRow));
+  return answer.count;
 }
 
 /**

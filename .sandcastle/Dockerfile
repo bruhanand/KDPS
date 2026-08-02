@@ -34,6 +34,16 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
+# Headless Chromium + the Playwright MCP server, for the browser-QA phase.
+# Debian's chromium rather than a Playwright download, so the browser and its
+# system libraries stay in step on arm64; sandbox-setup.sh points the MCP
+# server at it explicitly. The Noto fonts keep ₹ and Devanagari from rendering
+# as tofu in screenshots.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium fonts-noto-core fonts-noto-ui-core \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g @playwright/mcp
+
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
 # and bind-mounted files share an owner without runtime chown.
@@ -66,6 +76,16 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 # pyproject.toml requires >=3.12, so uv manages its own.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
   && uv python install 3.12
+
+# The repo's commit hooks. Without it every builder hits a failing commit and
+# installs it by hand mid-run — the same download, paid per issue instead of
+# once per image, from an agent improvising rather than following the slice.
+RUN uv tool install pre-commit
+
+# The code graph. Same argument as pre-commit: paid once per image rather than
+# once per issue. sandbox-setup.sh builds the graph itself (that part depends on
+# the branch's code) and re-installs if this image is stale.
+RUN uv tool install graphifyy
 
 # A Postgres cluster owned by `agent`, so the server starts in this rootless
 # container without sudo. Trust auth and a /tmp socket dir are safe because the

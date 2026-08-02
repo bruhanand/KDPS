@@ -20,10 +20,11 @@ cost-shaped key or number, and that test is the belt to this braces.
 
 **Big sections are deltaed; small ones are sent whole.** Items and stock are
 20,000 rows and get a watermark. The store's own registration, its tax slabs, its
-salesmen and its manager PINs are a handful of rows each: a delta over five rows
-saves nothing and would need a deletion channel the contract does not give it, so
-they are replaced wholesale on every response. `deleted` therefore names exactly
-the three sections that can lose a row invisibly - items, offers, credit notes.
+salesmen, its manager PINs, the season master's ordering and the shop floor's
+money dials are a handful of rows each: a delta over five rows saves nothing and
+would need a deletion channel the contract does not give it, so they are replaced
+wholesale on every response. `deleted` therefore names exactly the three sections
+that can lose a row invisibly - items, offers, credit notes.
 
 **The cursor deliberately laps backwards, and even so it is not the whole
 guarantee.** `updated_at` is stamped when a row is written, not when its
@@ -51,13 +52,13 @@ from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from accounts.models import ScopeType, User
-from accounts.permissions import user_can
-from accounts.sections import CAP_APPROVE
+from accounts.models import User
+from accounts.till_pin import STORE_BOUND_SCOPES, may_hold_till_pin
 from core.documents import DocStatus
-from masters.models import Cohort, GstSlab, Sku, Store
+from masters.models import Cohort, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
-from sell.models import CreditNote, CreditNoteRedemption, Salesman
+from offers.models import Offer
+from sell.models import CreditNote, CreditNoteRedemption, Salesman, SellPolicy
 from stockledger.models import StockOnHand
 
 #: How far behind the clock the returned cursor sits. See the module docstring for
@@ -74,14 +75,6 @@ from stockledger.models import StockOnHand
 #: The cost of the lap is a delta re-sending a quarter-hour of edits, which is a
 #: handful of rows the till upserts. That is the cheap side of an unfair trade.
 CURSOR_LAP = timedelta(minutes=15)
-
-#: Scopes whose boundary genuinely *is* a set of stores. A manager PIN hash goes
-#: down to a shop-floor device, so "this store's managers" is read as narrowly as
-#: it can honestly be read: somebody explicitly assigned to this store. A
-#: network-wide or entity-wide administrator whose matrix cell happens to say
-#: `sell: manage` is not one of this counter's people, and shipping their hash to
-#: fifty tills would be a worse answer than shipping nobody's.
-STORE_BOUND_SCOPES = (ScopeType.STORE, ScopeType.STORE_GROUP, ScopeType.REGION)
 
 
 class TillScopeError(Exception):
@@ -164,6 +157,7 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
     sync = Sync(store=store, since=_read_cursor(since_raw), today=timezone.localdate(started))
 
     notes_open, notes_closed = _credit_notes(sync)
+    offers_live, offers_withdrawn = _offers(sync)
     return {
         "cursor": _stamp(started - CURSOR_LAP),
         "full": sync.is_bootstrap,
@@ -175,19 +169,18 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "items": _items(sync),
         "stock": _stock(sync),
         "gst_slabs": _gst_slabs(),
-        # The rulebook is #183. Empty rather than absent, and for the same reason
-        # the Dashboard's offers card is: "nothing is running" is a fact a till
-        # has to be able to read, and a section that appears later is a section
-        # every till has to be taught about twice. Each row will carry its own
-        # `starts_on`/`ends_on` so the counter starts and stops an offer on its
-        # own clock while offline (grill Q3) - the dates ride inside the data.
-        "offers": [],
+        # Each row carries its own `starts_on`/`ends_on`, so the counter starts
+        # and stops an offer on its own clock while offline (grill Q3) - the
+        # dates ride inside the data rather than being applied by this query.
+        "offers": offers_live,
         "credit_notes": notes_open,
         "salesmen": _salesmen(sync),
         "managers": _managers(store),
+        "seasons": _seasons(),
+        "policy": _policy(),
         "deleted": {
             "items": _withdrawn_items(sync),
-            "offers": [],
+            "offers": offers_withdrawn,
             "credit_notes": notes_closed,
         },
     }
@@ -380,6 +373,122 @@ def _rate(rate: Decimal) -> str:
     return f"{Decimal(rate):.2f}"
 
 
+def _seasons() -> list[dict[str, Any]]:
+    """The season master's own ordering, so the counter can pick the oldest.
+
+    A barcode is a scan-alias, not an identity (A2): the same tag under two buying
+    cohorts is two lots at two ticket prices, and a scan that does not name a
+    season resolves to the **oldest live** one with stock here. `resolve_piece`
+    makes that choice server-side by ranking `(is_closed, sort_order)` from this
+    master - and the till has to make the identical choice offline, because the
+    season it picks is the season it writes on the line and the accept pipeline
+    honours an exact `(barcode, season)` outright. Without the ordering on the
+    device the till would fall back to sorting names, and "FW25 before SS26" is
+    true only by the accident of the alphabet.
+
+    Whole on every response, like the slabs and the manager list: it is a handful
+    of rows, a season closing is a fact the counter must not miss, and `deleted`
+    has no channel for it.
+    """
+    fields = ("code", "name", "status", "sort_order")
+    return [
+        {"code": code, "name": name, "status": status, "sort_order": sort_order}
+        for code, name, status, sort_order in Season.objects.order_by(
+            "sort_order", "code"
+        ).values_list(*fields)
+    ]
+
+
+def _policy() -> dict[str, str]:
+    """The dials the counter has to hold offline - today, just the discount cap.
+
+    The cap is B2: below it a manual discount is the cashier's to give, above it
+    the bill will not close without a manager. Both ends of that rule have to
+    agree, and only one of them is online. A till that did not know the number
+    would let a cashier key in a discount the accept pipeline refuses with
+    `OVERRIDE_REQUIRED` - days later, when the bill is printed, paid for and in a
+    customer's hand, and the only remaining move is a human unpicking it.
+
+    So it rides down whole on every response, and as a two-decimal **string** for
+    the reason the tax rates are: the till multiplies by it, and a rate that
+    arrived as 7.499999 would put the counter and the server on opposite sides of
+    a cap.
+    """
+    return {
+        "manual_discount_cap_percent": f"{SellPolicy.current().manual_discount_cap_percent:.2f}"
+    }
+
+
+def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:
+    """Should this counter be holding this rule at all?
+
+    Three ways a rule stops being this till's business, and the till can only see
+    the last of them for itself: head office stopped it, head office took this
+    store off it, or its end date passed. The dates are still sent down and still
+    judged at the counter (grill Q3) - this is about what is worth sending, not
+    about who decides when an offer stops.
+    """
+    if offer.status != Offer.Status.LIVE:
+        return False
+    # Upper-cased on both sides: `validate_store_scope` normalises what it
+    # stores, `Store.code` is a slug with no normalisation of its own, and a
+    # lower-case store code would otherwise send this counter an empty rulebook
+    # while the dashboard and the server still found its offers.
+    if store_code.upper() not in ((offer.store_scope or {}).get("stores") or []):
+        return False
+    return offer.ends_on is None or offer.ends_on >= today
+
+
+def _offers(sync: Sync) -> tuple[list[dict[str, Any]], list[int]]:
+    """The rulebook this counter prices with, and the rules it must forget.
+
+    Two things make this awkward in the same way `_credit_notes` is, and for the
+    same underlying reason - a rule can stop mattering without anybody writing to
+    its row:
+
+      · **A rule dies of a date.** `ends_on` passes and nothing is stamped, so a
+        delta also asks which rules crossed their own end date between the cursor
+        and today. A till that was offline over a weekend would otherwise go on
+        discounting under a promotion that finished on the Saturday.
+      · **A rule can be taken off *this store* rather than stopped.** That edit
+        does stamp `updated_at`, but it also drops the row out of any query
+        narrowed by store - so the delta would never mention it again and the
+        till would keep it for ever. The delta therefore scans the changed rules
+        across the network and decides store membership per row, which is the
+        only ordering that can report a withdrawal at all.
+
+    A bootstrap has nothing cached, so it reports nothing withdrawn and simply
+    omits what it will not send.
+    """
+    code = sync.store.code.upper()
+    rows = Offer.objects.select_related("brand")
+    if sync.is_bootstrap:
+        live = [
+            offer
+            for offer in rows.filter(status=Offer.Status.LIVE, store_scope__stores__contains=[code])
+            .filter(Q(ends_on__isnull=True) | Q(ends_on__gte=sync.today))
+            .order_by("priority", "id")
+        ]
+        return [offer.as_rule_payload() for offer in live], []
+
+    changed = rows.filter(
+        Q(updated_at__gt=sync.from_moment)
+        | Q(ends_on__gte=timezone.localdate(sync.from_moment), ends_on__lt=sync.today)
+    ).order_by("priority", "id")
+
+    sending: list[dict[str, Any]] = []
+    withdrawn: list[int] = []
+    for offer in changed:
+        if _offer_is_for(offer, code, sync.today):
+            sending.append(offer.as_rule_payload())
+        else:
+            # Sent even for a rule this store never held: an id the till does not
+            # know is a delete that does nothing, and the alternative - guessing
+            # which store scope a rule used to have - cannot be done from here.
+            withdrawn.append(offer.id)
+    return sending, withdrawn
+
+
 def _credit_notes(sync: Sync) -> tuple[list[dict[str, Any]], list[str]]:
     """The notes this store issued, split into "still worth money" and "stop
     honouring this".
@@ -464,11 +573,16 @@ def _managers(store: Store) -> list[dict[str, Any]]:
     """Who may authorise an over-cap discount at this counter with the line cut.
 
     The narrowest list this can honestly be, because it is a set of credentials
-    that leaves the building: somebody explicitly assigned to *this* store, whose
-    boundary is stores at all, who holds `sell >= approve` on the **stored** matrix
-    (whatever an administrator has made it - #173), who is not the break-glass
-    superuser, and who has actually set a PIN. A blank hash is not a credential,
-    and a row carrying one would let the till compare against nothing.
+    that leaves the building: somebody explicitly assigned to *this* store who
+    `may_hold_till_pin` (their boundary is stores at all, they hold `sell >=
+    approve` on the **stored** matrix - whatever an administrator has made it,
+    #173 - and they are not the break-glass superuser), and who has actually set
+    one. A blank hash is not a credential, and a row carrying one would let the
+    till compare against nothing.
+
+    That sentence lives in `accounts.till_pin` rather than here, because the
+    endpoint a manager sets their PIN through has to refuse exactly the people
+    this list would refuse to ship.
 
     Sent whole every time and never deltaed: it is a handful of rows, and the one
     thing that must never happen is a till holding a stale copy - a rung
@@ -499,5 +613,5 @@ def _managers(store: Store) -> list[dict[str, Any]]:
             "till_pin_hash": user.till_pin_hash,
         }
         for user in candidates
-        if user_can(user, "sell", CAP_APPROVE)
+        if may_hold_till_pin(user)
     ]

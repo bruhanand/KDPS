@@ -1,0 +1,77 @@
+{
+  "name": "fixed-price-mrp-band",
+  "note": "Flat 2,599 for pieces inside the band, per piece; the 2,999 piece is outside it and pays its own price.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 80,
+      "name": "Sweet Dreams 3249-3649 at 2599",
+      "layer": "brand",
+      "brand": "SWEET DREAMS",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "fixed_price",
+      "reward_config": {
+        "price_paise": 259900
+      },
+      "item_scope": {
+        "mrp_min_paise": 324900,
+        "mrp_max_paise": 364900
+      },
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "SWEET DREAMS",
+      "item": "Nightwear",
+      "design": "SD1",
+      "barcode": "8941",
+      "season": "FW25",
+      "qty": 2,
+      "mrp_paise": 334900,
+      "no_discount": false
+    },
+    {
+      "line_no": 2,
+      "brand": "SWEET DREAMS",
+      "item": "Nightwear",
+      "design": "SD2",
+      "barcode": "8942",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 299900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 150000,
+        "offer_id": 80,
+        "evidence": {
+          "offer_id": 80,
+          "offer_name": "Sweet Dreams 3249-3649 at 2599",
+          "layer": "brand",
+          "saved_paise": 150000,
+          "beat": [],
+          "stack": []
+        }
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 0,
+        "offer_id": null,
+        "evidence": {}
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 150000
+  }
+}

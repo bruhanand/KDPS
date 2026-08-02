@@ -195,10 +195,18 @@ a { color: inherit; text-decoration: none; }
 }
 .btn:hover { background: var(--inner); }
 .btn:active { transform: translateY(1px); }
+/* A button nobody may press has to look like one. Without this a disabled
+   Save & Print is indistinguishable from a live one, and a cashier presses it
+   twice - which is requirement G3's whole worry. */
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--surface); filter: none; }
+.btn:disabled:active { transform: none; }
 .btn-primary { background: var(--navy-fill); border-color: var(--navy-fill); color: #fff; }
 .btn-primary:hover { background: var(--navy-fill-hover); }
+.btn-primary:disabled:hover { background: var(--navy-fill); }
 .btn-cta { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
 .btn-cta:hover { filter: brightness(0.95); }
+.btn-cta:disabled:hover { background: var(--brand-red); }
 .btn-block { width: 100%; }
 .btn-lg { padding: 12px 18px; font-size: 15px; }
 
@@ -246,7 +254,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 .full-loader {
-  height: 100vh; display: flex; align-items: center; justify-content: center;
+  height: 100vh; display: flex; flex-direction: column; gap: 16px;
+  align-items: center; justify-content: center;
   color: var(--muted); font-weight: 600; letter-spacing: .3px;
 }
 

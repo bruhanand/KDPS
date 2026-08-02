@@ -8,11 +8,30 @@ from __future__ import annotations
 
 from django.urls import path
 
-from sell.views import DatasetView, RegisterView, SaleDetailView, SaleListCreateView
+from sell.views import (
+    DatasetView,
+    HeldBillsView,
+    IrnQueueItemView,
+    IrnQueueView,
+    RegisterHandoverView,
+    RegisterView,
+    ReturnCreateView,
+    SaleDetailView,
+    SaleListCreateView,
+    StoreFlagsView,
+    StoreFlagView,
+)
 
 urlpatterns = [
     path("dataset", DatasetView.as_view(), name="sell-dataset"),
+    path("returns", ReturnCreateView.as_view(), name="sell-returns"),
+    path("register/handover", RegisterHandoverView.as_view(), name="sell-register-handover"),
     path("register", RegisterView.as_view(), name="sell-register"),
+    path("held-bills", HeldBillsView.as_view(), name="sell-held-bills"),
+    path("flags", StoreFlagsView.as_view(), name="sell-flags"),
+    path("flags/<int:pk>", StoreFlagView.as_view(), name="sell-flag"),
+    path("irn-queue", IrnQueueView.as_view(), name="sell-irn-queue"),
+    path("irn-queue/<int:pk>", IrnQueueItemView.as_view(), name="sell-irn-queue-item"),
     path("sales", SaleListCreateView.as_view(), name="sale-list"),
     path("sales/<path:doc_number>", SaleDetailView.as_view(), name="sale-detail"),
 ]

@@ -37,6 +37,8 @@ export interface StatusInput {
   register: RegisterPayload | null;
   /** Did the browser throw the local database away between sessions? */
   storageLost: boolean;
+  /** Does this tab own the store's counter, or is it the second one open? */
+  lockHeld: boolean;
   online: boolean;
 }
 
@@ -48,7 +50,13 @@ export function deriveStatus(input: StatusInput): SyncStatus {
   if (input.storageLost) {
     return red(
       "Local data lost",
-      "This device cleared the counter's local data. Sync before billing so the till knows which bill number it is on.",
+      "This device cleared the counter's local data. Recover the counter from Till & Sync so it knows which bill number it is on - it will not bill until you do.",
+    );
+  }
+  if (!input.lockHeld) {
+    return red(
+      "Second window",
+      "This counter is already open in another tab or window. One store bills from one place, so this one will not take a bill.",
     );
   }
   if (input.halt) {

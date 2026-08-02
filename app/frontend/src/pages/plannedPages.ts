@@ -55,6 +55,28 @@ const PROMOTIONS: ReportModule = { name: "Promotions & EOSS", stage: "later" };
 const HRMS: ReportModule = { name: "HRMS & Payroll", stage: "later" };
 const ANALYTICS: ReportModule = { name: "Reports & Analytics", stage: "later" };
 
+/**
+ * The client report's own module strip, whole.
+ *
+ * Listed rather than derived from `PLANNED_PAGES`, because a module does not
+ * leave the report when its last screen is built: POS & Billing is on the strip
+ * and has nothing planned under it since #184 landed the last of Sell's four
+ * screens. Deriving the strip from what is unbuilt would quietly drop a module
+ * from the client's report the moment we finished it, which is the opposite of
+ * what finishing it should do.
+ */
+export const REPORT_MODULES: ReportModule[] = [
+  GOODS_RECEIPT,
+  TRANSFERS,
+  POS,
+  ACCOUNTS,
+  INVENTORY,
+  ADMINISTRATION,
+  PROMOTIONS,
+  HRMS,
+  ANALYTICS,
+];
+
 export interface PlannedScreen {
   /** One line: what the screen is for, in the words its user would use. */
   summary: string;
@@ -69,73 +91,27 @@ export interface PlannedScreen {
 
 export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // ---- Sell ---------------------------------------------------------------
-  "/sell": {
-    summary: "The counter screen — scan, bill, take the money.",
-    contains: [
-      "Barcode billing and GST invoice",
-      "Discounts at the counter, inside the limit the role allows",
-      "Real-time stock deduction",
-      "EOSS bulk billing — stock billed and kept in the store, set up in Offers & Price",
-    ],
-    notes: [
-      "Selling runs on the existing store billing software today. Our own counter is proven at one store, one counter, before any store is switched over.",
-      "The stores put Sell first on their own list of daily screens, twice — 30 June and 25 July.",
-    ],
-    module: POS,
-  },
-  "/sell/returns": {
-    summary: "A customer brings something back, or swaps it for another size.",
-    contains: [
-      "Customer returns against the original bill",
-      "Exchange for another size, colour or style",
-      "Stock and money both corrected by the return document — never by hand",
-    ],
-    notes: ["A return needs the original bill, so this comes with billing."],
-    module: POS,
-  },
-  "/sell/customers": {
-    summary: "Find an old bill and print it again.",
-    contains: [
-      "Search by name, phone number or bill number",
-      "The bill opens with its details",
-      "Re-print only — a past bill is never edited",
-    ],
-    notes: [
-      "There are no bills to find until billing is live.",
-      "“Re-print only, no editing” is the stores' own wording from their 25 July note, and it is already the rule the whole system runs on: a document is corrected by another document, never overwritten.",
-    ],
-    module: POS,
-  },
+  // Nothing. Every screen under Sell is built - Billing (#181), Return &
+  // Exchange (#184), Customers (#185) and Till & Sync (#180) - and a promise on
+  // this list for a screen somebody can already open would be a promise nobody
+  // can reach, which `plannedPages.test.ts` says out loud.
+  //
+  // The stores' own wording from the 25 July note about Customers, "re-print
+  // only, no editing", is what shipped: there is no writer behind that screen to
+  // edit with.
 
   // ---- Receive Goods ------------------------------------------------------
-  "/receive/upload-bill": {
-    summary: "Put the brand's own invoice into the system, so a PT can be made from it.",
-    contains: [
-      "Upload the brand's invoice or bill — Madura and the rest",
-      "The file stays attached to the goods receipt it belongs to",
-      "The upload feeds PT making",
-    ],
-    notes: [
-      "Reading an invoice PDF and turning it into a PT inside the app is not built. That still runs as a separate tool outside the system.",
-      "Brand PT files are a different matter — those already import with auto-mapping for nine brands, and PT making for non-brand goods is live.",
-    ],
-    module: GOODS_RECEIPT,
-  },
+  // Nothing. "Upload Bill" was a promise the built screen already keeps: the
+  // brand's invoice goes up inside "New receipt", where it is attached to the
+  // receipt and read for the line match. #228 deleted the entry rather than
+  // leave a menu line whose own page said "go and do it over there".
 
   // ---- Transfer -----------------------------------------------------------
-  "/transfer/distribution": {
-    summary: "The warehouse decides how newly arrived stock is split across the stores.",
-    contains: [
-      "A suggested split across stores, which you can change by hand",
-      "A buffer held back at the warehouse",
-      "Inter-store size rebalancing — moving sizes to the store that is selling them",
-      "The split becomes the transfers, so nothing is typed twice",
-    ],
-    notes: [
-      "Dispatch and receive are the transfer work in test now. This part has not been started.",
-    ],
-    module: TRANSFERS,
-  },
+  // Nothing. Distribution promised a screen to split newly arrived stock across
+  // stores; #229 deleted the stub for every role - distribution returns later
+  // as a rare-case feature of the transfer flow, not a promise sitting empty in
+  // the sidebar. Its old URL now redirects to Transfer.
+
   // ---- Money --------------------------------------------------------------
   "/money/payments": {
     summary: "Paying a brand, with the checks done before the money leaves.",
@@ -193,18 +169,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
       "Prices and markdowns, date-effective",
       "Brand-wise price lists",
       "History — what the price was on the day a bill was made",
-    ],
-    module: PROMOTIONS,
-  },
-  "/offers": {
-    summary: "The brand schemes that a bill is allowed to apply.",
-    contains: [
-      "Scheme management — value slabs, buy-2-get-1, gifts above a threshold",
-      "Per store, with start and end dates",
-      "Brand-wise rules, kept as data, so a new scheme needs no software release",
-    ],
-    notes: [
-      "Schemes are defined here and applied at the counter, so this lands with or after billing.",
     ],
     module: PROMOTIONS,
   },

@@ -53,6 +53,10 @@ The reason is written next to the registration (same pattern as `REGISTERED_ROLE
 Constraints: `UniqueConstraint(store, fy, till_seq)` `uq_sale_store_fy_seq`; CHECK `net_paise >= 0` is NOT added (an exchange-heavy bill can net negative → credit note, see contract).
 Indexes: (store, billed_at), customer_mobile, (store, origin).
 
+**Amended 31 Jul 2026 (#182).** Three columns added: `override_by` (FK accounts.User SET_NULL, null), `override_kind` (CharField 40, blank), `override_at` (DateTimeField, null) - migration `sell.0005`.
+The manager's tap is recorded on the bill as well as on the line, because what a manager authorises is not always a line: an unrecognised credit note is a *tender*, and the lines it helped pay for are ordinary lines.
+See the api-contract's 31 Jul amendment for the `kind` vocabulary and for what one tap does and does not cover.
+
 ### `sell_saleline` (NEW)
 
 | Column | Type / constraint |
@@ -84,6 +88,14 @@ Plain return without exchange (grill Q7).
 store FK · original_sale FK Sale PROTECT · window_override BooleanField default false · override_by FK User null · credit_note FK CreditNote null (set at post) · created_by.
 Lines: `sell_returnline` - return FK CASCADE · original_line FK SaleLine PROTECT · qty CHECK `> 0` · reason CharField(40) · condition `good/damaged` · refund_paise MoneyField (what the customer actually paid, computed).
 
+**Amended 31 Jul 2026, after building it (#184).** Five things.
+
+- **The note points at the return, not the return at the note.** `credit_note FK ... (set at post)` would be a column on a *posted* document, and the FSM trigger refuses every change to one - so the link is `CreditNote.source_return`, the mirror of the `source_sale` the negative-net exchange already uses. Same fact, written on the row that is still being created when it becomes true.
+- **The line column is `return_doc`, not `return`.** `return` is a Python keyword, so `line.return` is not something any caller could write.
+- **A return line carries the same seven merchandising dims a bill line does**, plus `gst_rate`/`gst_paise` and the `unit_cost_paise`/`cost_book`/`cost_vendor` triple. All of them are snapshots off the original line (Rule 3): the ledger legs are filed by brand and season, the reversal gives back the tax the bill charged rather than today's slab, and the cost unwinds out of the book the *sale* posted to even if the brand's terms have changed since.
+- **`SellPolicy` gains `return_window_days`** (default 30) - see the api-contract's amendment for why 30 and why it is a dial.
+- **`sell_continuityflag.kind` gains `return_late` and `return_uncosted`**, and **`sell_deferredcosting.status` gains `returned`**. The first two are exceptions this document raises; the third is how a sold-before-inward line stops waiting for a cost that will never be owed, because the piece came back before anything priced it.
+
 ### `sell_creditnote` (NEW, subclasses Document, doc_type `CRN`)
 
 store FK (issuing store; redemption same-store only in v1, grill Q4) · customer_name/mobile · value_paise · remaining_paise CHECK `0 <= remaining <= value` · status choices `open/spent/expired/cancelled` · expires_on DateField (validity is data; default from policy) · source_return FK sell.Return null · source_sale FK Sale null (negative-net exchange).
@@ -102,10 +114,32 @@ Till-authoritative; server copy exists only so the Dashboard can show holds (gri
 store FK · held_uuid UUID unique · label CharField(120) blank · payload JSONField (the cart) · held_at · expires_policy CharField choices `today/kept`.
 Replaced wholesale by each till push; no ledger, no document, no number.
 
+### `sell_registerhandover` (NEW, added 31 Jul 2026 with #189)
+
+The audit row the api-contract's handover step 2 calls for, as its own table rather than an `AccessChange`.
+`AccessChange` is a maker-checker *proposal* waiting for a second administrator to apply it; a handover is something that has already happened, and borrowing that row would have put a dead till in an approval queue.
+
+store FK PROTECT · fy CharField(7) · reason CharField(240) · last_accepted_seq Integer · hole_count Integer · actor FK User PROTECT · created_at/updated_at.
+Index (store, -created_at).
+
+`last_accepted_seq` and `hole_count` are **stored, not derived**: the whole value of the row is that it says what was true at the moment the machine changed, and by tomorrow neither will be.
+The hole *list* is not stored - it is derivable, it can be five thousand long, and what somebody asks of this row a month later is "how bad was it".
+Nothing updates or deletes a row here.
+
 ### `sell_continuityflag` (NEW, exception rows)
 
-kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/aged_uncosted` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · resolved_by/at.
+kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/gstin_invalid/aged_uncosted/employee_returns` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · **cleared_note CharField(240) blank** · resolved_by/at.
+
+*`gstin_invalid` added 31 Jul 2026 while building #187* - the B2B ticket asks for the buyer's GSTIN to be validated softly, and none of the original six means that. See the api-contract's step-11 amendment for why it is its own kind rather than another `gst_mismatch`.
+
+*`employee_returns` and `cleared_note` added 31 Jul 2026 with #188* (migration `sell.0011`).
+Grill Q7 asks for returns to be counted per employee in the daily check, and none of the seven existing kinds means "one seller took back an unusual number today"; it is deliberately its own because the finding is a pattern *across* bills, so there is no one bill to hang it on and no one bill that answers it.
+`cleared_note` is what the person who cleared a flag said about it, and it is a column rather than a key in `details` because `details` is the machine's finding - rewritten on every nightly run - and a person's sentence about it must not be something a later pass can overwrite.
+
+**Which day a flag belongs to** (`ContinuityFlag.DAY_KEY` / `for_day`, #188). Most flags are about a bill, and a bill has the day the counter printed it. The two the nightly check raises are about no bill - a hole is a bill that never arrived, and a return count is about a shop's afternoon - so they carry `day` in their details. The check runs in the small hours of the *next* morning, and `created_at` would file yesterday's finding under today. The hole flag's `day` is the day the gap first survived and never moves afterwards: it is a fact about a shop that goes on being true, not a fact about a day.
 This is the sell face of the exception-queue pattern (`TransferReceiptException`/`ReviewItem` precedent); the daily reconciliation and the Dashboard action queue read it.
+
+*`SellPolicy.return_review_count` added 31 Jul 2026 with #188* (same migration): how many pieces one seller may take back in a day before the daily check puts their name on the list. Five is a starting number in exactly the sense `uncosted_aging_days`' three days is - nothing in the corpus fixes one, and it is a dial so head office moves it rather than a store learning to ignore the list (Rule 12).
 
 ### `sell_deferredcosting` (NEW)
 
@@ -180,6 +214,7 @@ Index: (layer, starts_on, ends_on), brand.
 ## 9. `accounts` (CHANGED)
 
 - `User.till_pin_hash` CharField(128) blank (NEW) - the manager-override PIN verified at the till while offline; synced down as part of the dataset (hash only, manager-capability users of that store only).
+  **Amended 31 Jul 2026 (#182):** the column is written by `PUT /api/auth/me/till-pin` (new, self-service - see the api-contract), and hashed with PBKDF2-SHA256 rather than the project's default bcrypt, because a browser can verify the first offline and cannot verify the second. Who may hold one lives in `accounts/till_pin.py`, shared with the dataset's `managers` section so the two cannot drift.
 - Role matrix editing reuses `Role.section_access` + existing `AccessChange` log; no schema change.
 - The four floor rules live in code (`FLOORS` constant) - not rows, deliberately (grill Q8: floors are constitution).
 

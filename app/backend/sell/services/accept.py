@@ -26,18 +26,23 @@ decides *what happened*; that one decides what it is worth and where it posts.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from datetime import timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
 from django.utils import timezone
 
 from core.documents import DocStatus
-from masters.models import Sku, Store
+from masters.models import Customer, Sku, Store
 from masters.scoping import actionable_store_ids
+from offers.models import Offer
+from offers.resolution import Resolution
+from sell.gstin import describe as gstin_describe
+from sell.gstin import normalise as gstin_normalise
+from sell.gstin import state_code as gstin_state_code
 from sell.models import (
     ContinuityFlag,
     CreditNote,
@@ -50,7 +55,9 @@ from sell.models import (
     SaleTender,
     SellPolicy,
 )
-from sell.pricing import base_from_inclusive, split_line
+from sell.pricing import base_from_inclusive
+from sell.services.customers import normalise_mobile, upsert_customer
+from sell.services.movements import post_stock_move
 from sell.services.postings import (
     CostedLine,
     CostPlan,
@@ -58,19 +65,22 @@ from sell.services.postings import (
     post_sale_value,
     resolve_cost_plan,
 )
+from sell.services.recompute import (
+    BillLine,
+    credit_from_cited_rule,
+    gst_offenders,
+    offer_offenders,
+    resolve_bill,
+)
+from sell.services.refunds import entitled_refund, returned_so_far
 from sell.services.resolve import (
     ResolvedPiece,
     line_dims,
     manager_for_override,
     resolve_piece,
-    slab_for,
 )
-from stockledger.models import StockLedgerEntry
-from stockledger.projections import post_on_hand_movement, post_quarantine_movement
 
-#: How far a bill's tax may sit from the dated slab before it is worth a human's
-#: time - one rupee a line, per the daily applied-vs-rulebook check (B3, D5 Q10).
-GST_TOLERANCE_PAISE = 100
+logger = logging.getLogger(__name__)
 
 #: The e-invoice clock: a B2B bill must carry an IRN within 30 days (grill Q8).
 IRN_DUE_DAYS = 30
@@ -225,12 +235,13 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     lines = _prepare_lines(data, store, original_bill)  # steps 5, 8
     _check_line_arithmetic(lines)  # step 3
     _check_totals(data, lines)  # step 3
+    rulebook = _server_resolution(data, store, lines)  # steps 6 and 12 share it
     override = manager_for_override((data.get("override") or {}).get("user_id"), store)
-    _check_discount_policy(lines, override)  # step 6
+    _check_discount_policy(lines, rulebook, override)  # step 6
     tender_plan = _plan_tenders(data, store, override)  # step 7
     _guard_bill_number(data, store)  # step 4
 
-    sale = _write_sale(data, store, actor, original_bill, lines, override)  # step 9
+    sale = _write_sale(data, store, actor, original_bill, lines, override, tender_plan)  # step 9
     minted = sale.post()
 
     flags: list[str] = []
@@ -243,7 +254,27 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     _post_value(sale, lines, actor)  # step 10, the two value events
     flags += _apply_b2b(sale, store, data)  # step 11
     flags += _advisory_gst_check(sale, store, lines)  # step 12
+    flags += _advisory_offer_check(sale, store, lines, rulebook)  # step 12
+    transaction.on_commit(lambda: _upsert_customer(sale))  # step 6 (api-contract)
     return AcceptResult(sale=sale, created=True, flags=sorted(set(flags)))
+
+
+def _upsert_customer(sale: Sale) -> None:
+    """Step 6 (api-contract) - fired only once the sale has actually committed.
+
+    Never blocks: the bill is already printed and in the customer's hand, so a
+    master-data hiccup here must not refuse it (Rule 5). No error code exists
+    for this step by design - any failure is logged and swallowed.
+    """
+    try:
+        upsert_customer(
+            Customer,
+            mobile=sale.customer_mobile,
+            name=sale.customer_name,
+            gstin=sale.buyer_gstin,
+        )
+    except Exception:
+        logger.exception("customer upsert failed for sale %s", sale.doc_number)
 
 
 def _resolve_store(code: str, actor: Any) -> Store:
@@ -377,7 +408,9 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
 
     `ALREADY_RETURNED` is the contract's own code for this on the plain-return
     endpoint; the exchange leg is the same act inside a bill and answers the same
-    way, because the alternative is a refund path with no ceiling on it.
+    way, because the alternative is a refund path with no ceiling on it. The two
+    read one ledger (`sell.services.refunds`), so neither can give back what the
+    other already did.
     """
     wanted: dict[int, int] = {}
     for line in lines:
@@ -386,7 +419,7 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
     for line in lines:
         if not line.is_return or line.original is None:
             continue
-        already = _returned_so_far(line.original)[0]
+        already = returned_so_far(line.original)[0]
         if already + wanted[line.original.id] > line.original.qty:
             raise AcceptError(
                 "ALREADY_RETURNED",
@@ -394,30 +427,6 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
                 f"{line.original.qty - already} of that piece is still returnable.",
                 422,
             )
-
-
-def _returned_so_far(original: SaleLine) -> tuple[int, int]:
-    """`(quantity, paise)` already given back against one sold line.
-
-    The row is **locked** first, and that lock is the ceiling. Without it two
-    bills returning the last of a line run the aggregate concurrently, both read
-    the same "none returned yet", and both refund - a double refund that no
-    database constraint downstream would catch, because each bill is individually
-    valid. The credit-note path locks for the same reason.
-
-    A cancelled bill's returns are not counted: the books say that exchange never
-    happened, and the customer is still holding the piece and the receipt.
-    Counting them would close the refund path over a bill the books themselves
-    disown - the next legitimate return would be refused ALREADY_RETURNED, and
-    the remainder arithmetic below would under-pay the one after that.
-    """
-    SaleLine.objects.select_for_update().filter(pk=original.pk).first()
-    totals = (
-        SaleLine.objects.filter(original_line=original, direction=SaleLine.Direction.RETURN)
-        .exclude(sale__docstatus=DocStatus.CANCELLED)
-        .aggregate(qty=Sum("qty"), paise=Sum("net_paise"))
-    )
-    return int(totals["qty"] or 0), int(totals["paise"] or 0)
 
 
 def _check_line_arithmetic(lines: list[_PreparedLine]) -> None:
@@ -454,25 +463,6 @@ def _check_line_arithmetic(lines: list[_PreparedLine]) -> None:
             )
 
 
-def _entitled_refund(original: SaleLine, qty: int) -> int:
-    """What `qty` of a sold line is worth back, in whole paise (D2).
-
-    Two rules, and the second is the one that is easy to miss. A share of a line
-    is rounded half-up, never by Python's `round()` - that is banker's rounding
-    on a float, so a ₹10.05 pair refunds ₹5.02 instead of ₹5.03 and the till's
-    correct figure is refused. And the *last* piece of a line is settled as the
-    remainder of what has not been given back yet, so the parts always sum to
-    exactly what the customer paid: three pieces at ₹10.00 refund 333 + 333 +
-    334, not 333 three times with a paisa left in the books forever.
-    """
-    returned_qty, returned_paise = _returned_so_far(original)
-    paid = int(original.net_paise or 0)
-    if returned_qty + qty >= original.qty:  # the last of it - settle the remainder
-        return paid - returned_paise
-    share = Decimal(paid) * qty / original.qty
-    return int(share.quantize(Decimal(1), rounding=ROUND_HALF_UP))
-
-
 def _check_return_refund(line: _PreparedLine) -> None:
     """What comes back is what was paid (D2), never today's price.
 
@@ -483,7 +473,7 @@ def _check_return_refund(line: _PreparedLine) -> None:
     if line.original is None:
         return
     original = line.original
-    entitled = _entitled_refund(original, line.qty)
+    entitled = entitled_refund(original, line.qty)
     if entitled != line.value_paise:
         raise AcceptError(
             "TENDER_MISMATCH",
@@ -544,43 +534,131 @@ def _check_totals(data: dict[str, Any], lines: list[_PreparedLine]) -> None:
         )
 
 
-def _rulebook_saving(line: _PreparedLine) -> int:
-    """How much of this line's discount the rulebook is answerable for.
+@dataclass
+class _Rulebook:
+    """What the rulebook says this bill should have cost - the server's own answer.
 
-    Zero, for now, and deliberately. The obvious reading is to take
-    `offer_evidence.saved_paise` off the payload - but that number arrives from
-    the till, and the till is the party the cap exists to constrain. A cap that
-    the capped party can lift by describing its own discount as an offer is not a
-    cap: set `saved_paise` to the whole discount and `OVERRIDE_REQUIRED` can never
-    fire again. A money floor cannot take the word of the thing it stands under.
+    Computed once and used twice: the cap (step 6) subtracts it to find what a
+    cashier gave on their own, and the advisory check (step 12) compares it with
+    what was actually charged. Both need the *same* number, or a bill could be
+    refused for a discount the daily check would then call correct.
 
-    So until the offer engine can resolve a cart server-side and say what the
-    rulebook *actually* gave (#183), no discount is evidenced and the cap applies
-    to all of it. The evidence is still stored on the line, because the daily
-    applied-vs-rulebook check is exactly the thing that will later audit it; it
-    simply does not get a vote here.
+    The store, the day and the lines ride along because the cap needs to ask the
+    rulebook a second, narrower question - "was the rule this line cites really
+    running over this piece?" - and asking it needs all three.
     """
-    return 0
+
+    store: Store
+    day: date
+    resolution: Resolution
+    lines: dict[int, BillLine]
+    #: Lines whose discount was credited to the rule they cite rather than to
+    #: today's rulebook. Every one is flagged at step 12, whatever the figures
+    #: come to - see `_check_discount_policy`.
+    drift: set[int] = field(default_factory=set)
+
+    def saving_for(self, line_no: int) -> int:
+        outcome = self.resolution.by_line().get(line_no)
+        return outcome.discount_paise if outcome else 0
+
+    def credit_for(self, line: _PreparedLine) -> tuple[int, bool]:
+        """What this line's discount may be credited to the rulebook, and whether
+        that credit came from the rule the line *cites* rather than from today's
+        reading of the book.
+
+        The second half is the important one: a credit the current rulebook does
+        not produce is a disagreement, and a disagreement is always put in front
+        of a human, whatever the amounts happen to be.
+        """
+        line_no = line.payload["line_no"]
+        today = self.saving_for(line_no)
+        cited = credit_from_cited_rule(
+            line.payload.get("offer_id"),
+            self.store.code,
+            self.day,
+            list(self.lines.values()),
+            line_no,
+        )
+        return max(today, cited), cited > today
 
 
-def _check_discount_policy(lines: list[_PreparedLine], override: Any) -> None:
+def _server_resolution(data: dict[str, Any], store: Store, lines: list[_PreparedLine]) -> _Rulebook:
+    """Price this bill's sold lines against the rulebook, server-side.
+
+    The `no_discount` flag is fetched here rather than taken off the payload: it
+    is the one input to the rulebook that lives on the SKU master and not on the
+    bill, and a till that mis-stated it could discount a piece the AMM sheet says
+    is never discounted (D5 Q3).
+    """
+    day = _billed_on(data)
+    sold = [line for line in lines if not line.is_return]
+    barcodes = [line.payload["barcode"].strip() for line in sold]
+    never_discounted = set(
+        Sku.objects.filter(barcode__in=barcodes, no_discount=True).values_list("barcode", flat=True)
+    )
+    bill_lines = {
+        line.payload["line_no"]: BillLine(
+            line_no=line.payload["line_no"],
+            barcode=line.payload["barcode"].strip(),
+            season=line.season,
+            qty=line.qty,
+            mrp_paise=int(line.payload["mrp_paise"]),
+            dims=line.dims,
+            no_discount=line.payload["barcode"].strip() in never_discounted,
+        )
+        for line in sold
+    }
+    resolution = (
+        resolve_bill(store.code, day, list(bill_lines.values()))
+        if bill_lines
+        else Resolution(lines=(), entitlements=())
+    )
+    return _Rulebook(store=store, day=day, resolution=resolution, lines=bill_lines)
+
+
+def _billed_on(data: dict[str, Any]) -> date:
+    """The day the counter printed this bill, in the store's own reckoning."""
+    return timezone.localdate(data["billed_at"])
+
+
+def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, override: Any) -> None:
     """Step 6 - a discount the rulebook did not produce needs a manager past the cap.
 
     Whatever the rulebook is answerable for is the rulebook's; the remainder is a
     manual discount, and B2 caps that. Below the cap it is the cashier's to give;
     above it the bill does not close without a manager's OK recorded on it, which
     is the whole of H3.
+
+    The rulebook's share is the server's own resolution, never the till's
+    `offer_evidence.saved_paise`: that number arrives from the till, and the till
+    is the party the cap exists to constrain. A cap the capped party can lift by
+    describing its own discount as an offer is not a cap.
+
+    With one door open, and only one. A line may also be credited with what the
+    rule it *cites* works out - re-run server-side, so it is an amount rather
+    than a claim (`recompute.credit_from_cited_rule` says why at length). Any
+    line credited that way is recorded on `rulebook_drift`, and every one of them
+    is flagged at step 12 whatever the figures come to: the door exists so a
+    store's queue is not stopped by head office editing master data, not so a
+    discount can pass unseen.
     """
     cap_percent = SellPolicy.current().manual_discount_cap_percent
     over: list[_PreparedLine] = []
     for line in lines:
         if line.is_return:
             continue
-        manual = line.payload["disc_paise"] - _rulebook_saving(line)
+        credit, drifted = rulebook.credit_for(line)
+        given = int(line.payload["disc_paise"])
+        # Never more than was actually given, so a rulebook more generous than the
+        # counter cannot manufacture headroom for a manual discount on top.
+        manual = given - min(credit, given)
         allowance = int(Decimal(line.payload["mrp_paise"] * line.qty) * cap_percent / 100)
-        if manual > allowance:
-            line.override_needed = True
-            over.append(line)
+        if drifted and manual <= allowance:
+            rulebook.drift.add(line.payload["line_no"])
+        if manual <= allowance:
+            continue
+        line.override_needed = True
+        over.append(line)
     if over and override is None:
         first = over[0].payload["line_no"]
         raise AcceptError(
@@ -661,6 +739,26 @@ def _guard_bill_number(data: dict[str, Any], store: Store) -> None:
         raise _bill_number_taken(data)
 
 
+def _authorised_kind(lines: list[_PreparedLine], tenders: list[_TenderPlan]) -> str:
+    """What the manager's tap on this bill was actually for.
+
+    Derived from what the pipeline itself found, never taken from the payload's
+    `override.kind`. The till is the party the override constrains, so a bill
+    could otherwise file an over-cap discount under "credit_note" - and the daily
+    check, which groups on exactly this field, would count neither honestly.
+
+    The two are joined in one fixed order when a manager was asked both at once,
+    so the value a check groups on has one spelling
+    (`sell.serializers.OVERRIDE_KINDS`).
+    """
+    kinds = []
+    if any(line.override_needed for line in lines):
+        kinds.append("over_cap_discount")
+    if any(plan.unverified for plan in tenders):
+        kinds.append("credit_note")
+    return "+".join(kinds)
+
+
 def _write_sale(
     data: dict[str, Any],
     store: Store,
@@ -668,11 +766,16 @@ def _write_sale(
     original_bill: Sale | None,
     lines: list[_PreparedLine],
     override: Any,
+    tenders: list[_TenderPlan],
 ) -> Sale:
     """Step 9 - the draft and its lines, before a number exists."""
     customer = data.get("customer") or {}
     totals = data["totals"]
-    buyer_gstin = (customer.get("gstin") or "").strip().upper()
+    buyer_gstin = gstin_normalise(customer.get("gstin") or "")
+    # What the till said about the manager's tap. Only the *time* is taken from
+    # it - a clock this server does not have - and only when the pipeline
+    # recognised the person it named.
+    authorisation = (data.get("override") or {}) if override else {}
     sale = Sale.objects.create(
         idempotency_uuid=data["idempotency_uuid"],
         store=store,
@@ -681,7 +784,12 @@ def _write_sale(
         origin=data["origin"],
         billed_at=data["billed_at"],
         customer_name=(customer.get("name") or "").strip(),
-        customer_mobile=(customer.get("mobile") or "").strip(),
+        # Canonicalised here, not just in the master upsert: db-design links a
+        # bill to its customer by mobile at query time, over this indexed
+        # column, so a bill that snapshots '+91 98765-43210' as typed would
+        # never join to master row '9876543210'. Both sides of that join are
+        # written at this one boundary, so both get the same spelling.
+        customer_mobile=normalise_mobile(customer.get("mobile") or ""),
         buyer_gstin=buyer_gstin,
         # Derived here rather than after the number is minted, because a posted
         # document is immutable in the database: the FSM trigger lets a submitted
@@ -695,6 +803,13 @@ def _write_sale(
         round_paise=totals["round_paise"],
         exchange_of=original_bill,
         salesman_default=next((line.salesman for line in lines if line.salesman), None),
+        # Only a manager the pipeline actually recognised is written here. An
+        # override naming somebody who is not a manager of this store has already
+        # been discarded by `manager_for_override`, and recording the id anyway
+        # would put a name on a bill that person never authorised.
+        override_by=override,
+        override_kind=_authorised_kind(lines, tenders) if override else "",
+        override_at=authorisation.get("at"),
         created_by=actor,
     )
     for line in lines:
@@ -719,6 +834,7 @@ def _write_line(sale: Sale, line: _PreparedLine, override: Any) -> SaleLine:
         gst_paise=payload["gst_paise"],
         unit_cost_paise=line.unit_cost_paise,
         salesman=line.salesman,
+        offer=_offer_cited(payload),
         offer_evidence=payload["offer_evidence"],
         manual_desc=payload["manual_desc"].strip(),
         sold_before_inward=not line.is_return and not line.piece.is_known,
@@ -735,6 +851,22 @@ def _write_line(sale: Sale, line: _PreparedLine, override: Any) -> SaleLine:
         original_line=line.original,
         override_by=override if line.override_needed else None,
     )
+
+
+def _offer_cited(payload: dict[str, Any]) -> Offer | None:
+    """The rule the till says won this line, if it names one that exists.
+
+    Recorded, not trusted. What the bill was *worth* is settled by the server's
+    own resolution (`_server_resolution`); this field only answers "which rule
+    did the counter believe it was selling under", which is the question the
+    daily check starts from and which nobody else can answer afterwards. An id
+    naming no rule is dropped rather than refused - the bill is printed, and a
+    bad reference is a finding for step 12, not a reason to stop a queue.
+    """
+    offer_id = payload.get("offer_id")
+    if not offer_id:
+        return None
+    return Offer.objects.filter(pk=offer_id).first()
 
 
 def _line_description(line: _PreparedLine) -> tuple[dict[str, str], str]:
@@ -813,44 +945,16 @@ def _write_stock_legs(sale: Sale, store: Store, lines: list[_PreparedLine], acto
 
     A sold piece leaves the shelf; a returned one comes back to it, unless it
     comes back damaged, in which case it goes straight into quarantine and never
-    becomes sellable again without somebody looking at it (D3).
+    becomes sellable again without somebody looking at it (D3). Which of those a
+    line is, and where it lands, is `sell.services.movements` - shared with the
+    sweep so the two cannot answer it differently.
 
     A line the books cannot price writes nothing. That is not a gap: the piece was
     never inwarded, so there is no stock to take off a shelf it was never on, and
     the movement posts with the cost event when the paperwork lands (#186).
     """
     for row in _priced_rows(lines):
-        mover, kind, sign = _MOVEMENTS[_movement_of(row)]
-        mover(
-            store=store,
-            gstin=store.gstin,
-            sku_code=row.barcode,
-            source=row,
-            qty=sign * row.qty,
-            unit_cost_paise=row.unit_cost_paise,
-            kind=kind,
-            doc_number=sale.doc_number or "",
-            line_no=row.line_no,
-            posted_by=actor,
-        )
-
-
-def _movement_of(row: SaleLine) -> str:
-    """Which of the three things a bill line does to stock."""
-    if row.direction != SaleLine.Direction.RETURN:
-        return "sold"
-    return "returned_damaged" if row.condition == SaleLine.Condition.DAMAGED else "returned_good"
-
-
-#: The three movements a bill can make, each as `(writer, ledger kind, sign)`.
-#: One table rather than a pair of branches, so the bucket a piece lands in and
-#: the kind that names it can never be chosen by two different conditions and
-#: disagree - which is the failure that would put a damaged return on the shelf.
-_MOVEMENTS = {
-    "sold": (post_on_hand_movement, StockLedgerEntry.Kind.SALE_OUT, -1),
-    "returned_good": (post_on_hand_movement, StockLedgerEntry.Kind.SALE_RETURN_IN, 1),
-    "returned_damaged": (post_quarantine_movement, StockLedgerEntry.Kind.QUARANTINE_IN, 1),
-}
+        post_stock_move(sale, store, row, actor)
 
 
 def _priced_rows(lines: list[_PreparedLine]) -> list[SaleLine]:
@@ -913,6 +1017,8 @@ def _apply_tenders(sale: Sale, store: Store, plans: list[_TenderPlan]) -> list[s
             mode=plan.payload["mode"],
             amount_paise=plan.payload["amount_paise"],
             credit_note=plan.note,
+            upi_state=plan.payload.get("upi_state") or "",
+            upi_reference=plan.payload.get("upi_reference") or "",
         )
         if plan.note is not None:
             CreditNoteRedemption.objects.create(
@@ -956,10 +1062,16 @@ def _b2b_tax_kind(buyer_gstin: str, store: Store) -> str:
     store's registration means CGST + SGST; a different one means IGST. Bihar and
     Jharkhand are separate registrations, so this is an everyday branch here and
     not a corner case.
+
+    The characters are taken as typed - a GSTIN that fails `gstin.describe` still
+    gets a split out of its first two, and is flagged for a human rather than
+    re-taxed. The till printed the customer's copy from these same two characters
+    minutes ago (`till/gstin.ts`), and a server that quietly chose differently
+    would put one tax on the paper and another in the books.
     """
     if not buyer_gstin:
         return Sale.B2bTaxKind.NONE
-    if buyer_gstin[:2] == store.gstin.state_code:
+    if gstin_state_code(buyer_gstin) == store.gstin.state_code:
         return Sale.B2bTaxKind.CGST_SGST
     return Sale.B2bTaxKind.IGST
 
@@ -972,26 +1084,43 @@ def _apply_b2b(sale: Sale, store: Store, data: dict[str, Any]) -> list[str]:
     their input credit. The store cannot do that and should not be asked to: the
     deadline rides as data into a head-office queue (Rule 11).
 
-    The split itself was derived before the bill was posted. What is checked here
-    is whether the till printed the same thing on the customer's copy - where it
-    did not, the bill still lands and the disagreement is flagged.
+    The split itself was derived before the bill was posted. Two things are
+    checked here, and neither of them can stop a bill that is already paid for:
+
+    * **Is the registration well formed at all** (#187). A cashier mistyping one
+      character of fifteen has made a tax invoice head office must correct - it
+      still lands, and the flag carries the reason so a clerk can ring the
+      customer or fix a typo without re-deriving the check.
+    * **Did the till print the same split**. Where it did not, the bill lands and
+      the disagreement is flagged for the daily check.
     """
     if not sale.buyer_gstin:
         return []
     IrnQueueItem.objects.create(
         sale=sale, due_on=timezone.localdate(sale.billed_at) + timedelta(days=IRN_DUE_DAYS)
     )
+    flags = []
+    malformed = gstin_describe(sale.buyer_gstin)
+    if malformed:
+        flags.append(
+            _flag(
+                sale,
+                store,
+                ContinuityFlag.Kind.GSTIN_INVALID,
+                {"gstin": sale.buyer_gstin, "reason": malformed},
+            )
+        )
     declared = data.get("b2b_tax_kind") or ""
     if declared and declared != sale.b2b_tax_kind:
-        return [
+        flags.append(
             _flag(
                 sale,
                 store,
                 ContinuityFlag.Kind.GST_MISMATCH,
                 {"printed_split": declared, "derived_split": sale.b2b_tax_kind},
             )
-        ]
-    return []
+        )
+    return flags
 
 
 def _advisory_gst_check(sale: Sale, store: Store, lines: list[_PreparedLine]) -> list[str]:
@@ -1001,29 +1130,53 @@ def _advisory_gst_check(sale: Sale, store: Store, lines: list[_PreparedLine]) ->
     buys is the daily check knowing which bills to look at, not a refusal nobody
     could act on. A rupee a line is the threshold (B3).
 
-    Only the sold lines are checked. A return leg is priced at what the customer
-    actually paid on the original bill (D2), tax and all, so it deliberately
-    carries the *old* rate - measuring it against today's slab would raise a flag
-    on every return taken after a rate change, which is the daily check crying
-    wolf about the one thing the design asked for.
+    Only the sold lines are checked, and the arithmetic itself is
+    `sell.services.recompute` - shared with the nightly re-run (#188), so a bill
+    passed at the counter and a bill reported at midnight are answering the same
+    question rather than two questions that happen to look alike.
 
-    The offer half of this step waits for the offer engine (#183): with no
-    rulebook loaded, a server-side re-resolution would say every discount is
-    wrong, which is noise rather than a finding.
+    The offer half of the same step is `_advisory_offer_check`, below.
     """
-    when = timezone.localdate(sale.billed_at)
-    offenders = []
-    for row in [line.row for line in lines if line.row is not None and not line.is_return]:
-        expected = split_line(row.net_paise, row.qty, slab_for(row.hsn, when))
-        if abs(expected.gst_paise - row.gst_paise) > GST_TOLERANCE_PAISE:
-            offenders.append(
-                {
-                    "line_no": row.line_no,
-                    "charged_paise": row.gst_paise,
-                    "slab_paise": expected.gst_paise,
-                    "slab_rate": str(expected.rate),
-                }
-            )
+    offenders = gst_offenders(_written_rows(lines), timezone.localdate(sale.billed_at))
     if not offenders:
         return []
     return [_flag(sale, store, ContinuityFlag.Kind.GST_MISMATCH, {"lines": offenders})]
+
+
+def _advisory_offer_check(
+    sale: Sale, store: Store, lines: list[_PreparedLine], rulebook: _Rulebook
+) -> list[str]:
+    """Step 12, the offer half - did the counter charge what the rulebook says?
+
+    The daily applied-vs-rulebook check (D5 Q10) is the thing this feeds, and it
+    is advisory for the same reason its GST twin is: the bill is printed and the
+    customer has gone. What it buys is a store's morning queue knowing which bills
+    to look at.
+
+    The comparison is the *whole* discount against the rulebook's, not the till's
+    `offer_evidence` against the rulebook's, and that is deliberate. A line where
+    the counter gave nothing and the rulebook says the customer was owed ₹600 is
+    exactly the finding this check exists for, and comparing evidence with
+    evidence would miss it - a till that applied no offer also writes no evidence,
+    so the two would agree about nothing and report nothing.
+
+    The comparison itself is `sell.services.recompute`, shared with the nightly
+    re-run for the reason its GST twin is: one question, asked twice, not two.
+    What only this side can supply is `drift` - the lines whose discount was
+    credited to the rule they *cite* rather than to today's reading of the book,
+    which is a fact about the accept decision and not about the bill.
+    """
+    rows = _written_rows(lines)
+    offenders = offer_offenders(
+        rows,
+        {row.line_no: rulebook.saving_for(row.line_no) for row in rows},
+        rulebook.drift,
+    )
+    if not offenders:
+        return []
+    return [_flag(sale, store, ContinuityFlag.Kind.OFFER_MISMATCH, {"lines": offenders})]
+
+
+def _written_rows(lines: list[_PreparedLine]) -> list[SaleLine]:
+    """The `SaleLine` rows this bill actually wrote, in payload order."""
+    return [line.row for line in lines if line.row is not None]

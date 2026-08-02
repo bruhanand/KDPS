@@ -91,16 +91,45 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+export type ReceiveFlow = "branded" | "nonbranded";
+
+/** The receive flows the unit you are standing in actually has (#228).
+ *
+ *  Only branded goods arrive at a store - the server refuses a non-branded
+ *  receipt anywhere but a warehouse - so at a store the choice is not hidden,
+ *  it does not exist. A warehouse takes both. No single active unit (an owner
+ *  on "All units") keeps both too: the choice is still real there, and the
+ *  server decides the rest at the store the receipt names.
+ *
+ *  Written as "only a warehouse gets the second flow", not "only a store loses
+ *  it": KDPS has two unit types today, and a third one added later (an office)
+ *  must inherit the narrower screen, not the wider one. */
+export function receiveFlows(activeStore: { store_type: string } | null): ReceiveFlow[] {
+  if (!activeStore) return ["branded", "nonbranded"];
+  return activeStore.store_type === "warehouse" ? ["branded", "nonbranded"] : ["branded"];
+}
+
+/** The flow the URL asks for, clamped to the ones this unit has. Clamped rather
+ *  than merely defaulted: switching from the warehouse to a store leaves
+ *  `?tab=nonbranded` behind in the URL, and honouring it would put a store
+ *  person back on a flow their screen no longer offers. */
+export function activeFlow(flows: ReceiveFlow[], tabParam: string | null): ReceiveFlow {
+  const asked: ReceiveFlow = tabParam === "nonbranded" ? "nonbranded" : "branded";
+  return flows.includes(asked) ? asked : "branded";
+}
+
 export function InboundPage() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "nonbranded" ? "nonbranded" : "branded";
+  const { activeStore } = useAuth();
+  const flows = receiveFlows(activeStore);
+  const tab = activeFlow(flows, params.get("tab"));
   const kind = tab === "nonbranded" ? "non_branded" : "branded";
 
   const [q, setQ] = useState("");
   const { data: grns, loading } = useList<GrnListItemT>("/inbound/grns", { kind, q });
   const { data: pending } = useList<PendingBookingT>("/inbound/pending");
 
-  function setTab(next: "branded" | "nonbranded") {
+  function setTab(next: ReceiveFlow) {
     setParams((p) => {
       p.set("tab", next);
       return p;
@@ -121,24 +150,29 @@ export function InboundPage() {
         }
       />
 
-      <div className="mode-toggle" data-testid="receive-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
-        <button
-          type="button"
-          className={`mode-btn ${tab === "branded" ? "active" : ""}`}
-          onClick={() => setTab("branded")}
-          data-testid="receive-tab-branded"
-        >
-          <StoreIcon size={16} /> Branded (at store)
-        </button>
-        <button
-          type="button"
-          className={`mode-btn ${tab === "nonbranded" ? "active" : ""}`}
-          onClick={() => setTab("nonbranded")}
-          data-testid="receive-tab-nonbranded"
-        >
-          <Boxes size={16} /> Non-branded (at warehouse)
-        </button>
-      </div>
+      {/* No "(at store)" / "(at warehouse)" any more: the topbar already says
+          which unit you are standing in, and the toggle is only drawn where both
+          flows exist. */}
+      {flows.length > 1 && (
+        <div className="mode-toggle" data-testid="receive-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
+          <button
+            type="button"
+            className={`mode-btn ${tab === "branded" ? "active" : ""}`}
+            onClick={() => setTab("branded")}
+            data-testid="receive-tab-branded"
+          >
+            <StoreIcon size={16} /> Branded
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${tab === "nonbranded" ? "active" : ""}`}
+            onClick={() => setTab("nonbranded")}
+            data-testid="receive-tab-nonbranded"
+          >
+            <Boxes size={16} /> Non-branded
+          </button>
+        </div>
+      )}
 
       {tab === "branded" && pending.length > 0 && (
         <div className="section-card card">

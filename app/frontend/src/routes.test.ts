@@ -2,7 +2,7 @@ import { matchRoutes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { PROTECTED_ROUTES } from "./routes";
-import { INVENTORY_FOLD, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
+import { INVENTORY_FOLD, LEGACY_PATHS, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
 
 /** Which screen does this URL actually open? */
 function screenAt(url: string): string | null {
@@ -26,6 +26,8 @@ describe("the route table", () => {
       ["/return-to-brand", "rtv-list"],
       // The folded page (#170): its own URL, no menu entry pointing at it.
       ["/inventory", "inventory"],
+      ["/sell", "sell-billing"],
+      ["/sell/till", "sell-till"],
       ["/stock", "stock-on-hand"],
       ["/stock/history", "stock-history"],
       ["/stock/vflips", "vflip-list"],
@@ -62,10 +64,13 @@ describe("the route table", () => {
   });
 
   it("Transfer sub-screens do not swallow the Transfer document ids", () => {
-    // /transfer/distribution is still a planned page; /transfer/in-transit and
-    // /transfer/requests are now built (#71, #74) — all three sit where ids live.
+    // Distribution's stub is gone (#229); its address sits exactly where
+    // /transfer/:id looks for a document number, so it needs its own legacy
+    // route or it would open "transfer number distribution" — the same case
+    // #228 solved for Upload Bill. /transfer/in-transit and /transfer/requests
+    // are built (#71, #74) — all three sit where ids live.
     expect(screenAt("/transfer/requests")).toBe("stock-request-list");
-    expect(screenAt("/transfer/distribution")).toBe("planned:/transfer/distribution");
+    expect(screenAt("/transfer/distribution")).toBe("legacy:/transfer/distribution");
     expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");
     // The transfer's own PT hangs off the document, not off the section (#72).
@@ -98,6 +103,27 @@ describe("the route table", () => {
     }
     for (const old of ["/inbound/12", "/ledgers/vendor", "/outbound/rtvs/3", "/masters/stores"]) {
       expect(screenAt(old), old).toBeNull();
+    }
+  });
+
+  it("redirects the deleted Upload Bill stub instead of reading it as a GRN id", () => {
+    // The one legacy path that cannot be left to the catch-all (#228): it sits
+    // exactly where `/receive/:id` looks for a document number, so without its
+    // own route the old link opens "GRN number upload-bill" - a spinner and a
+    // 404 - rather than the Receive screen.
+    expect(screenAt("/receive/upload-bill")).toBe("legacy:/receive/upload-bill");
+    expect(resolveLegacyPath("/receive/upload-bill")).toBe("/receive");
+    // And the screen it lands on is still the one that owns the address.
+    expect(screenAt("/receive")).toBe("grn-list");
+  });
+
+  it("gives a redirect route to every legacy path a screen would otherwise claim", () => {
+    // The derivation, not the one path it currently finds: a legacy address that
+    // a route claims is the case the catch-all cannot see, and it must never be
+    // left to somebody noticing.
+    for (const old of LEGACY_PATHS) {
+      const id = screenAt(old);
+      expect(id === null || id.startsWith("legacy:"), `${old} → ${id}`).toBe(true);
     }
   });
 

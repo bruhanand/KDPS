@@ -107,3 +107,22 @@ export function slabFor(slabs: TillGstSlab[], hsn: string, when: string): TillGs
     FALLBACK_SLAB
   );
 }
+
+/**
+ * Today, on the counter's own clock.
+ *
+ * Not `new Date().toISOString().slice(0, 10)`, which is the day in **UTC**. A
+ * shop in Deoghar is five and a half hours ahead, so from half past six every
+ * evening - the busiest part of a retail day - the UTC date is already tomorrow.
+ * A slab or an offer boundary read that way would move at 18:30 rather than at
+ * midnight, and the server, which judges the same bill in `Asia/Kolkata`, would
+ * disagree with every bill rung up that evening.
+ *
+ * The counter's own clock is also what grill Q3 asks for by name: the till
+ * starts and stops an offer itself, offline, and "itself" has to mean the day it
+ * is actually trading in.
+ */
+export function tillToday(now: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}

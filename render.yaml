@@ -132,6 +132,42 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
 
+  # --- Nightly sell reconciliation ----------------------------------------------
+  # The daily check (#188), and the pilot's go/no-go gate. Four questions about a
+  # day that is over: did every bill arrive, was the customer charged what the
+  # rulebook says, is anything still unpriced (the old `sell_age_deferred`
+  # schedule, folded in as one of the four), and who took the returns. Writes
+  # exception rows only - it posts nothing and touches no document.
+  # Idempotent: a bill already flagged is not flagged twice, a flag the store
+  # chose to ignore stays ignored, and a hole that filled overnight is closed.
+  # It defaults to **yesterday**, which is what this schedule is about: 20:45 UTC
+  # is ~02:15 IST, so the day it reconciles is the one that has just ended.
+  # Same free-tier caveat as the crons above: run by hand if not on a paid Render
+  # plan (see DEPLOY.md).
+  - type: cron
+    name: kdps-sell-daily-check
+    runtime: python
+    branch: client-testing     # same code line as the alpha it checks
+    plan: starter
+    schedule: "45 20 * * *"    # 20:45 UTC daily (~02:15 IST, after the alerts cron)
+    region: singapore
+    rootDir: app/backend
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run python manage.py sell_daily_check
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true    # a management command signs nothing — any secret is fine
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kdps-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+
   # --- React PWA (static) ----------------------------------------------------
   - type: web
     name: kdps-erp-web

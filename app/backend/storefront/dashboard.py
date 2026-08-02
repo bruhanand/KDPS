@@ -7,16 +7,20 @@ just to draw a card (ADR-0002) - the same shape `search` already has.
 
 **Every count here is a count of something that exists today.** The nine
 `action_queue` keys in `api-contract.md` include three that read `sell_heldbill`,
-`sell_deferredcosting` and `sell_continuityflag`, and the `sell` app is not built
-until #177-#186. Those three keys are *absent* rather than reported as nought:
-a row saying "0 bills on hold" would be a sentence about a store's morning, and
-what is actually true is that nothing can be put on hold yet. The ticket's own
-words are "counting what already exists". They arrive with the tables they read.
+`sell_deferredcosting` and `sell_continuityflag`, and those tables arrived one
+ticket at a time. A key was *absent* rather than reported as nought until its
+table was there: a row saying "0 bills on hold" would be a sentence about a
+store's morning, and what would actually be true is that nothing could be put on
+hold yet. `held_bills` joined the queue with the hold list itself (#185),
+`uncosted_sale_lines` with the costing sweep (#186) and `continuity_flags` with
+the daily check (#188), which completes the contract's nine.
 
-The same honesty runs through the money tiles, which the contract does fix at
-zero: `sales_live` says whether a Sale can exist at all, so the screen can label
-a zero that means "no bills yet today" differently from one that means "billing
-is not live here".
+The money tiles were noughts for the same reason and are not any more (#188).
+`sales_live` stays in the payload and is now true wherever a bill can exist: the
+screen still needs to tell "no bills yet today" from "billing is not live here",
+and a store the POS has not reached is the second. The arithmetic itself is
+`storefront.day`, shared with the Money section's cash summary, so Home and Money
+cannot read one day two ways.
 """
 
 from __future__ import annotations
@@ -33,12 +37,17 @@ from accounts.permissions import user_can
 from accounts.sections import CAP_APPROVE, CAP_VIEW
 from alerts.models import Alert, AlertKind, AlertStatus
 from approvals.services import inbox_for
-from core.documents import DocStatus
+from core.documents import DocStatus, VoucherSeries
+from core.fiscal import financial_year
 from inbound.models import Grn
 from masters.models import Store, StoreTarget
-from masters.scoping import active_store_ids
+from masters.scoping import active_store_ids, is_brand_scoped
+from offers.models import Offer
+from offers.serializers import one_liner
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
 from ptmapper.models import PtFile
+from sell.models import SALE_DOC_TYPE, ContinuityFlag, DeferredCosting, HeldBill
+from storefront.day import DayMoney, money_for, net_sales_by_day
 
 #: How many in-transit cartons the "live in store" card names before it stops
 #: listing and the action-queue row carries the rest. Four fits the card; the
@@ -95,7 +104,26 @@ def resolve_store(user: Any, requested_code: str) -> StorePick:
     A network person who has picked no unit gets no store either: "the store's
     Home" is a question about a store, and with fifty in view there is no honest
     answer, only an arbitrary one.
+
+    **A brand-scoped person gets no store at all**, and that is a fail-closed
+    branch rather than an omission. `visible_store_ids` answers `None` for a
+    brand manager, and `None` there means "stores are the wrong question" - not
+    "every store". Reading it as the second is the read-scope fail-open class
+    this codebase has shipped before, and it bites harder now that the tiles
+    carry real money: a brand manager naming any shop in `?store=` would have
+    read that shop's takings, bill count and tender split, none of which is a
+    fact about their brands. `actionable_store_ids` is the existing spelling of
+    the same refusal, and it is the one used here.
     """
+    # Asked before anything else, because it is the one refusal that does not
+    # depend on what was asked for: "which store is this screen about" is a claim
+    # about a *place*, and a boundary made of brands cannot support one.
+    if is_brand_scoped(user):
+        return StorePick(
+            None,
+            "This screen is one store's day. Your access is by brand, so there is "
+            "no store to open here.",
+        )
     try:
         ids = active_store_ids(user)
     except PermissionDenied as exc:
@@ -221,14 +249,58 @@ def _open_count_session(store: Store) -> int:
     return int(Stocktake.objects.filter(store_id=store.id, status=CountStatus.OPEN).count())
 
 
+def _held_bills(store: Store) -> int:
+    """Carts the counter has parked (#185, grill Q13).
+
+    The till's own mirror, not a document: a hold holds no stock and no money, so
+    this is the one row on the queue that is a count of *unfinished conversations*
+    rather than of work the books are waiting on. It is on the queue because the
+    store chooses at day close whether each one is kept or let go, and a manager
+    should not have to walk to the counter to find out how many there are.
+    """
+    return int(HeldBill.objects.filter(store_id=store.id).count())
+
+
+def _uncosted_sale_lines(store: Store) -> int:
+    """Lines this store sold before the paperwork could price them (#186).
+
+    Counted per *line* rather than per bill, because a line is what the sweep
+    releases and what the daily check ages - a bill with two such lines is two
+    pieces the books cannot value, not one problem. Rows already posted drop out
+    the moment their PT lands, which is what makes this a queue rather than a
+    tally: it is meant to sit at nought.
+    """
+    return int(
+        DeferredCosting.objects.filter(
+            store_id=store.id, status=DeferredCosting.Status.WAITING
+        ).count()
+    )
+
+
+def _continuity_flags(store: Store) -> int:
+    """Counter exceptions nobody has cleared (#188).
+
+    Open only. `ignored` is the store having looked and decided this one is fine,
+    and a queue that kept counting it would make the third state mean nothing.
+
+    Not date-scoped, unlike the Money section's own figure: this is a to-do list,
+    and a flag raised on Tuesday is still work on Thursday. The day summary asks
+    the narrower question ("what did *this* day leave open") because that is the
+    one somebody counting a drawer is asking.
+    """
+    return int(
+        ContinuityFlag.objects.filter(store_id=store.id, status=ContinuityFlag.Status.OPEN).count()
+    )
+
+
 def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[str, Any]]:
     """The needs-your-action rows, in the contract's order.
 
-    Every row ships with its count even when that count is nought: unlike the
-    three `sell` keys, these all read a table that exists, so nought is a fact
-    about the store and not about the build. The screen greys a nought row rather
-    than hiding it - a queue that changes length as work is cleared is one you
-    stop trusting to be the whole list.
+    Every row ships with its count even when that count is nought: these all read
+    a table that exists, so nought is a fact about the store and not about the
+    build. The screen greys a nought row rather than hiding it - a queue that
+    changes length as work is cleared is one you stop trusting to be the whole
+    list. All nine of the contract's keys are here as of #188.
     """
     return [
         {"key": "approvals_pending", "count": _approvals_pending(user, store)},
@@ -237,39 +309,61 @@ def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[st
         {"key": "quarantine_to_confirm", "count": _quarantine_to_confirm(store)},
         {"key": "rtb_windows_closing", "count": _rtb_windows_closing(store)},
         {"key": "open_count_session", "count": _open_count_session(store)},
+        {"key": "held_bills", "count": _held_bills(store)},
+        {"key": "uncosted_sale_lines", "count": _uncosted_sale_lines(store)},
+        {"key": "continuity_flags", "count": _continuity_flags(store)},
     ]
 
 
 # --- the rest of the payload ----------------------------------------------
 
 
-def today_block() -> dict[str, Any]:
-    """The four money tiles. Zeros until the Sale document lands (#177/#178).
+def sales_live(store: Store) -> bool:
+    """Can a bill exist at this location at all?
 
-    The contract fixes these at zero for a fresh store, and a store with no POS
-    yet is the same arithmetic - `sales_live` beside them is what tells the two
-    apart, so nobody reads a quiet morning into a screen that cannot count.
+    The year's `SAL` series row, which is the same reading the till's own boot
+    call takes (`register_state.series_open`) - a store without one cannot have a
+    number minted for it, so every bill it printed would fail to sync. A warehouse
+    has no counter and never gets the row.
+
+    It matters because four noughts say "this store sold nothing today" and the
+    truth at a location the POS has not reached is "this store cannot bill yet",
+    and a store manager reading the first when the second is true will go looking
+    for the trade rather than for the rollout.
+    """
+    return VoucherSeries.objects.filter(
+        fy=financial_year(), store_code=store.code, doc_type=SALE_DOC_TYPE
+    ).exists()
+
+
+def today_block(money: DayMoney, yesterday_paise: int) -> dict[str, Any]:
+    """The four money tiles, as the contract fixes them (§Step 1, item 2).
+
+    `vs_yesterday_pct` is `None` rather than nought when yesterday took nothing:
+    "up 0%" against a day with no trade is arithmetic nobody can read, and there
+    is no percentage change from nothing.
     """
     return {
-        "net_sales_paise": 0,
-        "bills": 0,
-        "avg_bill_paise": 0,
-        "pieces": 0,
-        "collections": {"cash": 0, "card": 0, "upi": 0, "credit_note": 0},
-        "vs_yesterday_pct": None,
+        "net_sales_paise": money.net_sales_paise,
+        "bills": money.bills,
+        "avg_bill_paise": money.avg_bill_paise,
+        "pieces": money.pieces,
+        "collections": dict(money.collections),
+        "vs_yesterday_pct": (
+            round((money.net_sales_paise - yesterday_paise) * 100 / yesterday_paise)
+            if yesterday_paise > 0
+            else None
+        ),
     }
 
 
-def last7(today: date) -> list[dict[str, Any]]:
-    """Seven dated points, oldest first, so the sparkline has an x-axis before it
-    has any y values."""
-    return [
-        {
-            "date": (today - timedelta(days=offset)).isoformat(),
-            "net_sales_paise": 0,
-        }
-        for offset in range(SPARKLINE_DAYS - 1, -1, -1)
-    ]
+def last7(store: Store, today: date) -> list[dict[str, Any]]:
+    """Seven dated points, oldest first, so the sparkline has an x-axis whatever
+    the values come to - a day with no trade is a nought on the strip, not a gap
+    in it."""
+    days = [today - timedelta(days=offset) for offset in range(SPARKLINE_DAYS - 1, -1, -1)]
+    takings = net_sales_by_day(store, days)
+    return [{"date": day.isoformat(), "net_sales_paise": takings[day]} for day in days]
 
 
 def manager_block(user: Any, store: Store, today: date) -> dict[str, Any] | None:
@@ -294,34 +388,57 @@ def manager_block(user: Any, store: Store, today: date) -> dict[str, Any] | None
     """
     if not (user_can(user, "sell", CAP_APPROVE) and user_can(user, "money", CAP_VIEW)):
         return None
-    target = StoreTarget.objects.filter(store_id=store.id, month=today.replace(day=1)).first()
+    month_start = today.replace(day=1)
+    target = StoreTarget.objects.filter(store_id=store.id, month=month_start).first()
+    mtd = net_sales_by_day(
+        store, [month_start + timedelta(days=n) for n in range((today - month_start).days + 1)]
+    )
     return {
         # Day close (I3, store open/close) is its own designed flow, sequenced
         # after this one. The key is here with an honest state rather than
         # missing, so the row has its shape from the first day.
         "day_close": {"date": today.isoformat(), "state": "not_built"},
-        "mtd_net_paise": 0,
+        # The month so far, first of the month to today inclusive - and not a
+        # month-to-*yesterday*, because the bar is read beside a target somebody
+        # is still trading towards.
+        "mtd_net_paise": sum(mtd.values()),
         "target_paise": int(target.target_paise) if target else 0,
     }
+
+
+def live_offers(store: Store, today: date) -> list[dict[str, Any]]:
+    """What is running at this counter this morning (contract §Step 1, item 4).
+
+    A card the store reads before opening, so it says the rule in a phrase rather
+    than in its dials - and the phrase is generated from the rule (`one_liner`)
+    rather than typed beside it, because a hand-written summary drifts away from
+    the thing it summarises and the summary is what the shop floor believes.
+    """
+    rows = (Offer.objects.live_on(today).for_store(store.code).select_related("brand")).order_by(
+        "priority", "id"
+    )
+    return [
+        {"id": offer.id, "brand": offer.brand_name, "one_liner": one_liner(offer)} for offer in rows
+    ]
 
 
 def build(user: Any, store: Store) -> dict[str, Any]:
     """One store's whole Home, in the contract's shape."""
     today = timezone.localdate()
     in_transit = inbound_in_transit(store)
+    week = last7(store, today)
     payload: dict[str, Any] = {
         "store": store.code,
-        # False until the Sale document and the till land. Not in the contract's
-        # sketch, which was written as if `sell` existed; without it the money
-        # tiles would read as a real nought.
-        "sales_live": False,
-        "today": today_block(),
+        # Not in the contract's sketch, which was written as if `sell` existed.
+        # Without it four noughts cannot say whether this store had a quiet day
+        # or has no counter at all.
+        "sales_live": sales_live(store),
+        # Yesterday comes off the strip that is already loaded rather than from a
+        # query of its own: it is the second-to-last point on it.
+        "today": today_block(money_for(store, today), week[-2]["net_sales_paise"]),
         "action_queue": action_queue(user, store, len(in_transit)),
         "live": {
-            # The rulebook is #183. Empty rather than absent: "no offers running"
-            # is a card a store reads every morning, and it should not appear the
-            # day the table does.
-            "offers": [],
+            "offers": live_offers(store, today),
             "in_transit": [
                 {
                     "id": row.id,
@@ -332,7 +449,7 @@ def build(user: Any, store: Store) -> dict[str, Any]:
                 for row in in_transit[:IN_TRANSIT_SHOWN]
             ],
         },
-        "last7": last7(today),
+        "last7": week,
     }
     manager = manager_block(user, store, today)
     if manager is not None:

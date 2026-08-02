@@ -3,11 +3,15 @@ import type { ReactNode } from "react";
 /** Render integer paise as INR with Indian Lakh/Crore grouping. Never floats on
  *  any write path — this is display only (the value is computed once server-side). */
 export function formatINR(paise: number, opts: { short?: boolean } = {}): string {
-  const rupees = paise / 100;
+  // The minus goes outside the symbol: "-₹1", never "₹-1". `formatRupeeAmount`
+  // below has always written it that way, and a split-tender bill can now be
+  // overpaid, which is the first screen where a negative amount is an everyday
+  // sight rather than a corner of a report.
+  const sign = paise < 0 ? "-" : "";
+  const rupees = Math.abs(paise) / 100;
   if (opts.short) {
-    const abs = Math.abs(rupees);
-    if (abs >= 1e7) return `₹${(rupees / 1e7).toFixed(2)} Cr`;
-    if (abs >= 1e5) return `₹${(rupees / 1e5).toFixed(2)} L`;
+    if (rupees >= 1e7) return `${sign}₹${(rupees / 1e7).toFixed(2)} Cr`;
+    if (rupees >= 1e5) return `${sign}₹${(rupees / 1e5).toFixed(2)} L`;
   }
   // Whole rupees show no paise at all; anything with paise shows both digits.
   // Without the minimum, ₹1,222.50 renders as "₹1,222.5", which is not money.
@@ -16,7 +20,7 @@ export function formatINR(paise: number, opts: { short?: boolean } = {}): string
     minimumFractionDigits: fraction,
     maximumFractionDigits: fraction,
   }).format(rupees);
-  return `₹${grouped}`;
+  return `${sign}₹${grouped}`;
 }
 
 export function Money({ paise, short }: { paise: number; short?: boolean }) {

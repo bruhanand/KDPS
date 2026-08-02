@@ -1,0 +1,69 @@
+{
+  "name": "gift-earned",
+  "note": "The trolley is in stock, so nothing comes off the bill - the customer buys the gift at its token price on a line of its own.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 40,
+      "name": "Blackberry trolley above 22,999",
+      "layer": "brand",
+      "brand": "BLACKBERRY",
+      "trigger_type": "spend",
+      "trigger_config": {
+        "slabs": [
+          {
+            "min_paise": 2299900,
+            "gift_barcode": "8909999999999",
+            "token_price_paise": 39900,
+            "fallback": {
+              "reward_type": "amt_off",
+              "reward_config": {
+                "amount_paise": 60000
+              }
+            }
+          }
+        ]
+      },
+      "reward_type": "gift",
+      "reward_config": {},
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "BLACKBERRY",
+      "item": "Suit",
+      "design": "BB9",
+      "barcode": "8931",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 2499900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 0,
+        "offer_id": null,
+        "evidence": {}
+      }
+    ],
+    "entitlements": [
+      {
+        "offer_id": 40,
+        "offer_name": "Blackberry trolley above 22,999",
+        "barcode": "8909999999999",
+        "token_price_paise": 39900
+      }
+    ],
+    "total_discount_paise": 0
+  }
+}

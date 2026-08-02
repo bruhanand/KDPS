@@ -17,7 +17,14 @@
 // halt a queue over a token.
 
 import { api, apiErrorMessage } from "../lib/api";
-import type { AcceptedBill, DatasetPayload, QueuedBill, RegisterPayload } from "./types";
+import { stampManualUpi } from "./tender";
+import type {
+  AcceptedBill,
+  DatasetPayload,
+  HandoverPayload,
+  QueuedBill,
+  RegisterPayload,
+} from "./types";
 
 /** A refusal the till has to reason about, stripped of the HTTP library. */
 export class TillHttpError extends Error {
@@ -49,10 +56,19 @@ export interface TillTransport {
   dataset(since: string): Promise<DatasetPayload>;
   /** `GET /api/sell/register` - what the server has accepted from this counter. */
   register(): Promise<RegisterPayload>;
+  /** `POST /api/sell/register/handover` - this store bills from this machine now
+   *  (#189). A manager's call, not the sync loop's: it is never retried, and a
+   *  refusal is shown to the person who asked rather than swallowed. */
+  handover(reason: string): Promise<HandoverPayload>;
   /** `POST /api/sell/sales`. A replay of the same `idempotency_uuid` answers 200
    *  with the original bill and writes nothing; a first arrival answers 201. The
    *  queue drops the bill either way, so the two are not distinguished here. */
   postSale(bill: QueuedBill): Promise<AcceptedBill>;
+  /** `PUT /api/sell/held-bills` - the counter's parked carts, whole list, so the
+   *  Dashboard can count them (#185). Best effort by construction: a hold that
+   *  never reaches the server is still a hold, and nothing about billing waits
+   *  on this call. */
+  putHeld(held: Record<string, unknown>[]): Promise<{ count: number }>;
 }
 
 /** The real one, over `lib/api` (so it carries the session and its refresh). */
@@ -63,17 +79,30 @@ export const httpTransport: TillTransport = {
   async register() {
     return unwrap(api.get("/sell/register"));
   },
+  async handover(reason: string) {
+    return unwrap(api.post("/sell/register/handover", { reason }));
+  },
   async postSale(bill: QueuedBill) {
     return unwrap(api.post("/sell/sales", billBody(bill)));
+  },
+  async putHeld(held: Record<string, unknown>[]) {
+    return unwrap(api.put("/sell/held-bills", { held }));
   },
 };
 
 /** The queue's bookkeeping is the till's, not the server's. Sending `attempts`
  *  or the local row id would put fields in a money payload that the contract does
- *  not name, and the serializer would have to decide what to do with them. */
+ *  not name, and the serializer would have to decide what to do with them.
+ *
+ *  `stampManualUpi` runs here too, not only in `tender.toTenders` (#241): a bill
+ *  already sitting in the queue from before this build was committed with no
+ *  stamp at all, and sending it as-is would meet the server's new refusal and
+ *  halt the whole queue behind it - a queued bill is a printed bill, so it is
+ *  stamped at this wire boundary on exactly the reasoning the server's own
+ *  historic-data backfill uses. */
 export function billBody(bill: QueuedBill): Record<string, unknown> {
   const { id: _id, attempts: _a, last_error: _e, doc_number: _n, ...body } = bill;
-  return body;
+  return { ...body, tenders: stampManualUpi(body.tenders) };
 }
 
 async function unwrap<T>(request: Promise<{ data: T }>): Promise<T> {

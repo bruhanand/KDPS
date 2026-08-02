@@ -38,11 +38,12 @@ from _sell import (
     client_for,
     gst_on,
     stock_in,
+    upi_tender,
 )
 
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLEntry, trial_balance
-from masters.models import Cohort, Store
+from masters.models import Cohort, Customer, Store
 from sell.models import (
     ContinuityFlag,
     CreditNote,
@@ -51,6 +52,7 @@ from sell.models import (
     IrnQueueItem,
     Sale,
     SaleLine,
+    SaleTender,
     SellPolicy,
 )
 from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
@@ -244,6 +246,103 @@ def test_a_bill_with_no_lines_is_not_a_bill(counter):
     assert response.json()["code"] == "VALIDATION"
 
 
+# --- the UPI stamp (#241) ---------------------------------------------------
+
+
+def test_a_upi_tender_with_no_stamp_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "upi", "amount_paise": MRP_PAISE}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_stamp_on_a_non_upi_tender_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "cash", "amount_paise": MRP_PAISE, "upi_state": "manual"}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_confirmed_upi_tender_with_no_reference_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "upi", "amount_paise": MRP_PAISE, "upi_state": "confirmed"}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_manual_upi_tender_carrying_a_reference_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [
+        {
+            "mode": "upi",
+            "amount_paise": MRP_PAISE,
+            "upi_state": "manual",
+            "upi_reference": "AXL123456",
+        }
+    ]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_well_stamped_manual_upi_tender_is_accepted_and_reads_back(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(
+        counter["store"],
+        counter["salesman"],
+        till_seq=1,
+        tenders=[upi_tender(MRP_PAISE)],
+    )
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201, response.json()
+    tender = SaleTender.objects.get(sale_id=response.json()["id"])
+    assert tender.mode == "upi"
+    assert tender.upi_state == "manual"
+    assert tender.upi_reference == ""
+
+
+def test_a_confirmed_upi_tender_reads_back_its_acquirer_reference(counter):
+    """The reference is the reconciliation key against the bank file - a write
+    that silently drops it is a hole no DB constraint catches (a confirmed row
+    is allowed an empty reference by the same constraint that requires one on
+    a *different* combination)."""
+    _shelf(counter["store"], 1)
+    payload = bill_payload(
+        counter["store"],
+        counter["salesman"],
+        till_seq=1,
+        tenders=[upi_tender(MRP_PAISE, state="confirmed", reference="AXL999")],
+    )
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201, response.json()
+    tender = SaleTender.objects.get(sale_id=response.json()["id"])
+    assert tender.upi_state == "confirmed"
+    assert tender.upi_reference == "AXL999"
+
+
 # --- resolving what was scanned --------------------------------------------
 
 
@@ -335,6 +434,8 @@ def test_the_manager_who_approved_it_is_recorded_on_the_line(counter):
 
     assert response.status_code == 201
     assert SaleLine.objects.get().override_by == counter["manager"]
+    # And on the bill, which is where an override with no line of its own lands.
+    assert Sale.objects.get().override_by == counter["manager"]
 
 
 def test_a_cashier_cannot_be_their_own_manager(counter):
@@ -381,8 +482,9 @@ def test_a_till_cannot_lift_its_own_cap_by_calling_a_discount_an_offer(counter):
 
     `offer_evidence.saved_paise` arrives in the payload. If the cap subtracted it,
     a till - or anything posting as one - would set it to the whole discount and
-    OVERRIDE_REQUIRED could never fire again. Until the offer engine can re-resolve
-    the cart server-side (#183), nothing is evidenced and the cap covers all of it.
+    OVERRIDE_REQUIRED could never fire again. Since #183 the cap subtracts the
+    *server's* own resolution instead, and there is no rulebook here at all, so
+    the claim buys nothing and the cap covers the whole discount.
     """
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
@@ -471,6 +573,105 @@ def test_a_manager_may_take_an_unrecognised_note_and_it_is_flagged(counter):
     assert response.status_code == 201
     assert response.json()["flags"] == [ContinuityFlag.Kind.CN_UNVERIFIED]
     assert not CreditNoteRedemption.objects.exists()
+
+
+def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter):
+    """#182 - the override is the only evidence such a bill has.
+
+    A credit-note override has no line to hang the manager off: the tender is a
+    bill-level fact and the line it helped pay for is an ordinary line. Without
+    the bill carrying it, the daily check sees "somebody took an unknown note"
+    with no name against it, which is the exact evidence the counter's second eye
+    exists to leave.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": "26-27/XXX/CRN/9"},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 50000},
+    ]
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "credit_note",
+        "at": "2026-07-30T12:29:00Z",
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    sale = Sale.objects.get()
+    assert sale.override_by == counter["manager"]
+    assert sale.override_kind == "credit_note"
+    assert sale.override_at.isoformat() == "2026-07-30T12:29:00+00:00"
+
+
+def test_a_bill_that_needed_two_things_approving_says_so_in_one_word(counter):
+    """The daily check groups on this value, so the pair has one spelling."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": "26-27/XXX/CRN/9"},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 20000 - 50000},
+    ]
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "over_cap_discount+credit_note",
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount+credit_note"
+
+
+def test_a_kind_nothing_recognises_is_refused(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "because I said so"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert not Sale.objects.exists()
+
+
+def test_what_was_authorised_is_what_the_server_found_not_what_the_till_said(counter):
+    """The daily check groups on this field, and the till is the party the
+    override constrains - so a bill cannot file an over-cap discount under
+    "credit_note" and have neither counted honestly."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "credit_note"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount"
+
+
+def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
+    _shelf(counter["store"], 3)
+
+    response = _post(counter, bill_payload(counter["store"], counter["salesman"], till_seq=1))
+
+    assert response.status_code == 201
+    sale = Sale.objects.get()
+    assert sale.override_by is None
+    assert sale.override_kind == ""
+    assert sale.override_at is None
+
+
+def test_an_override_naming_somebody_who_is_not_a_manager_leaves_no_evidence(counter):
+    """A refused override is not evidence of anything - and the bill that carried
+    it does not exist, because the discount it was offered for is refused."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["cashier"].id, "kind": "over_cap_discount"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 422
+    assert not Sale.objects.exists()
 
 
 def test_one_note_cannot_be_tendered_twice_on_one_bill(counter):
@@ -796,7 +997,7 @@ def test_a_bill_that_owes_the_customer_money_issues_a_note_and_no_cash(counter):
 def test_a_gstin_on_the_bill_splits_the_tax_and_starts_the_irn_clock(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "10AABCU9603R1ZM"  # same state as the store
+    payload["customer"]["gstin"] = "10AABCU9603R1Z2"  # same state as the store
 
     response = _post(counter, payload)
 
@@ -809,7 +1010,7 @@ def test_a_gstin_on_the_bill_splits_the_tax_and_starts_the_irn_clock(counter):
 def test_a_buyer_in_another_state_makes_it_igst(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "20AABCU9603R1ZM"  # Jharkhand; the store is Bihar
+    payload["customer"]["gstin"] = "20AABCU9603R1Z1"  # Jharkhand; the store is Bihar
 
     _post(counter, payload)
 
@@ -819,13 +1020,84 @@ def test_a_buyer_in_another_state_makes_it_igst(counter):
 def test_a_printed_split_that_disagrees_with_the_gstin_is_flagged(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "20AABCU9603R1ZM"
+    payload["customer"]["gstin"] = "20AABCU9603R1Z1"
     payload["b2b_tax_kind"] = "cgst_sgst"
 
     response = _post(counter, payload)
 
     assert response.status_code == 201
     assert ContinuityFlag.Kind.GST_MISMATCH in response.json()["flags"]
+
+
+def test_a_well_formed_gstin_raises_nothing(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = "10AABCU9603R1Z2"
+
+    response = _post(counter, payload)
+
+    assert response.json()["flags"] == []
+
+
+def test_a_mistyped_gstin_is_flagged_and_the_bill_still_lands(counter):
+    """#187's acceptance: validated softly - flagged, never refused.
+
+    The customer is at the counter holding the garment. A cashier who fumbled one
+    character of fifteen has made a tax invoice head office must correct, not a
+    sale the shop should decline.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    # The real registration transposed - the shape survives, the check digit does
+    # not, which is the commonest way a GSTIN is mistyped and the one that costs
+    # the customer their input credit.
+    payload["customer"]["gstin"] = "10AABCU9603R1ZM"
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert ContinuityFlag.Kind.GSTIN_INVALID in response.json()["flags"]
+    flag = ContinuityFlag.objects.get(kind=ContinuityFlag.Kind.GSTIN_INVALID)
+    assert flag.details["gstin"] == "10AABCU9603R1ZM"
+    assert "check digit" in flag.details["reason"]
+
+
+def test_a_mistyped_gstin_still_prints_and_records_a_split(counter):
+    """The two characters that decide the tax are taken as typed.
+
+    The till printed the customer's copy from them minutes ago and offline; a
+    server that quietly chose otherwise would put one tax on the paper and
+    another in the books. It is flagged for a human, never re-taxed.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = "20AABCU9603R1ZM"  # Jharkhand, and mistyped
+
+    _post(counter, payload)
+
+    assert Sale.objects.get().b2b_tax_kind == Sale.B2bTaxKind.IGST
+
+
+def test_a_gstin_is_stored_upper_case_however_it_was_typed(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = " 10aabcu9603r1z2 "
+
+    response = _post(counter, payload)
+
+    assert Sale.objects.get().buyer_gstin == "10AABCU9603R1Z2"
+    assert response.json()["flags"] == []
+
+
+def test_a_bill_with_no_gstin_starts_no_clock_and_raises_nothing(counter):
+    """#187's fourth acceptance criterion: B2C bills are completely unaffected."""
+    _shelf(counter["store"], 3)
+
+    response = _post(counter, bill_payload(counter["store"], counter["salesman"], till_seq=1))
+
+    assert response.json()["flags"] == []
+    assert Sale.objects.get().b2b_tax_kind == Sale.B2bTaxKind.NONE
+    assert not IrnQueueItem.objects.exists()
 
 
 def test_tax_that_disagrees_with_the_dated_slab_is_flagged_not_refused(counter):
@@ -881,12 +1153,25 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """Four of the six have a producer in this slice and are asserted above. The
-    other two belong to slices that are not built yet, and are named here so the
-    gap is a recorded fact rather than something to be noticed later:
+    """All ten have a producer now, and each is asserted where it is raised: the
+    four counter ones here, `offer_mismatch` in the rulebook suite (#183),
+    `aged_uncosted` in the deferred-costing suite (#186) - raised by the nightly
+    ageing pass on a queue that has not drained, not by a bill - `gstin_invalid`
+    here too (#187), the two return ones in the plain-return suite (#184), and
+    `employee_returns` in the daily-check suite (#188).
 
-      · `offer_mismatch` needs the offer engine to re-resolve against (#183);
-      · `aged_uncosted` needs the daily check that ages a deferred line (#188).
+    Four of the ten are kinds db-design did not list, and each is deliberately its
+    own rather than folded into a neighbour, because head office answers each with
+    entirely different work:
+
+    * `gstin_invalid` - "a character of this registration is mistyped", which is
+      not "the tax on this bill is not the dated slab's".
+    * `return_late` - a manager set the return window aside, which is the one
+      policy at a counter they can set aside on their own say-so.
+    * `return_uncosted` - a piece given back before the books could ever price it,
+      so there is a cost event still parked against a sale that has been reversed.
+    * `employee_returns` - a pattern *across* bills, so there is no one bill to
+      hang it on and no one bill that answers it.
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",
@@ -894,7 +1179,11 @@ def test_every_flag_kind_the_contract_names_exists(counter):
         "return_orig_missing",
         "offer_mismatch",
         "gst_mismatch",
+        "gstin_invalid",
         "aged_uncosted",
+        "return_late",
+        "return_uncosted",
+        "employee_returns",
     }
 
 
@@ -923,3 +1212,164 @@ def test_an_unknown_idempotency_key_is_a_new_bill_not_a_replay(counter):
 
     assert second.status_code == 201
     assert Sale.objects.count() == 2
+
+
+# --- the database's own guard (#241) ----------------------------------------
+
+
+def test_the_database_refuses_a_upi_row_with_no_stamp(db):
+    """The API validates, and the table refuses independently - `ck_saletender_
+    upi_state_iff_upi` is the model's property of the data, not a rule that only
+    holds when this endpoint is the writer."""
+    from django.db.utils import IntegrityError
+
+    store = build_store()
+    cashier = build_cashier(store)
+    sale = Sale.objects.create(
+        store=store, fy=FY, till_seq=1, billed_at="2026-07-30T12:00:00Z", created_by=cashier
+    )
+
+    with pytest.raises(IntegrityError):
+        SaleTender.objects.create(sale=sale, mode="upi", amount_paise=100, upi_state="")
+
+
+# --- the customer master (#242) ---------------------------------------------
+#
+# `on_commit` callbacks do not fire under the plain `db` fixture - the outer
+# transaction pytest-django wraps the test in never commits - so every test
+# below runs the POST inside `django_capture_on_commit_callbacks(execute=True)`.
+# Without it AC1 would pass vacuously: the callback would simply never run.
+
+
+def test_saving_a_bill_with_a_mobile_creates_the_customer_row(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    customer = Customer.objects.get(mobile="9876543210")
+    assert customer.name == "Mrs Sharma"
+
+
+def test_a_later_bill_with_a_new_name_and_gstin_refreshes_the_row(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    first = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    first["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, first)
+
+    second = bill_payload(counter["store"], counter["salesman"], till_seq=2)
+    second["customer"] = {
+        "name": "Mrs S Sharma",
+        "mobile": "9876543210",
+        "gstin": "10AABCU9603R1Z2",
+    }
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, second)
+
+    customer = Customer.objects.get(mobile="9876543210")
+    assert customer.name == "Mrs S Sharma"
+    assert customer.gstin == "10AABCU9603R1Z2"
+
+
+def test_a_blank_name_on_a_later_bill_never_wipes_the_stored_name(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    first = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    first["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, first)
+
+    second = bill_payload(counter["store"], counter["salesman"], till_seq=2)
+    second["customer"] = {"name": "", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, second)
+
+    assert Customer.objects.get(mobile="9876543210").name == "Mrs Sharma"
+
+
+def test_the_bill_snapshots_the_mobile_in_the_same_spelling_as_the_master(
+    counter, django_capture_on_commit_callbacks
+):
+    """db-design links a bill to its customer by mobile at query time, over the
+    indexed `sell_sale.customer_mobile`. Canonicalising only the master's key
+    would leave that join with two spellings and no match."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "+91 98765-43210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    sale = Sale.objects.get(doc_number=response.json()["doc_number"])
+    assert sale.customer_mobile == "9876543210"
+    assert Customer.objects.get(mobile=sale.customer_mobile).name == "Mrs Sharma"
+
+
+def test_a_bill_with_no_mobile_creates_no_customer_row(counter, django_capture_on_commit_callbacks):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Walk-in", "mobile": "", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Customer.objects.count() == 0
+
+
+def test_an_induced_upsert_failure_does_not_fail_the_bill(
+    counter, django_capture_on_commit_callbacks, monkeypatch
+):
+    """AC3. The upsert has no error path by design - a raise inside it is logged
+    and swallowed, never surfaced to the till (Rule 5)."""
+    _shelf(counter["store"], 3)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("sell.services.accept.upsert_customer", _boom)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert "errorCode" not in body
+    assert Sale.objects.count() == 1
+    assert Customer.objects.count() == 0
+
+
+def test_old_bills_are_byte_identical_after_the_customer_name_changes(
+    counter, django_capture_on_commit_callbacks
+):
+    """AC4 - Rule 3. A bill snapshots the name it was billed with; a later edit
+    to the master never rewrites it."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+    doc_number = response.json()["doc_number"]
+
+    customer = Customer.objects.get(mobile="9876543210")
+    customer.name = "Somebody Else Entirely"
+    customer.save(update_fields=["name"])
+
+    sale = Sale.objects.get(doc_number=doc_number)
+    assert sale.customer_name == "Mrs Sharma"
+    assert sale.customer_mobile == "9876543210"
+
+    reread = counter["client"].get(f"{SALES_URL}/{doc_number}")
+    assert reread.json()["customer_name"] == "Mrs Sharma"
+    assert reread.json()["customer_mobile"] == "9876543210"

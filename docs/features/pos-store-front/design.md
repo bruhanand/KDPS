@@ -54,6 +54,10 @@ Everything follows an existing traced pattern (Grn/StoreTransfer for documents, 
 - `pricing.ts` - MRP-inclusive back-calculation (half-up + rounding line) and the GST slab pick; `offers.ts` - the TS port of `resolution.py`, tested against the same golden vectors.
 - `print.ts` - `PrintAdapter` interface with a `BrowserPrintAdapter` v1 (receipt HTML via hidden iframe + `window.print`); the hardware spike swaps in an ESC/POS adapter behind the same interface without touching callers. Printer-check = adapter `probe()`; on failure the bill still saves and the screen says so (G2).
 - `guard.ts` - till init: `navigator.storage.persist()`, storage-sentinel check (sentinel missing -> red sync light, billing blocked until re-bootstrap + `GET /api/sell/register` reconciliation), single-till lock via `navigator.locks` so a second tab cannot double-write the counter.
+  **As built (#189), three things.**
+  The sentinel is a pair of `localStorage` keys rather than db-design's `meta` row - a marker inside the database cannot survive the database being thrown away, which is the one event it exists to detect - and the second key is what stops a page reload lifting the block, since the first sync after a loss refills `meta`.
+  The re-bootstrap is a **button**, not something the boot sync does on its own: recovering moves the number the next customer's bill will carry, and a counter that reset itself quietly is the thing the red light is there to prevent.
+  The lock is advisory over an invariant IndexedDB already enforces inside `commitBill`'s transaction, so a browser without `navigator.locks` (or one whose lock manager throws) counts as holding it - refusing to bill because an advisory API is missing would turn a nicety into a lost day's trade.
 - `TillProvider.tsx` - React context exposing till state (sync status, pending count, dataset ready) via `useSyncExternalStore`; mounted only under `/sell` routes.
 
 ### Frontend - screens (all normal shell pages, existing UI kit, `data-testid` throughout)
@@ -67,6 +71,8 @@ Everything follows an existing traced pattern (Grn/StoreTransfer for documents, 
 - `pages/MasterPages.tsx` gains Store Targets (month x store grid, money-manage gated).
 - `routes.tsx` + `navConfig.ts` - replace the three `planned:true` sell items with built routes; STORE_LAYOUT already places sell; nav/route/planned-pages tests updated in the same commit (they fail otherwise by design).
 - `vite.config.ts` - add `vite-plugin-pwa` (app-shell precache only; API traffic is never SW-cached - the till reads IndexedDB, not stale HTTP).
+  **As built (#189):** the options live in `src/pwa/config.ts` rather than inline, because "the service worker never caches an API response" is a money rule and a money rule wants a test - and a config object a test can import is the only seam a bundler plugin offers.
+  `runtimeCaching: []`, a precache globbed by file extension, and `navigateFallbackDenylist: [/^\/api/]` so a navigation-shaped API request is never answered with the app shell.
 
 ## Request flow (the three that matter)
 

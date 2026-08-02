@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { NAV_ITEMS, itemPath } from "../shell/navConfig";
-import { PLANNED_PAGES } from "./plannedPages";
+import { PLANNED_PAGES, REPORT_MODULES } from "./plannedPages";
 
 const plannedItems = NAV_ITEMS.filter((i) => i.planned && !i.deepLink);
 const plannedPaths = plannedItems.map(itemPath);
@@ -52,9 +52,13 @@ describe("the planned pages", () => {
     ];
     for (const [prefix, module] of byPrefix) {
       const under = plannedPaths.filter((p) => p === prefix || p.startsWith(prefix + "/"));
-      expect(under.length, prefix).toBeGreaterThan(0);
       for (const path of under) expect(PLANNED_PAGES[path].module.name, path).toBe(module);
     }
+    // A prefix with nothing under it is not a mistake and is no longer asserted
+    // against: it is a module that has been *built out*, which is what happened
+    // to Sell when #184 landed the last of its four screens. The strip itself is
+    // checked whole below, so finishing a module cannot silently drop it from
+    // the client's report either.
   });
 });
 
@@ -64,11 +68,13 @@ describe("the report's own sequence", () => {
     // (Purchase Orders · Transfers & Returns) → Next (POS & Billing) → Then
     // (Accounts & Payments) → Later (HRMS · Promotions · Analytics).
     //
-    // The two "already moving" modules are the trap. Their in-build column names
-    // dispatch/receive, IGST, RTV and adjustments — not Stock Request,
-    // Distribution, In-Transit or Upload Bill. So those screens are *not* in
-    // build, and must carry the report's third column ("Planned") rather than a
-    // chip that promises motion nobody has started.
+    // The "already moving" module is the trap. Its in-build column names
+    // dispatch/receive, IGST, RTV and adjustments - not Stock Request or
+    // In-Transit. So those screens are *not* in build, and must carry the
+    // report's third column ("Planned") rather than a chip that promises motion
+    // nobody has started. (Goods Receipt, POS & Billing and, since #229 deleted
+    // the Distribution stub, Transfers & Returns all keep their place on the
+    // strip with nothing planned left under them.)
     const expected: Record<string, string> = {
       "POS & Billing": "next",
       "Accounts & Payments": "then",
@@ -80,6 +86,10 @@ describe("the report's own sequence", () => {
       "Inventory Management": "unscheduled",
       Administration: "unscheduled",
     };
+    // The strip itself, whole - including a module with nothing planned left
+    // under it. POS & Billing is that module since #184 finished Sell, and it is
+    // still on the client's report.
+    expect(Object.fromEntries(REPORT_MODULES.map((m) => [m.name, m.stage]))).toEqual(expected);
     for (const path of plannedPaths) {
       const { name, stage } = PLANNED_PAGES[path].module;
       expect(Object.keys(expected), `${path} → ${name}`).toContain(name);

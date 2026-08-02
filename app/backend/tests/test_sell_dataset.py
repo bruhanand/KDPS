@@ -50,8 +50,8 @@ from django.utils.dateparse import parse_datetime
 
 from accounts.models import ScopeType, User
 from core.documents import DocStatus
-from masters.models import Cohort, GstSlab, Sku
-from sell.models import CreditNote
+from masters.models import Cohort, GstSlab, Season, Sku
+from sell.models import CreditNote, SellPolicy
 from stockledger.models import StockOnHand
 
 URL = "/api/sell/dataset"
@@ -68,6 +68,8 @@ SECTIONS = [
     "credit_notes",
     "salesmen",
     "managers",
+    "seasons",
+    "policy",
     "deleted",
 ]
 
@@ -286,10 +288,52 @@ def test_gst_slabs_carry_their_own_effective_date(till):
     assert future["threshold_paise"] == 250000
 
 
-def test_offers_is_present_and_empty_until_the_rulebook_lands(till):
+def test_offers_is_present_and_empty_when_nothing_is_running(till):
     """Empty, not absent: "no offers running" is something a till must be able to
-    read. The rulebook is #183; when it lands each row carries its own dates."""
+    read, and it must read the same way on the day the rulebook is empty as on
+    the day it is full. What a populated section looks like is #183's own suite
+    (`tests/test_offers_api.py`), which owns the rulebook end to end."""
     assert till["client"].get(URL).json()["offers"] == []
+
+
+def test_the_discount_cap_rides_down_so_the_counter_can_hold_it(till):
+    """#181. The cap is a dial head office turns (`SellPolicy`), and the counter
+    has to hold the same number offline that the accept pipeline holds - otherwise
+    the screen lets a cashier key in a discount the server will refuse days later,
+    when the bill is already in a customer's hand."""
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = Decimal("7.50")
+    policy.save(update_fields=["manual_discount_cap_percent"])
+
+    body = till["client"].get(URL).json()
+
+    assert body["policy"] == {"manual_discount_cap_percent": "7.50"}
+
+
+def test_the_discount_cap_rides_down_on_a_delta_too(till):
+    """Whole every time, like the manager list: a cap widened at head office has
+    to reach the counter on the next response, and there is nothing to delta over
+    one row."""
+    delta = till["client"].get(URL, {"since": _cursor_now()}).json()
+
+    assert "manual_discount_cap_percent" in delta["policy"]
+
+
+def test_seasons_carry_the_masters_own_order_so_the_till_picks_the_oldest(till):
+    """A2. The server resolves a season-less scan to the oldest live season with
+    stock, ranking by the `Season` master's own order and preferring an open
+    season to a closed one (`sell.services.resolve`). The till makes that same
+    choice offline, and it can only make it if the ordering is on the device."""
+    Season.objects.create(code="SS26", name="Spring/Summer 2026", status="open", sort_order=3)
+    Season.objects.create(code="SS24", name="Spring/Summer 2024", status="closed", sort_order=1)
+
+    seasons = till["client"].get(URL).json()["seasons"]
+
+    assert seasons == [
+        {"code": "SS24", "name": "Spring/Summer 2024", "status": "closed", "sort_order": 1},
+        {"code": "FW25", "name": "Autumn/Winter 2025", "status": "open", "sort_order": 2},
+        {"code": "SS26", "name": "Spring/Summer 2026", "status": "open", "sort_order": 3},
+    ]
 
 
 # --- Criterion 1: full then delta, including deletions ---------------------

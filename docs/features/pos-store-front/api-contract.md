@@ -54,8 +54,10 @@ Business logic:
 1. Resolve store from scope narrowed by the switcher (above); reject anything else.
    -> no single store, or a store outside it -> `SCOPE_DENIED` (403)
 2. Aggregate today/last7 tiles from `sell_sale` + `sell_saletender` for the store (billed_at in store-local day).
-   **As built:** noughts, and a new top-level `"sales_live": false` beside them. `sell` does not exist until #177, and four zeros with nothing to read them against say "this store sold nothing today" when the truth is "this store cannot bill yet". The flag flips to `true` with the Sale document; nothing else about the block changes.
+   **As built (#174):** noughts, and a new top-level `"sales_live": false` beside them. `sell` did not exist until #177, and four zeros with nothing to read them against say "this store sold nothing today" when the truth is "this store cannot bill yet".
+   **Live as of #188**, off `storefront/day.py` - shared with the Money section's cash summary, so Home and Money cannot read one day two ways. `sales_live` stays and is now true wherever the year's `SAL` series row exists (the same reading the till's boot call takes), which is still the sentence a warehouse or an un-rolled-out shop needs. `vs_yesterday_pct` is `null` rather than nought when yesterday took nothing - there is no percentage change from nothing - and `manager.mtd_net_paise` is the month so far, first of the month to today inclusive.
 3. Build action_queue counts from: approvals (pending, store-scoped), in-transit transfers inbound, GRN/PT drafts, QuarantineStock, RTV windows, open count sessions, `sell_heldbill`, `sell_deferredcosting(waiting)`, `sell_continuityflag(open)`.
+   **All nine as of #188.** `continuity_flags` is the ninth and last; it is *not* date-scoped (it is a to-do list, and Tuesday's exception is still work on Thursday), and it is the one row the client drops for a caller whose sections cannot open where it links - it opens the Money section, and a count that lands somebody on a refusal is worse than no count.
    **As built:** the first six keys only. The last three read `sell` tables that #177-#186 create, and they are *absent* rather than reported as nought - the ticket's own words are "counting what already exists", and a row reading "0 bills on hold" is a sentence about a store's morning. `approvals_pending` is the caller's own inbox (`inbox_for`), not every pending approval at the store: a count that opens onto an empty screen is worse than no count. `quarantine_to_confirm` counts draft `MarkDamaged` (the flag awaiting confirmation, #138), and `rtb_windows_closing` counts open `alerts_alert(return_window)` rather than re-deriving the pool, so the card and the Alerts screen cannot drift.
 4. `live.offers` = offers where store in scope and today within dates and status live.
    **As built:** always `[]` - the rulebook is #183. Empty rather than absent: "no offers running" is a card a store reads every morning.
@@ -232,6 +234,17 @@ What shipped is below, and #181 should be built against this text.
   The capability refusal is `require_section`, which answers with DRF's `{"error": ...}`-less `{"detail": ...}` at 403, exactly as `/api/stock/availability` recorded when it shipped.
   `TILL_SCOPE` does carry its code, because the till branches on it: it means "this login will never be a till", which is not something to retry.
   Unifying the two body shapes is one change across every gate in the project, not this endpoint's to make alone.
+- **Two sections were added while building the Billing screen (#181): `seasons` and `policy`.**
+  Both are sent whole on every response, for the same reason `gst_slabs` and `managers` are.
+  `seasons` is `[{code, name, status, sort_order}]`, the season master's own ordering.
+  A2 says a scan that does not name a season resolves to the *oldest live* one with stock.
+  `resolve_piece` makes that choice in three steps: the season actually on this shelf first (from `StockOnHand`), then `(is_closed, sort_order)` from the season master, then the cohort's own id.
+  The till can apply the second step and not the first, because the dataset's `stock` rows are counted per barcode and carry no season - so a till without the master would fall back to sorting names, where "FW25 before SS26" is true only by the accident of the alphabet.
+  That the two differ on the first step does not matter in practice: the season the till picks is the season it writes on the line, and the accept pipeline honours an exact `(barcode, season)` outright, so the till's choice is the one that reaches the books.
+  Sending season-aware stock so the till could match step one exactly is a change to the `stock` section, and it belongs with whatever slice first needs it rather than with this screen.
+  `policy` is `{"manual_discount_cap_percent": "7.50"}` from `SellPolicy`, a two-decimal string for the reason the tax rates are.
+  Without it the counter cannot hold the cap it is meant to hold, and a cashier's over-cap discount would be discovered by an `OVERRIDE_REQUIRED` days later, on a bill already printed, paid for and in a customer's hand.
+
 - **`updated_at` was not a new column and is not backfilled.**
   db-design lists "`updated_at` (NEW column, auto_now + index) ... Backfill: set to migration time" for `Sku`/`Cohort`/`GstSlab`.
   The column already exists on all three through `TimeStampedModel` and has been stamping real edit times since those tables did, so only the index is new - and a backfill would throw away the only history a delta can read.
@@ -305,6 +318,73 @@ Business logic:
 
 (Every flag named above has a `sell_continuityflag` kind; flags are returned in the 201 body.)
 
+**Amended 31 Jul 2026, after building the split tender and the manager's PIN (#182).**
+Four things about the `override` block, and one new endpoint that had to exist for any of it to work.
+
+- **`override` carries `at` as well as `user_id` and `kind`.**
+  The manager types their PIN and the cashier goes on scanning; Save & Print is a different moment, sometimes minutes later, and the gap between the two is the evidence.
+  Optional, because a till that predates the field is still a till.
+- **The bill records the override, not only the line.**
+  `db-design.md` puts `override_by` on `sell_saleline`, which is right for a discount and has nowhere to hang the other case: an unrecognised credit note is a *tender*, and the lines it helped pay for are ordinary lines.
+  So `sell_sale` gains `override_by` / `override_kind` / `override_at` (migration `sell.0005`), and a daily check reading "somebody took an unknown note here" finds a name against it.
+  The line-level field is unchanged.
+- **`kind` is a closed vocabulary**: `over_cap_discount`, `credit_note`, or `over_cap_discount+credit_note` when a manager was asked both at once (`sell.serializers.OVERRIDE_KINDS`, a `ChoiceField`).
+  One bill can need two things approving and the contract has one field for them; joining them in a fixed order means the value a check groups on has one spelling.
+- **What one tap authorises is bounded at the till, and only at the till.**
+  A manager approves *this discount on this line*, and the till refuses to close if the discount grows, moves to another line, or is joined by a second unknown note (`till/pin.ts` `covers`).
+  The server still asks only "is `override.user_id` a manager of this store" - and cannot honestly ask more, because the till composes the payload and the PIN is verified on the device by design (grill Q1).
+  The server-side floor is therefore *a named manager*, and the per-exception binding is a property of the screen; the daily check is what audits the pair.
+
+**Amended 31 Jul 2026, after building the B2B corner (#187).** Three things about step 11.
+
+- **A seventh flag kind exists: `gstin_invalid`.**
+  db-design lists six, and the ticket asks for the buyer's GSTIN to be "validated softly (flag, not block)" - a thing none of the six means.
+  Folding it into `gst_mismatch` would put "a character of this registration is mistyped" and "the tax on this bill is not the dated slab's" in one bucket, and head office answers those two with entirely different work.
+  The check is the real one (`sell/gstin.py`): fifteen characters, the PAN shape, a state code the GSTN actually issues, and the mod-36 check digit.
+  The checksum is what earns it - structure alone passes a transposed pair of digits, which is the commonest way a GSTIN is mistyped and the one that quietly costs the customer their input credit.
+  It refuses nothing. The customer is standing at the counter holding the garment.
+
+- **The split is derived from the two characters as typed, even when the GSTIN is malformed.**
+  The till printed the customer's copy from those same two characters, offline, minutes earlier (`till/gstin.ts` is a character-for-character mirror of `sell/gstin.py`), and a server that quietly chose differently would put one tax on the paper and another in the books.
+  A bad registration is flagged for a human; it is never silently re-taxed.
+
+- **`b2b_tax_kind` rides on every bill the till sends, including B2C ones, where it is `"none"`.**
+  Step 11 compares what the till *printed* against what the server derives, which only works if the till says what it printed.
+  It is evidence about a piece of paper, not an instruction.
+
+**Open item, not a ruling: the split prints but does not post.**
+§Postings has credited one `OUTPUT_GST` account on every bill since this contract was written, and #187 did not change it - so on the paper a bill says CGST + SGST or IGST, and in the ledger an IGST invoice and a CGST/SGST one are indistinguishable.
+That is enough for the counter and the customer, and it is **not** obviously enough for the GSTR-1 and the Tally voucher, where the two are separate heads.
+The split is recorded on the document (`Sale.b2b_tax_kind`) so the breakdown is derivable whenever it is needed, and the halving is only presentation (the odd paise goes to SGST; the two always add back to what the bill charged).
+Whether `OUTPUT_GST` must become three accounts is a question for **the CA ruling and the D6/Tally-sync slice**, alongside the five money-critical items already gated there. It is flagged here rather than settled here, because a build-time footnote is not where a chart of accounts gets decided.
+
+### PUT `/api/auth/me/till-pin` (NEW, #182)
+
+The counter PIN had no way to be set: `db-design.md` §9 adds the column and the dataset ships the hash, and nothing anywhere wrote one - so the manager list was empty by construction and no override could ever be verified.
+
+Auth: `require_section("sell", CAP_APPROVE)` **and** `accounts.till_pin.may_hold_till_pin` - store-bound scope, active, not the break-glass superuser. That is the same sentence the dataset's `managers` section is built from, written once so the two cannot drift.
+Body: `{"pin": "4813", "current_password": "…"}`. Response 200 `{"status": "set"}`.
+
+Self-service, and only ever the caller's own row: an override's whole value is that it names who stood at the counter, so an administrator who could set a manager's PIN could authorise a discount in that manager's name.
+The password is asked for because a counter is a shared machine and a screen left signed in would otherwise be a way to give yourself somebody else's override.
+
+Hashed with **PBKDF2-SHA256** explicitly, not the project's default bcrypt: the till verifies it offline in a browser, and the Web Crypto API has PBKDF2 and no bcrypt. A hash nothing can verify is not a credential.
+PIN rules (invented here, nothing in the design speaks to them): 4 to 6 digits, digits only, not one digit repeated.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | not 4-6 digits, not digits, one digit repeated |
+| NOT_A_TILL_MANAGER | 403 | holds the rung but is not somebody at a store |
+| PASSWORD_WRONG | 403 | the caller's own password does not match |
+
+(A caller who does not hold `sell: approve` is refused by the section gate itself, in DRF's `{"detail": …}` at 403 - the same shape every other capability refusal wears.)
+
+`GET /api/auth/me` gains `has_till_pin` and `may_hold_till_pin` (booleans, never the hash), which `design.md`'s "`/me` untouched" did not anticipate: the card that offers to set a PIN has to know whether you have one and whether you are somebody who may.
+
+**Still deferred, and no longer to #182:** step 1's point 6 - labelling the Dashboard's collections card with the till's last sync time.
+The till's clock is in the browser's own database and `TillProvider` is mounted per Sell route on purpose, so a head-office or warehouse login never opens a store's local copy.
+Reading it on the Dashboard means moving where the till layer mounts, which is a PWA-shaped decision and belongs with #189.
+
 ### GET `/api/sell/register` · POST `/api/sell/register/handover`
 
 GET - the till's boot/recovery state. Auth: sell>=operate, single-store scope.
@@ -335,6 +415,26 @@ The POST handover is unbuilt and belongs to #189; three things about the GET are
   The two clocks straddle 1 April for a few minutes each year, and a till that reconciled a brand-new counter against last year's frontier would jump to bill 5,001 and stay there.
   The `TILL_SCOPE` refusal is the dataset endpoint's, unchanged, for the same reason: one counter's numbering is only ever of use to that counter.
 
+**Amended 31 Jul 2026, after building the POST (#189).**
+Four things.
+
+- **The refusal is `TILL_SCOPE`, not `SCOPE_DENIED`.**
+  The endpoint shares `till_store` with the dataset and the register GET, so it shares their vocabulary - the same amendment the held-bills mirror recorded on 31 July.
+  The two refusals it can give are not the one the table above sketched: a **cashier** is refused by the section gate itself, at `sell: approve`, in DRF's `{"detail": …}` at 403, and a **login that can see more than one store** is refused with `TILL_SCOPE`, which means "this login will never be a counter" rather than "not here, not now".
+  `SCOPE_DENIED` is not emitted here either.
+- **The response carries `hole_count` as well as `unsynced_hint`**, for exactly the reason the GET's does: a machine that died at bill 5,000 leaves more receipts in a drawer than a response should carry, and a screen listing 200 without saying so would tell somebody they had finished when they had not.
+- **The handover writes nothing to `VoucherSeries`.**
+  It records the act and reads the state back; `resume_from_seq` is `last_accepted_seq + 1` handed to the new machine, not a counter the server moved.
+  The till numbers bills and the server only ever accepts them, so a server that advanced its own counter would be holding an opinion about a number nobody has printed - and the next straggler from the old machine would then look like a hole that had been jumped over rather than one being filled.
+- **The audit row is its own table**, `sell_registerhandover`, rather than an `AccessChange`.
+  `AccessChange` is a maker-checker *proposal* waiting for a second administrator, and a handover is a thing that has already happened; borrowing the row would have put a handover in an approval queue nobody watches.
+  It is `AccessChange`-shaped in the sense the contract meant - actor, reason, and the frontier at the time - and nothing reads it back into a decision.
+  See `db-design.md` §2.
+
+**Moved out of #189 and into its own ticket, #215:** labelling the Dashboard's collections card with the till's last sync time.
+It was parked here as "PWA-shaped", and it is - but what it needs is the till layer mounted somewhere other than under the Sell routes, which would start a store's counter (and open its local database) on every screen that login opens.
+That is a change to *when* the till runs rather than to how it is installed, so after two deferrals it is a decision with a ticket on it rather than a third paragraph.
+
 ### PUT `/api/sell/held-bills`
 
 Best-effort mirror so the Dashboard sees holds (grill Q13); the till is authoritative.
@@ -346,6 +446,18 @@ Body: `{"held": [{"held_uuid": "...", "label": "Mrs Sharma", "held_at": "...", "
 3. Return 200 `{"count": 2}`. No document, no number, no money.
 
 Errors: `VALIDATION`/400, `SCOPE_DENIED`/403.
+
+**Amended 31 Jul 2026, after building it (#185).** Four things.
+
+- **The 403 is `TILL_SCOPE`, not `SCOPE_DENIED`**, for the reason the dataset and register endpoints record: the capability refusal is `require_section`, which answers DRF's `{"detail": ...}`, and the scope refusal means "this login will never be a till", which the till must not retry.
+This endpoint shares `till_store` with them, so it shares their vocabulary; `SCOPE_DENIED` is not emitted here either.
+- **The upsert matches on `(store, held_uuid)`, and the table's unique key is that pair** rather than db-design's estate-wide `held_uuid unique`.
+A key the till mints is unique in practice, but matching a hold by it alone lets one store's push find - and silently reparent - another store's row, taking that store's Dashboard count with it.
+The scoped constraint is what makes the scoped lookup the only one the database will accept.
+- **`held` is required**, not defaulted to an empty list: "I have nothing parked" clears the store's row, and a body that omitted the key should not be able to say it by accident.
+- **The till keeps a sixth field the mirror never carries**, `reviewed_on` - the local day the store last answered "keep this" at day close.
+Without it, `expires_policy: kept` would hide a hold for ever after one answer, and grill Q13's "nothing expires silently" would become "nothing is ever asked about again".
+The server has no use for the answer, so it stays at the counter that made it.
 
 ---
 
@@ -400,6 +512,41 @@ Body: `{"idempotency_uuid": "...", "store": "DEO", "original": {"fy": "26-27", "
 | ALREADY_RETURNED | 422 | line already fully returned |
 | OVERRIDE_REQUIRED | 422 | manager evidence missing (any plain return) or window exceeded without window_override |
 
+**Amended 31 Jul 2026, after building it (#184).** Seven things.
+
+- **The manager may not be the person taking the return.**
+  Step 5 asks for "a manager of this store" and stops there, which lets a store manager raise a return and authorise it in the same act - a second pair of eyes that are their own.
+  That is floor rule 1, "nobody approves their own document", so `override.user_id` must differ from the caller and `OVERRIDE_REQUIRED` is the refusal.
+  It bites at a shop where the manager *is* the counter: a return there now needs somebody else on the floor.
+  That is the intended cost of a floor - the alternative is a rule that switches itself off for exactly the person best placed to abuse it - but **whether a lone-manager store should be able to take one alone is Anand's ruling**, and it is the second open item this feature has left him after the `sell: approve` rung itself.
+
+- **The manager's tap is not routed through the approvals machinery**, which `design.md` sketched (a `KINDS` entry and an `ApprovalPolicy` row, self-clearing).
+  Two things make that route the wrong one here, and the api-contract's own step 5 is what shipped instead.
+  An approval policy names *roles*, and no seeded role reaches `sell: approve` - so the policy would be unsatisfiable out of the box, and the gate that actually matters ("could this named person have been standing at this counter") is a question about one human and one store rather than about a rung.
+  And a return is decided and finished in one call at the counter: an inbox row would leave the customer holding no credit note while a document waited for somebody to open a screen.
+  What the approvals machinery was there to enforce - floor rule 1 - is enforced directly, above.
+
+- **`lines[].condition` is required**, not defaulted.
+  Both available defaults are wrong: `good` puts a damaged garment back on the shelf for the next customer whenever the field is dropped, and `damaged` quarantines saleable stock.
+
+- **The window is `SellPolicy.return_window_days`** (new, default 30), read as data exactly as the discount cap and the credit-note validity are (Rule 12).
+  Nothing in the corpus fixes a customer-facing window - the 60-120 days in the domain facts are the *brand's* return terms, a different clock - so 30 is a starting number head office moves without a release.
+  A late return that carries `window_override` lands and raises a `return_late` flag; the column on the document records that a manager answered, and the flag is what makes somebody read it.
+
+- **A piece given back before the books could ever price it raises `return_uncosted`**, and closes the sale's costing queue row where the whole line came back.
+  Sold before its paperwork (#186) and returned before the PT landed: the money reverses because the customer really paid it, and nothing costs because nothing was ever costed.
+  Without closing the queue row the sweep would post COGS days later for a garment standing on the shelf and take it out of stock a second time - with the trial balance at nought throughout.
+  Only a line returned *in full* can be settled that way, because the sweep posts a whole `SaleLine`'s cost rather than a queue row's quantity; a partial return leaves the row waiting and puts the quantity on the flag instead.
+  Note also what the flag is telling a store in both cases: the stock ledger refuses a movement at nought value (Rule 5), so a piece returned **damaged** is physically in the back room and counted in no bucket at all.
+
+- **`GET /api/sell/sales` and the detail are what the Return & Exchange screen finds a bill with**, in that order.
+  The detail is keyed by the whole `26-27/DEO/SAL/74` and what a person reads off the slip is "74", so the screen searches on what was typed and then reads the bill the search names.
+  The counter does not render the number itself: a series carries an editable prefix and suffix, and guessing them is how a screen finds nothing at a store that has one.
+
+- **The bill's read shape gains `returned_qty`, `returned_paise` and `exchange_of`.**
+  The first two are annotated per line (`sell.services.refunds.with_returned`) and the paise are the load-bearing half: an exchange leg is priced **offline** and the last piece of a line settles the remainder of what has not been given back, so a till that knew only how many pieces had gone would get a second partial return a paisa out - and find out after the receipt had printed.
+  `exchange_of` names the bill an exchange gave back against, which a reprint needs: a return leg rendered as an ordinary line puts a piece the customer *handed back* on their copy as one they bought, and the column of amounts then stops adding up to the total under it.
+
 ### GET `/api/sell/sales`
 
 Customer search / reprint (E1, E2). Auth: sell>=view; store-scoped.
@@ -408,6 +555,52 @@ Response 200: `[{doc_number, billed_at, customer_name, net_paise, lines_summary}
 Detail: GET `/api/sell/sales/{doc_number}` -> full read-only bill for reprint. **No mutation endpoint exists on a posted Sale anywhere in this contract** (A7).
 
 Errors: `VALIDATION`/400 (no criterion), `SCOPE_DENIED`/403, `NOT_FOUND`/404 (detail only).
+
+**Amended 31 Jul 2026, after building the screen (#185).** The detail carries `store_gstin`.
+A reprint reached from customer search has no till behind it to borrow a registration from - the dataset is a *counter's* copy, and whoever is looking an old bill up may not be standing at one - and a tax invoice without a GSTIN on it is not a tax invoice.
+Nothing else about the read shape moved, and it is still read-only: there is no writer in `sell/views.py` for a screen to call.
+
+**Amended 31 Jul 2026 again, after building the B2B corner (#187).** The detail carries `irn`.
+It reads off the queue row beside the bill (`sell_irnqueue.irn`) and is blank on every B2C bill and on a B2B bill head office has not raised yet - which is most of a bill's first month.
+A reprint prints the reference when there is one and "IRN to follow" when there is not, which is what the counter's own copy said when it came off the printer.
+
+---
+
+## Step 5a - The IRN queue (NEW, #187)
+
+Not in the original contract, which recorded the queue as a table (`db-design.md` §`sell_irnqueue`, "surfaces in an HO work queue") and gave it no endpoint.
+A queue nothing can read and nothing can leave is a table, not a queue, so the two calls below are what make grill Q8's thirty-day clock a duty somebody can actually discharge.
+
+### GET `/api/sell/irn-queue`
+
+Auth: **`require_section("money", CAP_MANAGE)`** - and that is the one gate in `sell` that is not the `sell` section's.
+Raising an IRN is a statutory filing, not shop-floor work, and the `sell` ladder cannot express that audience: `sell: operate` is the *store*, which would put a GST duty on a cashier's sidebar, and `sell: manage` is the IT administrator alone, who holds no money at all on the ratified sheet.
+`money: manage` is exactly Owner and Accounts, the people who file the returns. Nothing on the ratified sheet moves to make this true.
+
+Store-scoped by the bill's own store (`scope_by_store` on `sale__store_id`), so the top-bar unit switcher narrows it exactly as every other document list.
+Query: `status=pending` (default) | `generated` | `failed` | `all`.
+
+Response 200: `{"today": "2026-07-31", "rows": [...], "pending_count": 3, "overdue_count": 1}`.
+Each row: `id, doc_number, store_code, store_name, billed_at, buyer_gstin, customer_name, b2b_tax_kind, net_paise, gst_paise, due_on, days_left, status, irn, handled_by_name, handled_at`.
+Ordered by `due_on` then id - the oldest deadline is the next thing to do.
+`days_left` is computed against the response's single `today` rather than per row, so thirty rows cannot disagree about what day it is because the clock ticked over mid-response; it is negative once the deadline has gone by.
+Both counts are over the *pending* rows whatever is being listed: they are the header a clerk reads to know whether anything is on fire, and a filter must not move it.
+The pending list is never truncated (it is the work); the settled tail behind it is capped at 200 (it is history, and history is what gets long).
+
+Errors: `VALIDATION`/400 (a status nothing recognises), capability refusal 403 (DRF's `{"detail": ...}`, as every sibling gate).
+
+### PUT `/api/sell/irn-queue/{id}`
+
+Body: `{"status": "generated"|"failed", "irn": "..."}`; sets `handled_by`/`handled_at` from the caller and the clock.
+One way only: `pending`/`failed` -> `generated` or `failed`, never back to `pending` - "we tried and it did not work" is a fact worth keeping.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | not one of the two statuses, or `generated` with no reference |
+| NOT_FOUND | 404 | the row is outside the caller's stores (a 403 would confirm the bill exists) |
+| IRN_ALREADY_RECORDED | 409 | the row already carries an IRN |
+
+Nothing here can touch the Sale (A7). The row beside it is a fact about a filing, not a fact about a sale.
 
 ---
 
@@ -418,6 +611,65 @@ Errors: `VALIDATION`/400 (no criterion), `SCOPE_DENIED`/403, `NOT_FOUND`/404 (de
 Auth: `require_section("money", CAP_VIEW)`; store-scoped; `?date=` (default today).
 Response 200: `{"date": "2026-07-30", "modes": {"cash": 0, "card": 0, "upi": 0, "credit_note": 0}, "bills": 12, "returns": 1, "credit_notes_issued_paise": 0, "flags_open": 2}` - from CashLedgerEntry receipt rows + tender aggregates; read-only.
 The store's day-close confirmation (I3, store open/close) is deliberately NOT in this contract; it is its own designed flow, sequenced after.
+
+**Amended 31 Jul 2026, after building it (#188).** Six things.
+
+- **The source is `sell_saletender`, not `finledger`.**
+  The sketch names both, and only one of them can answer the question a store person is asking.
+  A cash row carries **no store** and its clock is the *server's* - stamped when the bill synced, not when the counter took the money - so a till that syncs Tuesday's bills on Wednesday morning would put Tuesday's cash on Wednesday's summary, which is precisely the figure being checked against a drawer counted on Tuesday night.
+  The tender hangs off the bill, and the bill carries the store and the till's own clock.
+  The cash rows are written *from* these same tenders (`post_sale_collection`), so the two agree by construction; a test asserts the tie per account rather than leaving it to the docstring.
+- **The body carries `store`** beside `date`, for the reason the Dashboard's does: the top-bar switcher decides which shop this is, and a screen that could not name the store it drew would leave somebody reading yesterday's Ranchi against tonight's Deoghar drawer.
+- **A cancelled bill is not a day's trade.** The kernel corrects by reversal, so a cancelled sale keeps its row and its tenders; counting them would leave a summary a drawer can never match again. Only numbered, non-cancelled bills count.
+- **`returns` is pieces, not documents.** The sketch's `"bills": 12, "returns": 1` reads as two document counts, and the honest figure is the one that answers "how much came back": a bill with two returned pieces is two pieces, not one return. Today they are exchange legs; the plain-return document (#184) joins the same count through the same lines when it lands. The screen labels it "Pieces back" so the wire and the words agree.
+- **`flags_open` is the day's**, where "the day" is `ContinuityFlag.for_day`: a flag about a bill belongs to the bill's day, and one about no bill (a hole, a seller's return count) says which day it is about in its details, because the nightly check runs in the small hours of the *next* morning and `created_at` would file it under the wrong day. The Dashboard's `continuity_flags` count is deliberately **not** date-scoped - it is a to-do list, and Tuesday's exception is still work on Thursday.
+- **`SCOPE_DENIED` now also refuses a brand-scoped caller**, on this endpoint and on the Dashboard, which share one resolver. `visible_store_ids` answers `None` for a brand manager meaning "stores are the wrong question", and reading that as "every store" is the read-scope fail-open class this project has shipped before - live money on the tiles is exactly the payload that must not fall out of it.
+
+### GET `/api/sell/flags` · PUT `/api/sell/flags/{id}` (NEW, #188)
+
+Not in the original contract, which recorded `sell_continuityflag` as a table the Dashboard counts and gave it no endpoint.
+A queue nothing can read and nothing can leave is a table, not a queue - and the ticket's third acceptance criterion is "flags land on the Dashboard queue with links; **resolving clears them**", which needs a door.
+
+Auth for both: **`require_section("money", CAP_VIEW, write_minimum=CAP_OPERATE)`** - the section the day summary answers to, since the exceptions are what that screen shows underneath the day by tender.
+Not `sell`, for the reason the IRN queue is not: `sell: view` is held by the brand manager, whose business a counter's exceptions are not, and no seeded role reaches `sell: approve` at all - a rung nobody holds is a list nobody could ever clear.
+On the ratified sheet `money: operate` is the store itself ("Expenses only (create)"), the warehouse, Owner and Accounts.
+
+GET query: `status=open` (default) | `resolved` | `ignored` | `all`; `date=` (optional, `ContinuityFlag.for_day`).
+Response 200: `{"rows": [...], "truncated": false, "open_count": 3}`.
+Each row: `id, kind, kind_label, status, store_code, doc_number, billed_at, details, created_at, cleared_note, resolved_by_name, resolved_at`.
+`doc_number` is the empty string on a flag about no particular bill, which is a fact rather than a gap.
+Store-scoped by `scope_by_store` on the flag's own store (the switcher narrows it); the write gate is `scope_by_entitlement` (ADR-0003 - what you are looking at must never decide what you may do).
+Open rows are never truncated - they are the work; the settled tail behind them is capped at 200.
+`open_count` is over the open rows whatever is being listed, so a filter cannot move the header.
+
+PUT body: `{"status": "resolved"|"ignored", "note": "..."}`.
+One way only: an open row goes to one of the two and never back. `note` is required on `ignored` and optional on `resolved` - "I dealt with it" is usually evidenced by the thing itself having changed, "this one is fine" by nothing at all unless a person says why.
+Nothing here can touch the Sale (A7); clearing an exception is a statement about somebody's attention.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | a status nothing recognises, a bad date, `ignored` with no note |
+| NOT_FOUND | 404 | the row is outside the caller's stores (a 403 would confirm the bill exists) |
+| FLAG_ALREADY_CLEARED | 409 | somebody has already answered this one |
+
+### The daily check (NEW, #188)
+
+`sell_daily_check` - a management command, on the nightly cron that used to run `sell_age_deferred` (now one of its four steps).
+Defaults to **yesterday**: the questions are about a day that is over, and the cron fires at ~02:15 IST. `--date` and `--store` narrow it.
+
+Four steps, all idempotent, none of them posting anything:
+
+1. **Bill continuity.** One standing flag per store naming the numbers that never arrived, plus closing the accept-time `number_hole` flags whose gaps have since filled. The standing row's `day` is the day the gap first survived and never moves; an `ignored` row silences only the *same* set of missing numbers.
+2. **Applied-vs-rulebook and dated-slab reprice** of the day's bills, through the very functions the accept pipeline uses (`sell.services.recompute`) - so a bill passed at the counter and a bill reported at midnight are answering one question. What changes between the two askings is the *book*, not the bill: an offer authored after a counter had synced, a slab head office corrected on Wednesday for a rate that changed on Monday.
+3. **Ageing** the sold-before-inward queue (#186), folded in from its own schedule.
+4. **Returns per seller** (grill Q7), counted whether or not anybody crosses the dial, and flagged past `SellPolicy.return_review_count`. Attributed to the seller who served the customer on the bill the piece came back on - the control cited is refund fraud, which is about the person *processing* the return.
+
+A clean day raises nothing. That is the pilot's go/no-go gate, and it is why every finding has to be a real disagreement rather than a thing the design merely makes possible.
+
+**Open item, not a ruling: the fifth question this check does not ask.**
+Step 6's sketch pairs the summary with `CashLedgerEntry`, and the tie between the two books is asserted in tests rather than checked nightly in production.
+A store whose cash rows and tenders parted company would be found by a test on a fixture and by nothing on real data.
+That belongs with the D4 three-way audit (collected / banked / booked), which is where the other two legs of it live, and it is flagged here rather than bolted on.
 
 ---
 

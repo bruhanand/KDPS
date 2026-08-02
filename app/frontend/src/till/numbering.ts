@@ -17,14 +17,18 @@
 //     one is refused for ever with `BILL_NO_TAKEN`, and two customers' purchases
 //     sit under one Tally key.
 //
-// So there is exactly one way in - `commitBill` - and the function that reads the
-// counter is not exported. Nothing outside this file can obtain a bill number.
+// So there are exactly two ways in - `commitBill`, which takes the next number,
+// and `reenterPaperBill` (#189), which fills a hole a dead machine left - and the
+// function that reads the counter is not exported. Nothing outside this file can
+// obtain a bill number.
 
 import { financialYear } from "../lib/fiscal";
 
 import { META, readMeta } from "./db";
 import type { TillDb } from "./db";
-import type { BillDraft, QueuedBill } from "./types";
+import { notesSpentBy } from "./tender";
+import type { BillDraft, PaperEntered, QueuedBill } from "./types";
+import { newUuid } from "./uuid";
 
 /** The document type the till numbers. The kernel accepts external numbers on
  *  this series and no other (`core.documents.EXTERNAL_NUMBER_DOC_TYPES`). */
@@ -101,31 +105,129 @@ export async function commitBill(
   draft: BillDraft,
   now: Date = new Date(),
 ): Promise<QueuedBill> {
+  return writeBill(db, storeCode, draft, financialYear(now), null);
+}
+
+/**
+ * Key a printed bill back in under the number it already carries (#189).
+ *
+ * The other half of a register handover. A machine that died holding six unsynced
+ * bills left six receipts in a drawer and six holes in the store's series; this is
+ * how those receipts become rows, on a machine that never issued their numbers.
+ *
+ * Three things make it different from an ordinary commit, and all three are the
+ * same worry from different sides - that this becomes a way to mint a number:
+ *
+ *   · **The number is given, not taken.** The counter does not move, because this
+ *     bill is *behind* the counter by definition.
+ *   · **It must be a hole.** A sequence at or past where the till is up to is not
+ *     a bill from a dead machine, it is a fresh one, and re-entering it here
+ *     would spend a number twice.
+ *   · **Once, and once for good.** Two people working through the same drawer -
+ *     or one person reloading a page whose address still names the bill - would
+ *     otherwise queue the same receipt twice. The record of what has been keyed
+ *     in is `META.paperEntered`, which outlives both the queue (a bill leaves it
+ *     the moment the server takes it) and the handover list (a store puts that
+ *     away when it is done). The second attempt is refused here rather than left
+ *     for the server, whose only answer is `BILL_NO_TAKEN` - terminal, which
+ *     stops the store's whole queue behind a bill nobody meant to send twice.
+ *
+ * The stock still moves. The pieces went out of the door on the old machine, but
+ * this counter's shelf was rebuilt from the server's figures - which never heard
+ * about these bills - so the local count is holding them and has to let go.
+ */
+export async function reenterPaperBill(
+  db: TillDb,
+  storeCode: string,
+  draft: BillDraft,
+  seq: number,
+  now: Date = new Date(),
+): Promise<QueuedBill> {
+  return writeBill(db, storeCode, { ...draft, origin: "paper" }, financialYear(now), seq);
+}
+
+async function writeBill(
+  db: TillDb,
+  storeCode: string,
+  draft: BillDraft,
+  fy: string,
+  atSeq: number | null,
+): Promise<QueuedBill> {
   // Generated outside the transaction because it is not state: the key exists to
   // make the *server* side idempotent, so a bill that rolls back here and is
   // retried by the cashier is a genuinely different bill and wants a new one.
   const idempotencyUuid = newUuid();
-  const fy = financialYear(now);
 
   // `items` is in scope because the shelf move asks it whether the piece is one
   // the counter has ever heard of. Read-only in practice, but a Dexie
   // transaction has to declare every table it will touch, and a commit that
   // reached outside its own scope would throw at the worst possible moment.
-  return db.transaction("rw", [db.meta, db.queue, db.stock, db.items], async () => {
-    const seq = await nextBillNumber(db, fy);
-    const bill: QueuedBill = {
-      ...draft,
-      idempotency_uuid: idempotencyUuid,
-      store: storeCode,
-      fy,
-      till_seq: seq,
-      origin: draft.origin ?? (navigator.onLine ? "online" : "offline"),
-      doc_number: renderBillNumber(fy, storeCode, seq),
-      attempts: 0,
-    };
-    await db.queue.add(bill);
-    await moveStock(db, bill);
-    return bill;
+  return db.transaction(
+    "rw",
+    [db.meta, db.queue, db.stock, db.items, db.creditNotes],
+    async () => {
+      const seq = atSeq === null ? await nextBillNumber(db, fy) : await claimHole(db, fy, atSeq);
+      if (atSeq !== null) await recordPaperEntry(db, fy, seq);
+      const bill: QueuedBill = {
+        ...draft,
+        idempotency_uuid: idempotencyUuid,
+        store: storeCode,
+        fy,
+        till_seq: seq,
+        origin: draft.origin ?? (navigator.onLine ? "online" : "offline"),
+        doc_number: renderBillNumber(fy, storeCode, seq),
+        attempts: 0,
+      };
+      await db.queue.add(bill);
+      await moveStock(db, bill);
+      await moveNotes(db, bill);
+      return bill;
+    },
+  );
+}
+
+/** Take a number the counter has already given out, and refuse anything else.
+ *
+ *  Inside `writeBill`'s transaction, so the check and the write of both the bill
+ *  and the "this one is done" record cannot be separated by a second re-entry of
+ *  the same receipt. */
+async function claimHole(db: TillDb, fy: string, seq: number): Promise<number> {
+  if (!Number.isInteger(seq) || seq < 1) {
+    throw new Error(`${seq} is not a bill number.`);
+  }
+  const counter = await counterFor(db, fy);
+  if (seq >= counter) {
+    throw new Error(
+      `Bill ${seq} has not been printed yet - this counter is on ${counter}. ` +
+        "Only a bill from the old machine is re-entered from paper.",
+    );
+  }
+  const entered = await paperEntries(db, fy);
+  if (entered.includes(seq)) {
+    throw new Error(`Bill ${seq} has already been entered from its printed copy.`);
+  }
+  const queued = await db.queue.filter((bill) => bill.fy === fy && bill.till_seq === seq).count();
+  if (queued) {
+    throw new Error(`Bill ${seq} has already been re-entered and is waiting to sync.`);
+  }
+  return seq;
+}
+
+/** Which numbers this counter has keyed in from paper this year.
+ *
+ *  A year that is not the stored one reads as empty rather than being cleared:
+ *  the read happens on the commit path, and a rollover is not the moment to be
+ *  writing. `recordPaperEntry` replaces the row when it next writes. */
+export async function paperEntries(db: TillDb, fy: string): Promise<number[]> {
+  const entered = await readMeta<PaperEntered | null>(db, META.paperEntered, null);
+  return entered && entered.fy === fy ? entered.seqs : [];
+}
+
+async function recordPaperEntry(db: TillDb, fy: string, seq: number): Promise<void> {
+  const seqs = await paperEntries(db, fy);
+  await db.meta.put({
+    key: META.paperEntered,
+    value: { fy, seqs: [...seqs, seq].sort((a, b) => a - b) } satisfies PaperEntered,
   });
 }
 
@@ -178,15 +280,44 @@ async function moveStock(db: TillDb, bill: QueuedBill): Promise<void> {
   }
 }
 
-/** A v4 UUID, from the platform where there is one. */
-function newUuid(): string {
-  const cryptoApi = globalThis.crypto;
-  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID();
-  // Chrome is the standardised till (grill Q5) and has had `randomUUID` on
-  // secure origins for years, so this is for a plain-http dev box, not for a
-  // counter. It is still a v4 shape, so nothing downstream can tell.
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => {
-    const n = Number(c);
-    return (n ^ (Math.floor(Math.random() * 256) & (15 >> (n / 4)))).toString(16);
-  });
+/**
+ * Spend the counter's own copy of every credit note this bill took (#182).
+ *
+ * In the same transaction as the bill, and for the same reason the shelf is:
+ * what the next customer is offered has to reflect what the last one just spent.
+ * The server draws the real balance down when the bill syncs, which may be days
+ * later - and until then a note whose local balance had not moved would pay for
+ * a second bill, and a third, all of them landing at head office to be refused.
+ *
+ * A note that reaches nought is left on the cache at nought rather than deleted:
+ * the next attempt to spend it should read "nothing left on it" and not "this
+ * counter has never heard of that note", which is a different sentence with a
+ * different remedy. The sync's `deleted.credit_notes` is what removes it.
+ */
+async function moveNotes(db: TillDb, bill: QueuedBill): Promise<void> {
+  await drawDownNotes(db, notesSpentBy(bill.tenders));
+}
+
+/**
+ * Take `spent` off the counter's copy of each named note.
+ *
+ * Exported because the sync does the same write for a different reason: it has
+ * to subtract the queue's spending from a balance the server has just re-stated
+ * (`sync.replayQueuedNotes`). Two copies of "what a spent note now says" is two
+ * chances to write one of them differently.
+ *
+ * A note the counter does not hold is skipped: it is an unverified one taken on
+ * a manager's OK, there is no local balance to move, and inventing one would be
+ * inventing money. A note that reaches nought stays in the cache at nought, so
+ * the next attempt reads "nothing left on it" rather than "never heard of it".
+ */
+export async function drawDownNotes(db: TillDb, spent: Map<string, number>): Promise<void> {
+  for (const [number, amount] of spent) {
+    const note = await db.creditNotes.get(number);
+    if (!note) continue;
+    await db.creditNotes.put({
+      ...note,
+      remaining_paise: Math.max(0, note.remaining_paise - amount),
+    });
+  }
 }

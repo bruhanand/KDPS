@@ -5,10 +5,13 @@
 // opens — `/receive/new` is the new-GRN form, `/receive/12` is GRN 12 — is
 // something a test can assert rather than something we hope React Router got
 // right. `id` is that assertion's handle; it never reaches the user.
+import type { ReactNode } from "react";
+import { matchRoutes } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 
 import { PlannedPage } from "./pages/PlannedPage";
-import { NAV_ITEMS, itemPath } from "./shell/navConfig";
+import { LegacyRedirect } from "./shell/LegacyRedirect";
+import { LEGACY_PATHS, NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { AccessMatrixPage } from "./pages/AccessMatrix";
@@ -26,16 +29,27 @@ import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/O
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
 import { AlertsPage } from "./pages/Alerts";
+import { OffersPage } from "./pages/Offers";
 import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
 import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
+import DaySummary from "./pages/DaySummary";
+import IrnQueue from "./pages/IrnQueue";
+import BillingPage from "./pages/sell/Billing";
+import CustomerSearchPage from "./pages/sell/CustomerSearch";
+import ReturnsExchangePage from "./pages/sell/ReturnsExchange";
 import TillPage from "./pages/sell/Till";
 import { TillProvider } from "./till/TillProvider";
 
 type Screen = RouteObject & { id: string; path: string };
+
+/** A Sell screen, with the counter behind it. */
+function withTill(screen: ReactNode) {
+  return <TillProvider>{screen}</TillProvider>;
+}
 
 /** Screens that are built. Behaviour is unchanged from before the re-housing —
  *  only the address moved. */
@@ -46,6 +60,9 @@ const BUILT: Screen[] = [
   { id: "approvals", path: "/approvals", element: <ApprovalsPage /> },
   // Home's Alerts surface — in-transit aging + return-window 30/15/7 (#77)
   { id: "alerts", path: "/alerts", element: <AlertsPage /> },
+  // Offers & Price - the store's read-only view of the rulebook (#183). The
+  // three authoring screens beside it in the nav are still planned.
+  { id: "offers", path: "/offers", element: <OffersPage /> },
   // Booking
   { id: "booking-list", path: "/booking", element: <BookingsPage /> },
   { id: "booking-new", path: "/booking/new", element: <BookingNewPage /> },
@@ -86,20 +103,34 @@ const BUILT: Screen[] = [
   // (#170). It belongs to no section: it is the store persona's arrangement of
   // three of them, and its tabs carry those sections' own gates.
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },
-  // Sell — the till layer's own surface (#180). `TillProvider` wraps the screen
-  // rather than the app: opening a counter's local database means holding one
-  // store's price list, credit notes and manager PIN hashes, which a warehouse or
-  // head-office login has no business carrying. When the billing screens land
-  // (#181) the three of them share one provider through a layout route.
-  {
-    id: "sell-till",
-    path: "/sell/till",
-    element: (
-      <TillProvider>
-        <TillPage />
-      </TillProvider>
-    ),
-  },
+  // Sell - the counter (#181) and the till layer's own surface (#180).
+  //
+  // `TillProvider` wraps each screen rather than the app: opening a counter's
+  // local database means holding one store's price list, credit notes and
+  // manager PIN hashes, which a warehouse or head-office login has no business
+  // carrying.
+  //
+  // A provider each rather than the layout route this comment used to promise.
+  // The route table is flat by design - `App.tsx` maps it, and `routes.test.ts`
+  // asserts one route per URL over that flat list - and nesting it to save a
+  // remount would change both to buy nothing: only one of these renders at a
+  // time, and `TillEngine.start`/`stop` are a matched pair built to run any
+  // number of times on one tab. The Dexie connection is a per-store singleton
+  // and outlives the navigation either way.
+  { id: "sell-billing", path: "/sell", element: withTill(<BillingPage />) },
+  // Taking a piece back (#184). `withTill`, because half of what it does is the
+  // counter's own: the bill the customer is holding may still be in this till's
+  // queue and nowhere else, the manager's PIN is checked against the cached
+  // hash, and an exchange is handed to Billing through the local database.
+  { id: "sell-returns", path: "/sell/returns", element: withTill(<ReturnsExchangePage />) },
+  { id: "sell-till", path: "/sell/till", element: withTill(<TillPage />) },
+  // Find a bill and print it again (#185). No `withTill`, and that is the whole
+  // shape of the screen: it reads the *server's* bills, because the counter's
+  // local copy holds only what it has not yet synced - last month's bill, or one
+  // from the machine that was replaced, is only ever at head office. It also
+  // means somebody who may read bills but not bill (an owner, an accountant) can
+  // open it without a counter's price list being opened on their laptop.
+  { id: "sell-customers", path: "/sell/customers", element: <CustomerSearchPage /> },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
   { id: "stock-search", path: "/stock/search", element: <CrossStoreSearch /> },
@@ -108,9 +139,11 @@ const BUILT: Screen[] = [
   { id: "vflip-new", path: "/stock/vflips/new", element: <VFlipNewPage /> },
   { id: "vflip-detail", path: "/stock/vflips/:id", element: <VFlipDetailPage /> },
   // Money
+  { id: "day-summary", path: "/money/day-summary", element: <DaySummary /> },
   { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
+  { id: "irn-queue", path: "/money/irn-queue", element: <IrnQueue /> },
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },
@@ -131,4 +164,20 @@ const PLANNED: Screen[] = NAV_ITEMS.filter((i) => i.planned && !i.deepLink).map(
   element: <PlannedPage />,
 }));
 
-export const PROTECTED_ROUTES: Screen[] = [...BUILT, ...PLANNED];
+// Old addresses are redirected by App's catch-all — every one that falls through
+// the table. `/receive/upload-bill` (the stub #228 deleted) does not fall
+// through: it sits exactly where `/receive/:id` looks for a document number, so
+// it would open "GRN number upload-bill" and the catch-all would never see it.
+//
+// So: any legacy path a built or planned route would claim gets a redirect route
+// of its own, derived rather than listed, so the next one is caught without
+// anybody remembering this file. A static segment outranks a dynamic one, so
+// these win over `/receive/:id` whatever the order here.
+const CLAIMABLE: Screen[] = [...BUILT, ...PLANNED];
+const LEGACY: Screen[] = LEGACY_PATHS.filter((path) => matchRoutes(CLAIMABLE, path)).map((path) => ({
+  id: `legacy:${path}`,
+  path,
+  element: <LegacyRedirect />,
+}));
+
+export const PROTECTED_ROUTES: Screen[] = [...CLAIMABLE, ...LEGACY];

@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# Bring a Sandcastle container to the point where `npm run ci` can actually run.
+# Bring a Sandcastle container to the point where the pipeline's agents can
+# build, run touched tests, and QA in a browser.
 #
 # Runs as the sandbox's `onSandboxReady` hook, once per sandbox, against the
 # freshly-created worktree (which is main plus nothing). Everything here is
 # idempotent, so re-running it is safe.
 #
-# Three things have to be true before the acceptance gate means anything:
+# Note the full acceptance gate (`npm run ci`) is deliberately NEVER run
+# during the build — the pipeline's ci-check phase runs `npm run ci:fast`
+# after QA, and the host re-runs it on merged main before anything counts as
+# landed. The dependencies below exist so the builder can run the tests it
+# touched, so ci-check can run the fast gate, and so the QA phase can boot
+# the API + frontend and drive them in headless Chromium.
+#
 #   1. Postgres is up      — the kernel's append-only/FSM guarantees are DB
 #                            triggers, so pytest on anything else is theatre.
-#   2. Backend deps synced — ruff, mypy, import-linter and pytest all come from
-#                            app/backend's dev group via uv.
+#   2. Backend deps synced — pytest + mypy come from app/backend's dev group.
 #   3. Frontend deps synced — tsc + vitest live in app/frontend, via yarn.
+#   4. Playwright MCP registered — the QA agent's browser tools.
 #
 # Fails loudly. A sandbox that can't verify its own work is worse than no sandbox.
 set -euo pipefail
@@ -37,6 +44,17 @@ if [ -f "$CJSON" ]; then
 else
   printf '{"projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true}}}' > "$CJSON"
 fi
+
+# --- 0b. Playwright MCP for the browser-QA phase ------------------------------
+# User-scoped (written to ~/.claude.json) so no per-project approval gate gets
+# in the way. Pointed at Debian's chromium from the image; --no-sandbox because
+# Chromium's own sandbox cannot start in this rootless container, which is fine
+# — the whole container is the sandbox.
+say "Registering Playwright MCP (headless Chromium)"
+claude mcp remove --scope user playwright >/dev/null 2>&1 || true
+claude mcp add --scope user playwright -- playwright-mcp \
+  --browser chromium --executable-path /usr/bin/chromium \
+  --headless --no-sandbox
 
 # --- 1. Postgres -------------------------------------------------------------
 # The cluster was created by the Dockerfile at $PGDATA, owned by `agent`, with a
@@ -74,4 +92,28 @@ say "Syncing frontend dependencies (yarn)"
 cd "$ROOT/app/frontend"
 yarn install --frozen-lockfile
 
-say "Ready — 'npm run ci' will run from $ROOT"
+# --- 4. Code graph (graphify) -------------------------------------------------
+# The slicer and the reviewers spend most of their time answering "where does
+# this live and what touches it". On the #229 run the slicer ran 104 shell
+# commands — nearly all of them greps — to find one function. A graph answers
+# that in one call.
+#
+# `graphify update` is AST-only: deterministic, no LLM, no API key, ~10s over
+# app/. It is pointed at app/ and not the repo root deliberately — the root
+# would pull in the whole docs corpus, and markdown needs semantic (LLM)
+# extraction, which does not belong in an unattended shell script. The corpus
+# stays the slicer's job to read; the graph is for code.
+#
+# Built from inside app/ deliberately: graphify writes graphify-out/ relative to
+# the working directory as well as the target, so building from the repo root
+# leaves a second, half-populated graphify-out/ there that shadows the real one.
+# From app/, the graph is at app/graphify-out/ and graphify's own default path
+# resolves — which is why the prompts tell agents to `cd app` first.
+say "Building the code graph (graphify)"
+# The image ships graphify; this is the fallback for a stale image (the running
+# one predated `uv tool install pre-commit` by weeks). Idempotent either way.
+command -v graphify >/dev/null 2>&1 || uv tool install graphifyy
+cd "$ROOT/app"
+graphify update .
+
+say "Ready — pipeline agents can build, test and QA from $ROOT"

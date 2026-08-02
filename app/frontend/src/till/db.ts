@@ -22,6 +22,7 @@
 import Dexie from "dexie";
 import type { Table } from "dexie";
 
+import type { HeldPayload } from "./held";
 import type {
   QueuedBill,
   TillCreditNote,
@@ -30,17 +31,36 @@ import type {
   TillManager,
   TillOffer,
   TillSalesman,
+  TillSeason,
   TillStock,
 } from "./types";
 
 /** A bill the counter parked to serve the next customer. Mirrored to the server
- *  best-effort so the Dashboard can count them; the till stays authoritative. */
+ *  best-effort so the Dashboard can count them; the till stays authoritative.
+ *
+ *  `payload` is typed rather than left as loose JSON, even though the *server*
+ *  keeps it opaque: the till writes it and the till reads it back, so a cart is
+ *  the only thing it can hold, and calling it `Record<string, unknown>` here
+ *  would buy a cast at every one of those reads. The import is type-only, so
+ *  nothing circular survives the compiler. */
 export interface HeldBill {
   held_uuid: string;
   label: string;
   held_at: string;
-  expires_policy: string;
-  payload: Record<string, unknown>;
+  /** `today` until the store says otherwise at day close; `kept` once it has. */
+  expires_policy: "today" | "kept";
+  payload: HeldPayload;
+  /** The local day the store last answered "keep this" - and the one field here
+   *  that is **not** mirrored up.
+   *
+   *  A hold parked before today is put to the store at day close, and keeping it
+   *  has to be an answer about *that* close rather than for ever: a hold kept on
+   *  Monday and still parked on Thursday is a cart nobody has thought about in
+   *  three days, and a policy of `kept` alone would hide it for good. The server
+   *  has no use for the answer - the mirror is a count on a Dashboard - and the
+   *  contract's five columns are what `PUT /api/sell/held-bills` takes, so this
+   *  stays where the decision was made. */
+  reviewed_on?: string;
 }
 
 /** One row of `meta` - the till's small pile of state, keyed by name so a new
@@ -68,6 +88,31 @@ export const META = {
   halt: "halt",
   /** What the server last said it had accepted from this counter. */
   register: "register",
+  /** The shop floor's money dials - see `TillPolicy`. */
+  policy: "policy",
+  /** The salesman the counter picked last, defaulted onto the next line. */
+  lastSalesman: "lastSalesman",
+  /** The register handover this machine took over on, and the bills the old one
+   *  never sent - see `HandoverState`. A list somebody is working through, and
+   *  they may put it away when they are done. */
+  handover: "handover",
+  /** Which numbers this counter has keyed back in from a printed copy, for the
+   *  year it is counting in - see `PaperEntered`.
+   *
+   *  Deliberately **not** part of the handover row above, and the separation is
+   *  the whole point: the handover list is a job that gets put away, and this is
+   *  a fact about numbers that have been spent. A re-entry also leaves the queue
+   *  the moment the server takes it, so neither the queue nor the tick list on a
+   *  screen can be what stops the same receipt going in twice. */
+  paperEntered: "paperEntered",
+  /** An exchange the Return & Exchange screen picked, waiting for the Billing
+   *  screen to pick it up - see `exchange.ts`.
+   *
+   *  Here rather than in React state because each Sell route mounts its own
+   *  `TillProvider`, so there is no shared tree between the two screens to hand
+   *  it through; and because a customer standing at the counter mid-exchange
+   *  should survive a reload. Taken exactly once. */
+  exchange: "exchange",
 } as const;
 
 export class TillDb extends Dexie {
@@ -76,6 +121,7 @@ export class TillDb extends Dexie {
   offers!: Table<TillOffer, number>;
   creditNotes!: Table<TillCreditNote, string>;
   salesmen!: Table<TillSalesman, number>;
+  seasons!: Table<TillSeason, string>;
   managers!: Table<TillManager, number>;
   gstSlabs!: Table<TillGstSlab, [string, string]>;
   meta!: Table<MetaRow, string>;
@@ -105,6 +151,12 @@ export class TillDb extends Dexie {
       queue: "++id, idempotency_uuid",
       held: "held_uuid",
     });
+    // The season master's ordering, for resolving a scan that names no season
+    // (#181). A version of its own rather than an edit to version 1: a counter
+    // that has been billing since #180 has a database on disk with unsynced
+    // money in it, and Dexie upgrades that one in place instead of asking the
+    // browser to throw it away and start again.
+    this.version(2).stores({ seasons: "code" });
   }
 }
 

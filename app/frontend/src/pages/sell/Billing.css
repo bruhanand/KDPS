@@ -1,0 +1,319 @@
+/* Billing (#181, revamped to a fixed one-screen frame by #243). House tokens
+   only - no colour is spelled out here, so the dark theme's one override
+   block keeps working without touching this file.
+
+   The frame (design.md, G-2): three fixed bands - `.bill-top` (identity: the
+   scan box and the bill's lifecycle actions, plus the one alert line), then
+   `.bill-work` (the only band that scrolls - the line grid left, the payment
+   and customer rail fixed right), then `.bill-foot` (totals, Reprint, Save &
+   Print). `.bill-page` sizes itself to `.content`'s own box exactly, so
+   `.content` never scrolls on this route (the shell contract, AppShell.css
+   L1-5) - below 1280px that guarantee is deliberately given up and the page
+   scrolls honestly again (G-2). */
+
+.bill-page {
+  /* Must equal `.content`'s box exactly (`flex:1` under a `60px` topbar) or
+     the two nest: a `.bill-page` even one pixel taller than this makes
+     `.content` scroll too, on top of `.bill-lines` scrolling underneath it -
+     two scrollbars for what reads as one page. Padding is included on
+     purpose (`* { box-sizing: border-box }`), so it does not need repeating
+     rooms here. */
+  height: calc(100dvh - var(--topbar-h));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  padding-bottom: 40px;
+}
+
+/* One grid row for PageHeader plus whatever it draws above itself. A
+   stripped-section persona has `PageHeader` render a tab strip
+   (`data-testid="section-tabs"`) as a sibling of its own toolbar row
+   (`HostedPageContext`, PageHeader.tsx L70) - two DOM nodes for what is one
+   conceptual band. Wrapping them in `.bill-top` keeps `.bill-page`'s grid to
+   exactly three rows regardless of persona; sizing this band by counting
+   pixels for "PageHeader's height" would have quietly broken for that
+   persona the day the tab strip shipped. */
+.bill-top { min-height: 0; }
+
+.bill-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
+.bill-lifecycle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.bill-alert {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--amber);
+  border-radius: 10px; padding: 10px 13px; font-size: 13px; margin: 0 0 16px;
+}
+
+/* A scan that found nothing (#186). It sits above the suggestion list because
+   the two are one question asked in the right order: "did you mean one of
+   these?" first, "bill it off the tag" second. Floating (#243, G-4) - see
+   `.bill-float` - so the two keep their own spacing but neither carries the
+   bottom margin a stacked banner needed. */
+.bill-unknown { padding: 14px 16px; }
+/* The message is one wrapping text block, not four flex items (icon, three
+   text runs split by the barcode span) - `.bill-float`'s 380px is narrower
+   than the full page width this banner used to stack across, and letting the
+   sentence itself be a flex item put its icon, its first clause and its
+   barcode in three side-by-side columns instead of one wrapped paragraph. */
+.bill-unknown-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 0 10px; font-size: 13px; color: var(--amber);
+}
+.bill-unknown-note svg { flex-shrink: 0; margin-top: 2px; }
+.bill-unknown-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.bill-unknown .muted-cell { font-size: 11.5px; }
+
+/* The counter itself cannot bill (#189) - data cleared, or a second window on
+   one till. Red rather than the amber every other banner on this page wears: it
+   is the only one that means "nothing below this works". Rule 5 says
+   collapsing alerts to one line must not soften this case, so it is not one of
+   the alert-strip banners at all - `.bill-blocked-area` below is `.bill-work`'s
+   entire content instead of a line above it. */
+.bill-alert-stop {
+  background: var(--red-bg); border-color: var(--red-bd); color: var(--red);
+}
+
+/* The full-band takeover (#243, AC4): the work area's only content while
+   `till.blocked`, in place of the grid and the rail. */
+.bill-blocked-area {
+  grid-column: 1 / -1;
+  height: 100%; margin: 0; padding: 40px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  text-align: center; font-size: 15.5px;
+}
+
+/* Keying a printed bill back in after a register handover (#189). Deliberately
+   not an alert: nothing is wrong, this is a job somebody was sent here to do. */
+.bill-paper {
+  display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  background: var(--band-edge-bg); border: 1px solid var(--band-edge-bd); color: var(--ink);
+  border-radius: 10px; padding: 12px 14px; font-size: 13px; margin: 0 0 16px;
+}
+.bill-paper > div:first-child { flex: 1 1 320px; }
+.bill-paper .field { margin: 0; }
+.bill-paper .input { width: 220px; }
+.bill-paper .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+.bill-suggest { padding: 14px 16px; }
+.bill-suggest-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.bill-suggest-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; text-align: left; font-weight: 500;
+}
+
+/* "Did you mean" and "bill it off the tag" (#243, G-4: "nothing pushes the
+   layout"). Portaled to `document.body` and placed by
+   `usePositionedPopover(..., "below")`, hanging under the scan box rather
+   than over the grid it used to sit inline above - a fixed width because a
+   portaled node answers to no parent's column width, only the viewport's. */
+/* Barcodes are non-unique scan-aliases by design (CONTEXT.md), so a collision
+   can put more candidate rows here than a short viewport has room for below
+   the scan box - `position: fixed` ignores page scroll, so without its own
+   scrollbar the lower rows would be there but unreachable (round-2 finding).
+   The cap has to be an inline style (`scanFloat.at.maxHeight`), not a CSS
+   `100vh` rule: the float starts at `scanBox.bottom`, which moves with the
+   top strip's own height, and a `vh`-only formula can't see that offset -
+   it let the panel run past the bottom of a short viewport uncapped
+   (round-3 finding). */
+.bill-float {
+  position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 32px);
+  overflow-y: auto;
+}
+.bill-float > * + * { margin-top: 10px; }
+
+/* Bills on hold (#185). A panel above the grid rather than a drawer or a modal:
+   picking one up replaces what is on the counter, so the cashier should be able
+   to see both at once before choosing. Lives inside `.bill-lines` (#243) - the
+   one band that scrolls - rather than pushing the rail or the footer. */
+.bill-holds { padding: 14px 16px; margin-bottom: 16px; }
+.bill-holds-blocked { display: block; margin-top: 6px; color: var(--amber); }
+.bill-holds-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bill-hold-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 9px 12px;
+}
+.bill-hold-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bill-hold-name { font-weight: 600; font-size: 13.5px; }
+.bill-hold-who .muted-cell { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
+.bill-hold-money { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.bill-hold-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bill-alert .btn { margin-left: auto; }
+
+/* The work area (#243): left the grid, right the rail (payment above,
+   customer below - both "today's 264px rail is too narrow for tender rows
+   plus chips; ~340px is the floor", design.md). `min-height: 0` is load-bearing
+   twice over - here, so this row can shrink inside `.bill-page`'s `1fr` track
+   instead of growing to fit the grid's content; again on `.bill-lines`, so
+   *it* can shrink inside this row and hand the leftover space to its own
+   `overflow-y: auto` rather than pushing `.bill-work` taller than the frame. */
+.bill-work { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; min-height: 0; }
+.bill-lines { min-width: 0; min-height: 0; overflow-y: auto; }
+.bill-empty {
+  display: block; padding: 40px 0; text-align: center; font-size: 14px;
+  border: 1px dashed var(--hairline); border-radius: var(--radius);
+}
+
+/* Twelve columns is what staff read today (D10 §4), so the grid is tuned to
+   carry all twelve on a counter screen rather than to look roomy: none of them
+   may fall off the right-hand edge, least of all Net. */
+/* `table.data th` is more specific than `.bill-grid th`, so the padding has to
+   be written to out-weigh it or the generic 18px gutter keeps twelve columns
+   from fitting. */
+.bill-grid { font-size: 12.5px; table-layout: fixed; width: 100%; }
+table.data.bill-grid th { padding: 9px 7px; }
+table.data.bill-grid td { vertical-align: top; padding: 8px 7px; }
+/* Sticky column header (#243, design.md: "the line list is the only
+   overflow-y: auto, with position: sticky column headers"). `position: sticky`
+   is contained by the nearest ancestor with its own scroll box, which by the
+   generic `.table-wrap { overflow: auto }` (index.css) would be `.bill-grid-wrap`
+   itself - a box that never actually scrolls here, since `.bill-lines` around
+   it does. Sticky against a box that never scrolls just sits still, so this
+   scopes the grid's own wrap back to `overflow: visible`, making
+   `.bill-lines` the scrolling ancestor sticky measures against - scoped to
+   `.bill-grid-wrap` alone (BillGrid.tsx) rather than every `.table-wrap` in
+   `.bill-lines`, so the exchange table above it keeps its own rounded corners
+   and scroll safety net. Safe at the frame's own floor (1280px and up): the
+   twelve columns are sized in fixed percentages precisely so the grid never
+   needs its own horizontal scrollbar there (the comment above). Below that
+   floor the frame gives way and this reverts (media query, bottom of file).
+   `.table-wrap.bill-grid-wrap`, not `.bill-grid-wrap` alone: both classes are
+   on the one element (BillGrid.tsx), and a bare `.bill-grid-wrap` ties with
+   `.table-wrap` on specificity - same trap as `table.data th` above, same
+   answer, this time the loser was whichever file's bundle chunk happened to
+   land second rather than which rule "should" win by reading order. */
+.table-wrap.bill-grid-wrap { overflow: visible; }
+table.data.bill-grid thead th { position: sticky; top: 0; z-index: 2; }
+/* Figures never break: "₹3,4 / 99" over two lines is not money. Words may. */
+.bill-grid td.num, .bill-grid th.num { white-space: nowrap; }
+.bill-grid .muted-cell { font-size: 11px; }
+.bill-barcode { font-size: 11px; overflow-wrap: anywhere; }
+/* Element-qualified on purpose. A bare `.bill-cell` ties with the app's generic
+   `.input` - both are one class - so the winner is whatever the bundler happens
+   to emit last, and when `.input` won, its 15px text and 14px side padding did
+   not fit a column this narrow: "1499" rendered as "149" in the box a cashier
+   reads a price out of. Same trap as `table.data th` above, same answer.
+   `min-width` is nought because `table-layout: fixed` sets the widths here; a
+   floor on the input would push the column wider than its share. */
+input.bill-cell,
+select.bill-cell {
+  width: 100%; min-width: 0; padding: 4px 6px; font-size: 12.5px;
+}
+.bill-grid td.num .bill-cell { text-align: right; }
+select.bill-season { min-width: 0; }
+.bill-overcap {
+  display: block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--red);
+}
+/* The offers on a strip of their own under each line, spanning the grid, with
+   no top border so it reads as part of the line above rather than as a line in
+   its own right. Tokens only - no literal colours - so the dark theme inherits
+   it with no second rule, per that theme's one standing constraint.
+
+   The strip is here because the chips were in the Disc column first, and that
+   column is sixty pixels wide. It holds "₹1,049.70" and nothing longer, and it
+   is a `td.num` - `white-space: nowrap`, so that "₹3,4 / 99" can never break
+   across two lines. A rule's *name* is not a figure: left nowrap it did not
+   wrap, it printed straight across the GST and salesman columns; wrapped, it
+   broke to one syllable a line and stood up as a tall thin column. Browser QA
+   found both. A rule is the one thing on this row a cashier reads aloud to a
+   customer asking why the shirt is cheaper, so it gets width to be read in. */
+.bill-grid tr.bill-offer-row td {
+  padding-top: 0; padding-bottom: 10px; border-top: 0; white-space: normal;
+}
+.bill-offer {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; line-height: 1.6;
+  white-space: normal; overflow-wrap: break-word;
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+
+/* The rail (#243): "both always visible" (design.md) holds whenever the
+   payment card plus the customer card fit the available height - true on
+   most counters, since neither is asked to grow here (#246/#249 are the
+   tickets that reshape their fields). When they do not fit - a laptop at the
+   1280px floor, or a persona whose stripped-section tab strip eats a row -
+   the column scrolls on its own rather than the alternative, which is worse:
+   its bottom half sliding under the footer with no way to reach it at all.
+   `.bill-lines` gets the same treatment (`min-height: 0` + its own
+   `overflow-y: auto`) for the identical reason. */
+.bill-pay { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
+.bill-panel { padding: 16px 18px; }
+.bill-panel .field { margin-top: 10px; }
+.bill-panel .muted-cell { display: block; margin-top: 10px; font-size: 12px; }
+.bill-due { font-size: 30px; font-weight: 700; color: var(--ink); margin: 4px 0 0; }
+.bill-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  margin-top: 10px; font-size: 13.5px; font-weight: 600;
+}
+
+/* The payment panel (#182): four modes, the notes among them, and the manager's
+   tap. One column of label-then-amount rows, so a cashier's eye runs down the
+   amounts rather than hunting for them. */
+.bill-tenders { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.bill-tender { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 10px; }
+.bill-tender > label {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+/* "the rest" beside the cash label, where the panel's other hints sit under a
+   block. It has to stay on the label's own line, so the panel-wide rule that
+   drops `.muted-cell` onto its own line is undone here. */
+.bill-tender > label .muted-cell {
+  display: inline; margin: 0; font-size: 11.5px; font-weight: 500;
+}
+.bill-tender .bill-cell { text-align: right; }
+
+.bill-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.bill-note { display: flex; flex-direction: column; gap: 4px; }
+.bill-note-row { display: grid; grid-template-columns: 1fr 100px 24px; align-items: center; gap: 8px; }
+.bill-note-row .bill-cell { padding: 6px 8px; }
+.bill-note .muted-cell { margin-top: 0; }
+.bill-note-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+
+.bill-unpaid { color: var(--red); }
+.bill-authorised {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+}
+.bill-authorised .btn { display: inline-flex; align-items: center; gap: 7px; }
+.bill-authorised .muted-cell { margin-top: 0; }
+.bill-pin { max-width: 460px; }
+/* What the manager is agreeing to, itemised. They are approving these lines and
+   these amounts and nothing else, so the modal shows all of them rather than a
+   count. */
+.bill-asks { margin: 4px 0 16px; padding-left: 18px; font-size: 13.5px; color: var(--ink); }
+.bill-asks li { margin-top: 4px; }
+
+.bill-foot {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  flex-wrap: wrap; margin-top: 18px;
+}
+.bill-totals { display: flex; flex-wrap: wrap; gap: 22px; }
+.bill-figure { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.bill-figure-label { font-size: 11.5px; text-transform: uppercase; color: var(--caption); }
+.bill-figure-strong { font-size: 20px; font-weight: 700; }
+
+.bill-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bill-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.bill-blocked { font-size: 12.5px; color: var(--red); max-width: 320px; }
+
+/* G-2: "the fixed one-screen frame holds at 1280px width and up... narrower
+   than that, the frame degrades honestly: bands stack, the page scrolls
+   again, everything still works. A till is a laptop in landscape." Below the
+   floor every fixed-height/scroll-locking rule above is given back to the
+   ordinary page: `.bill-page` stops being a `calc(100dvh - ...)` box (so
+   `.content` is free to scroll it, per the shell contract) and `.bill-lines`
+   stops being its own scroller (so the twelve-column grid gets its
+   horizontal safety net back too - see the sticky-header comment above). */
+@media (max-width: 1279px) {
+  .bill-page { height: auto; display: block; overflow: visible; }
+  .bill-top, .bill-work, .bill-foot { display: block; }
+  .bill-work { min-height: auto; }
+  .bill-lines { min-height: auto; overflow-y: visible; }
+  /* Same two-class selector as the desktop rule above, or this loses to it on
+     specificity regardless of which comes later in the cascade. */
+  .table-wrap.bill-grid-wrap { overflow: auto; }
+  table.data.bill-grid thead th { position: static; }
+  .bill-pay { margin-top: 16px; }
+  .bill-scan { width: 220px; }
+}

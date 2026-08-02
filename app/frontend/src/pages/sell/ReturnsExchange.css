@@ -1,0 +1,25 @@
+/* Return & Exchange (#184). House tokens only - no colour is spelled out here,
+   so the dark theme's one override block keeps working without touching this
+   file. */
+
+.rx-find { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 8px; }
+.rx-find .field { flex: 1; max-width: 340px; margin: 0; }
+.rx-find .btn { display: inline-flex; align-items: center; gap: 7px; }
+
+.rx-actions { padding: 18px 20px; }
+.rx-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  font-size: 20px; font-weight: 600; margin-bottom: 4px;
+}
+
+/* The window override reads as a sentence rather than as a form control: it is
+   the one thing on this screen a manager is being asked to decide, and a bare
+   tick beside a label three words long would not say what is being set aside. */
+.rx-late {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 13px; color: var(--ink); margin: 14px 0;
+}
+.rx-late input { margin-top: 2px; }
+
+.rx-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.rx-buttons .btn { display: inline-flex; align-items: center; gap: 7px; }

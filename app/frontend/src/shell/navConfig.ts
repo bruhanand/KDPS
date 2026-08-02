@@ -141,9 +141,21 @@ export const SECTIONS: NavSectionDef[] = [
     icon: ShoppingCart,
     layer: "store",
     items: [
-      { label: "Billing", to: "/sell", planned: true },
-      { label: "Return & Exchange", to: "/sell/returns", planned: true },
-      { label: "Customers", to: "/sell/customers", planned: true },
+      // The counter itself (#181). `operate` for the same reason Till & Sync
+      // carries it: this screen bills, and every endpoint behind it is gated at
+      // `sell: operate`.
+      { label: "Billing", to: "/sell", minCapability: "operate" },
+      // Taking a piece back (#184). `operate`, the same rung as billing and for
+      // the same reason: an exchange *is* a bill, and `POST /api/sell/returns`
+      // is gated at `sell: operate` too. The second pair of eyes on a plain
+      // return is not a rung at all - it is a named manager of this store,
+      // asked for on every single one.
+      { label: "Return & Exchange", to: "/sell/returns", minCapability: "operate" },
+      // Finding an old bill and printing it again (#185). `view`, not `operate`:
+      // `GET /api/sell/sales` is gated at `sell: view` and this screen cannot
+      // write, so an owner or an accountant reaching a customer's bill is the
+      // matrix working rather than a hole in it.
+      { label: "Customers", to: "/sell/customers", minCapability: "view" },
       // The counter's own state: what it holds offline, and what it still owes
       // head office (#180). Listed after the screens a cashier uses all day,
       // because it is the page somebody opens when something looks wrong.
@@ -175,8 +187,14 @@ export const SECTIONS: NavSectionDef[] = [
     icon: PackagePlus,
     layer: "store",
     items: [
-      { label: "Receive (GRN)", to: "/receive" },
-      { label: "Upload Bill", to: "/receive/upload-bill", planned: true },
+      // "Receive", not "Receive (GRN)" (#228). GRN stays in the working
+      // vocabulary where it names the document - the number, the table column -
+      // but the menu line and the page title are the plain verb.
+      //
+      // There is no "Upload Bill" line beside it: the bill upload already lives
+      // inside "New receipt", so a second entry promised a screen that would
+      // only have sent people back here.
+      { label: "Receive", to: "/receive" },
       // PT making moved to the warehouse's rung (#119): this line - the
       // Mapper-upload and from-GRN authoring workspace - needs
       // `receive_goods: approve`, so it drops off the store's sidebar on its
@@ -194,7 +212,6 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Transfers", to: "/transfer" },
       { label: "Send Stock", to: "/transfer/new" },
       { label: "Stock Request", to: "/transfer/requests" },
-      { label: "Distribution", to: "/transfer/distribution", planned: true },
       { label: "In-Transit", to: "/transfer/in-transit" },
     ],
   },
@@ -253,6 +270,14 @@ export const SECTIONS: NavSectionDef[] = [
     // already have on the server, and Money collapses to one Expenses line for
     // everyone else.
     items: [
+      // What the counter took today, by tender, and what the day left open
+      // (#188). No `minCapability`, so it sits at the section's own `view` rung:
+      // the ratified sheet gives both store seats `money: operate` ("Expenses
+      // only (create)"), and a store reading its own day back is the whole point
+      // of the screen. The exceptions underneath are cleared at `operate`, which
+      // is the same seat - so nothing here shows a person a button the API
+      // refuses (#85).
+      { label: "Day Summary", to: "/money/day-summary" },
       { label: "Payments", to: "/money/payments", planned: true, minCapability: "manage" },
       // The store × month rupee target the Dashboard is measured against (#171).
       // It is a master, so Setup is where a reader might look for it - but the
@@ -265,6 +290,16 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Store Targets", to: "/money/store-targets" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
+      // The B2B bills head office still owes an e-invoice reference (#187).
+      //
+      // Filed under Money rather than Sell, and that is the gate deciding the
+      // filing rather than the other way round. Raising an IRN is a statutory
+      // duty of the people who file the returns; `sell: operate` is the *store*,
+      // which would put it on a cashier's sidebar, and `sell: manage` is the IT
+      // administrator alone, who holds no money on the ratified sheet. The
+      // endpoint behind it is gated at `money: manage` for the same reason, so
+      // the sidebar and the API agree (#85).
+      { label: "IRN Queue", to: "/money/irn-queue", minCapability: "manage" },
       { label: "Bank", to: "/money/bank", planned: true, minCapability: "manage" },
       { label: "Collections", to: "/money/collections", planned: true, minCapability: "manage" },
       { label: "Expenses", to: "/money/expenses", planned: true },
@@ -278,7 +313,7 @@ export const SECTIONS: NavSectionDef[] = [
     layer: "intelligence",
     items: [
       { label: "Price List", to: "/offers/price-list", planned: true },
-      { label: "Offers", to: "/offers", planned: true },
+      { label: "Offers", to: "/offers" },
       { label: "Discounts", to: "/offers/discounts", planned: true },
       { label: "EOSS Planning", to: "/offers/eoss", planned: true },
     ],
@@ -355,6 +390,12 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/documents/sales", "/sell"],
   ["/documents/payments", "/money/payments"],
   ["/inbound", "/receive"],
+  // The Upload Bill stub, deleted in #228 - the bill goes up inside "New
+  // receipt". Anyone holding the old link lands on Receive.
+  ["/receive/upload-bill", "/receive"],
+  // The Distribution stub, deleted in #229 - the stub is gone for every role,
+  // and distribution returns later as a rare-case feature of a transfer.
+  ["/transfer/distribution", "/transfer"],
   ["/outbound/transfers", "/transfer"],
   ["/outbound/rtvs", "/return-to-brand"],
   ["/outbound/adjustments", "/stock-count/adjustments"],
@@ -391,6 +432,11 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/edges/pos", "/setup/settings"],
   ["/edges/config", "/setup/settings"],
 ].sort((a, b) => b[0].length - a[0].length) as [string, string][];
+
+/** Every address the manifest has moved away from. The route table reads it to
+ *  spot the one that a dynamic route would otherwise claim (see routes.tsx),
+ *  so which paths are legacy is stated once, here. */
+export const LEGACY_PATHS: string[] = LEGACY_PREFIXES.map(([from]) => from);
 
 /** Does `pathname` sit at or under `prefix`? (`/stock` ≠ `/stock-count`.) */
 export function underPrefix(pathname: string, prefix: string): boolean {
@@ -499,8 +545,11 @@ export function itemVisible(
 //   · A tab's gate is the gate of the menu entry it draws. Folding is
 //     presentation, so a tab can never open a screen the sidebar would have
 //     hidden - a role without count rights simply sees no Count & Adjust tab.
-//   · Names never change. Folding is allowed, renaming is not (#84 as amended)
-//     - a store person and the warehouse both say "Transfer".
+//   · Names never change, with two conscious exceptions Anand made for the
+//     store persona alone (#84 as amended, #229): Home reads "Dashboard" and
+//     HRMS reads "Attendance" there. Every other section keeps the word the
+//     warehouse and HO use for it - a store person and the warehouse both
+//     say "Transfer".
 //
 // A role with no layout gets the flat list, which is what keeps every other
 // persona byte-identical to before this file grew this section.
@@ -531,8 +580,41 @@ export interface NavFoldDef {
   tabs: FoldTab[];
 }
 
-/** One row of a persona's sidebar: a section code, or a fold. */
-export type LayoutRow = string | NavFoldDef;
+/** One section drawn as a single sidebar link, its own screens recomposed as a
+ *  horizontal tab row on those screens themselves (#227).
+ *
+ *  A fold merges several sections onto one new URL it owns. A strip owns no URL
+ *  at all: its tabs are the section's existing canonical routes, and the tab row
+ *  is plain navigation between them (grill decision 1). So no screen is edited
+ *  to gain tabs, no route is added, and a bookmark keeps working - the strip is
+ *  presentation laid over URLs that already exist.
+ *
+ *  It owns no capability either: every tab is a menu entry of `section`, and
+ *  keeps that entry's gate. Folding a section can only ever subtract. */
+export interface NavStripDef {
+  /** The section code this row stands for. Its head leaves the sidebar. */
+  section: string;
+  /** This persona's name for the row. Absent ⇒ the section's own label. */
+  label?: string;
+  /** The entries drawn as tabs, by their `to`, in display order. */
+  tabs: string[];
+}
+
+/** One row of a persona's sidebar: a section code, a fold, or a strip. */
+export type LayoutRow = string | NavFoldDef | NavStripDef;
+
+/** Is this layout row a strip? A fold names several `sections`; a strip names
+ *  the one `section` it is. The two predicates are each other's complement over
+ *  the non-string rows, and every place that has to tell the shapes apart calls
+ *  one of them rather than re-writing the test. */
+export function isStripRow(row: LayoutRow): row is NavStripDef {
+  return typeof row !== "string" && "section" in row;
+}
+
+/** Is this layout row a fold? */
+export function isFoldRow(row: LayoutRow): row is NavFoldDef {
+  return typeof row !== "string" && !isStripRow(row);
+}
 
 /** The rows, top to bottom. A section held but named nowhere here is still
  *  drawn - appended after these rows - so retuning somebody's access can never
@@ -561,22 +643,45 @@ export const INVENTORY_FOLD: NavFoldDef = {
   ],
 };
 
+// Sell, as a strip (#227): one sidebar link landing on Billing, and its four
+// screens drawn as a tab row on the screens themselves. The mechanism is proven
+// here first; the rest of the store's rows follow it in #229.
+export const SELL_STRIP: NavStripDef = {
+  section: "sell",
+  tabs: ["/sell", "/sell/returns", "/sell/customers", "/sell/till"],
+};
+
 // The store's own screen, as D10 decided it on 30 July 2026: ten sections, in
-// this order, one row each. Attendance is back under HRMS - D10 §10 puts it
-// there, and Home becomes the store dashboard that carries approvals and alerts
-// as cards (#174).
+// this order, one row each, and no subsections ever - anything a section needs
+// to divide does it inside the page, as tabs (#229). Sell and Inventory proved
+// the two mechanisms first (#227, #170); this slice turns the rest into strips.
+// Home becomes "Dashboard" - the store dashboard that carries approvals and
+// alerts as cards (#174) - and HRMS becomes "Attendance", both consciously
+// renamed for the store persona alone (see the amendment above). Approvals and
+// Alerts stay in the manifest as Home's own items; they are simply not one of
+// Dashboard's tabs, so they stay reachable by URL and from the bell, never from
+// this row.
 const STORE_LAYOUT: PersonaLayout = [
-  "home",
-  "sell",
+  { section: "home", label: "Dashboard", tabs: ["/"] },
+  SELL_STRIP,
   INVENTORY_FOLD,
-  "receive_goods",
-  "transfer",
-  "booking",
-  "money",
-  "offers_price",
-  "reports",
-  // Reads "HRMS" (#118 renamed it from "Staff").
-  "hrms",
+  { section: "receive_goods", tabs: ["/receive"] },
+  { section: "transfer", tabs: ["/transfer", "/transfer/requests", "/transfer/in-transit"] },
+  { section: "booking", tabs: ["/booking"] },
+  { section: "money", tabs: ["/money/day-summary", "/money/store-targets", "/money/expenses"] },
+  {
+    section: "offers_price",
+    tabs: ["/offers/price-list", "/offers", "/offers/discounts", "/offers/eoss"],
+  },
+  {
+    section: "reports",
+    tabs: ["/reports/sales", "/reports/stock", "/reports/profit", "/reports/daily", "/reports/maker"],
+  },
+  // Member Details and Payroll are not tabs here - a store manager's extra
+  // `hrms: manage` rung would otherwise add Member Details, and D10 §10 keeps
+  // this row to the one built screen (Attendance is a placeholder; the grill
+  // rules the manager loses nothing real today).
+  { section: "hrms", label: "Attendance", tabs: ["/staff/attendance"] },
 ];
 
 /** Role code → its sidebar arrangement. Absent ⇒ the flat list. Both store role
@@ -592,7 +697,7 @@ const FOLDS: NavFoldDef[] = [
   ...new Set(
     Object.values(PERSONA_LAYOUTS)
       .flat()
-      .filter((row): row is NavFoldDef => typeof row !== "string"),
+      .filter(isFoldRow),
   ),
 ];
 
@@ -658,7 +763,23 @@ export function visibleSections(user: {
 /** A row of the rendered sidebar. */
 export type NavRow =
   | { kind: "section"; key: string; section: VisibleSection }
-  | { kind: "fold"; key: string; fold: NavFoldDef; tabs: FoldTab[] };
+  | { kind: "fold"; key: string; fold: NavFoldDef; tabs: FoldTab[] }
+  | {
+      kind: "strip";
+      key: string;
+      strip: NavStripDef;
+      /** The section the strip stands for - its icon, layer and fallback label.
+       *  Resolved here because a row only exists where the section does. */
+      def: NavSectionDef;
+      label: string;
+      /** Never empty: a strip with no visible tab is not drawn at all. */
+      tabs: NavItem[];
+    };
+
+/** A strip's key, in the same namespace as a section code and a fold's key. */
+export function stripKey(strip: NavStripDef): string {
+  return `strip:${strip.section}`;
+}
 
 /** The tabs of `fold` this person may see, in the fold's own order.
  *
@@ -688,6 +809,95 @@ export function foldTabsFor(
   return user ? foldTabs(fold, visibleSections(user)) : [];
 }
 
+/** The tabs of `strip` this person may see, in the strip's own order.
+ *
+ *  Reads the *output* of the access filter, exactly as `foldTabs` does: a tab
+ *  exists only where the menu entry behind it survived that filter, so a strip
+ *  can never show a screen the sidebar would have hidden. An entry the section
+ *  no longer carries at all simply has no tab. */
+export function stripTabs(strip: NavStripDef, sections: VisibleSection[]): NavItem[] {
+  const section = sections.find((s) => s.def.code === strip.section);
+  if (!section) return [];
+  const byPath = new Map(section.items.map((i) => [i.to, i]));
+  return strip.tabs.flatMap((to) => {
+    const item = byPath.get(to);
+    return item ? [item] : [];
+  });
+}
+
+/** This persona's name for a strip row: its own override, else whatever the
+ *  server called the section, else the manifest's label. */
+export function stripLabel(strip: NavStripDef, sections: VisibleSection[]): string {
+  const section = sections.find((s) => s.def.code === strip.section);
+  return strip.label ?? section?.label ?? SECTION_DEFS.get(strip.section)?.label ?? strip.section;
+}
+
+/** The strip whose section owns this URL for this persona, or null.
+ *
+ *  Per persona, because a strip is an arrangement: an owner whose sidebar still
+ *  expands Sell gets no strip and so no redundant second copy of their own menu.
+ *  Asked of `itemOwning`'s *section*, not its tab list (#229): a screen the
+ *  strip lists no tab for - `/transfer/new`, `/receive/pt/12`, `/approvals`
+ *  under the Home strip - still belongs to a section this persona's sidebar
+ *  strips, so the row still lights. Whether a *tab row* is worth drawing there
+ *  is `sectionTabsFor`'s question, not this one. */
+export function stripOwning(pathname: string, roleCode: string): NavStripDef | null {
+  // Asked of `itemOwning` rather than walked again here: which screen a URL
+  // belongs to is already the manifest's one rule, and a second walk beside it
+  // is a second answer waiting to disagree with the route guard.
+  const owner = itemOwning(pathname);
+  if (!owner) return null;
+  const strips = (PERSONA_LAYOUTS[roleCode] ?? []).filter(isStripRow);
+  return strips.find((s) => s.section === owner.section) ?? null;
+}
+
+/** The tab lit at `pathname`: the one whose path is the deepest prefix of it, so
+ *  a child URL keeps its parent tab lit (`/sell/returns/12` lights Return &
+ *  Exchange, a bill under `/sell/9` lights Billing). Null when this person holds
+ *  no tab covering where they are standing. */
+export function activeStripTab(tabs: NavItem[], pathname: string): NavItem | null {
+  const normalized = normalizePath(pathname);
+  let best: NavItem | null = null;
+  for (const tab of tabs) {
+    const path = itemPath(tab);
+    if (!underPrefix(normalized, path)) continue;
+    if (!best || path.length > itemPath(best).length) best = tab;
+  }
+  return best;
+}
+
+/** The tab row a stripped section puts on its own screens, or null for no row.
+ *
+ *  The whole decision in one place, because the shell only draws it: which strip
+ *  owns this URL for this persona, which of its tabs access left standing, which
+ *  one is lit, and what the header calls the row. Null - draw nothing - covers
+ *  the three cases the grill named: a persona whose sidebar still expands the
+ *  section, a strip access has cut to a single tab (a strip of one is not a
+ *  choice), and a URL none of the surviving tabs covers. */
+export interface SectionTabs {
+  /** The eyebrow: the strip's row name. */
+  crumb: string;
+  /** The lit tab's name, which is this screen's title. */
+  title: string;
+  tabs: NavItem[];
+  active: NavItem;
+}
+
+export function sectionTabsFor(
+  pathname: string,
+  user: Parameters<typeof visibleSections>[0] | null | undefined,
+): SectionTabs | null {
+  if (!user) return null;
+  const strip = stripOwning(pathname, user.role?.code ?? "");
+  if (!strip) return null;
+  const sections = visibleSections(user);
+  const tabs = stripTabs(strip, sections);
+  if (tabs.length < 2) return null;
+  const active = activeStripTab(tabs, pathname);
+  if (!active) return null;
+  return { crumb: stripLabel(strip, sections), title: active.label, tabs, active };
+}
+
 /** The tab `slug` names, or the first one this person can see. An unknown slug,
  *  or one whose tab this person is not shown, falls back rather than leaving
  *  them on a page with nothing on it. */
@@ -714,6 +924,25 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
       spokenFor.add(row);
       const s = byCode.get(row);
       if (s?.items.length) rows.push({ kind: "section", key: row, section: s });
+      continue;
+    }
+    if (isStripRow(row)) {
+      // A strip speaks for its section whether or not any tab survives: the
+      // head is gone from this persona's sidebar either way.
+      spokenFor.add(row.section);
+      const section = byCode.get(row.section);
+      const tabs = stripTabs(row, sections);
+      // No tab this person can see ⇒ nowhere for the row to land; don't draw it.
+      if (section && tabs.length) {
+        rows.push({
+          kind: "strip",
+          key: stripKey(row),
+          strip: row,
+          def: section.def,
+          label: stripLabel(row, sections),
+          tabs,
+        });
+      }
       continue;
     }
     // A fold speaks for its sections whether or not it draws a tab for each of
@@ -763,6 +992,19 @@ export function sectionsIn(rows: NavRow[]): VisibleSection[] {
   return rows.flatMap((r) => (r.kind === "section" ? [r.section] : []));
 }
 
+/** Does `row` draw as a single line - a link straight to a screen, rather than
+ *  a head with several items under it? True for a fold and a strip, whose
+ *  whole point is to be one line, and for a section access has cut to exactly
+ *  one visible item. This is the same question the sidebar's own
+ *  `renderSection` already answers to decide whether a section draws as
+ *  `oneLineRow` or as a toggle over `.nav-items` (#96) - and, since #230, the
+ *  question the icon rail asks to decide "navigate on click" versus "open a
+ *  flyout". One predicate, so the two can never draw a different answer for
+ *  the same row. */
+export function isOneLineRow(row: NavRow): boolean {
+  return row.kind !== "section" || row.section.items.length === 1;
+}
+
 /** Is the folded page where this person is standing? True on the fold's own URL
  *  and on any standalone screen it folds - so a store person who lands on
  *  `/stock` from the global search still sees which row they are on. */
@@ -777,9 +1019,11 @@ export function isActiveFold(fold: NavFoldDef, pathname: string): boolean {
  *  a folded page draws as one link and so has nothing to unfold. */
 export function headingOwning(pathname: string, roleCode: string): string | null {
   const layout = PERSONA_LAYOUTS[roleCode] ?? [];
-  const folds = layout.filter((row): row is NavFoldDef => typeof row !== "string");
+  const folds = layout.filter(isFoldRow);
   const here = folds.find((f) => isActiveFold(f, pathname));
   if (here) return foldKey(here);
+  const strip = stripOwning(pathname, roleCode);
+  if (strip) return stripKey(strip);
   for (const section of SECTIONS) {
     if (section.items.some((i) => isActiveItem(i, pathname))) return section.code;
   }
