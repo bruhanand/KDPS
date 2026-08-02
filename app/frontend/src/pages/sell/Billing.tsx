@@ -629,7 +629,7 @@ function Counter({ storeName }: { storeName?: string }) {
               <ScanBox
                 boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
                 value={typed}
-                disabled={locked}
+                disabled={locked || counterBlocked}
                 onChange={setTyped}
                 onSubmit={applyScan}
               />
