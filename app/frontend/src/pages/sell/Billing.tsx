@@ -39,6 +39,8 @@ import { storeStateCodeOf, taxKindFor } from "../../till/gstin";
 import type { B2bTaxKind } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import type { Ask } from "../../till/pin";
+import { mockPaymentAdapter } from "../../till/payment";
+import type { PaymentAdapter, UpiCharged } from "../../till/payment";
 import { browserPrintAdapter } from "../../till/print";
 import { playTone, toneForScan } from "../../till/sounds";
 import { receiptHtml } from "../../till/receipt";
@@ -59,6 +61,7 @@ import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
 import { TaxFigure } from "./billing/TaxFigure";
+import { UpiCharge } from "./billing/UpiCharge";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
@@ -148,7 +151,17 @@ export default function BillingPage() {
   );
 }
 
-function Counter({ storeName }: { storeName?: string }) {
+function Counter({
+  storeName,
+  // Passed rather than imported, unlike the print adapter next to it: the
+  // payment terminal is the one seam a test has to be able to swap, and the
+  // hardware slice (#190's sibling) replaces exactly this default (#248,
+  // design.md). Nothing else on the screen knows which adapter it is.
+  payments = mockPaymentAdapter,
+}: {
+  storeName?: string;
+  payments?: PaymentAdapter;
+}) {
   const { engine, till } = useTill();
   const [params, setParams] = useSearchParams();
   const [cart, setCart] = useState<Cart>(emptyCart);
@@ -176,6 +189,10 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Open when a manager is being asked for their PIN, carrying exactly what
    *  they are being shown - which is also what their approval will cover. */
   const [asking, setAsking] = useState<Ask[] | null>(null);
+  /** Open while a UPI charge is on the card (#248). It carries no state of its
+   *  own beyond "open": the figure being charged is read from the UPI row at
+   *  the moment it opens, and closing it leaves the bill untouched. */
+  const [charging, setCharging] = useState(false);
   // --- cart safety: autosave and undo (#244) --------------------------------
   /** One snapshot per cart action, oldest first - see `till/undo.ts`. */
   const [undoStack, setUndoStack] = useState<UndoStack>(emptyUndo);
@@ -682,6 +699,40 @@ function Counter({ storeName }: { storeName?: string }) {
     setCart((current) => ({ ...current, payment: { ...current.payment, ...patch } }));
   }
 
+  /**
+   * The bank answered a UPI charge (#248) - the one thing that puts a
+   * `confirmed` stamp on a bill.
+   *
+   * Unreachable on this build by construction: the mock adapter cannot emit
+   * success (`till/payment.ts`), so the till only ever sends `manual`. It is
+   * written now because the hardware slice must be able to land without
+   * touching this screen.
+   *
+   * `useCallback` because `UpiCharge` restarts its charge when this changes,
+   * and a fresh closure on every render would regenerate the QR under a
+   * customer trying to scan it.
+   */
+  const upiConfirmed = useCallback((charged: UpiCharged) => {
+    runSeq.current += 1;
+    setCart((current) => ({
+      ...current,
+      // The charged figure, not the typed one. They are the same figure - the
+      // card charges what the row says - but pinning the stamp's own amount
+      // into the row is what keeps `confirmedUpiOf` honest if they ever drift.
+      payment: {
+        ...current.payment,
+        upi_paise: charged.amount_paise,
+        upi_charge: charged,
+      },
+    }));
+    // The card deliberately stays open on a success. It is the one state that
+    // carries a fact the cashier may need to read out - the acquirer's
+    // reference - and a card that closed itself would flash it past them; it is
+    // also the only state that would otherwise never be on screen at all, which
+    // would leave the hardware slice as the first thing ever to render it.
+    setNote(`The bank confirmed the UPI payment. Reference ${charged.reference}.`);
+  }, []);
+
   /** The customer strip, typed into directly - the third source (with a scan
    *  and the exchange hand-off) that can race the mount-time draft read. */
   function editCustomer(next: TillCustomer) {
@@ -744,6 +795,9 @@ function Counter({ storeName }: { storeName?: string }) {
     setCustomer(NO_CUSTOMER);
     setUndoStack(emptyUndo());
     setPendingDraft(null);
+    // A charge card left open over a bill that no longer exists would be
+    // charging a figure nobody is being asked for.
+    setCharging(false);
     clearScan();
   }
 
@@ -1249,6 +1303,7 @@ function Counter({ storeName }: { storeName?: string }) {
                 // they agreed to as well, and the fresh authorisation replaces the
                 // old one whole.
                 onAsk={() => setAsking(bill.asks)}
+                onShowQr={() => setCharging(true)}
               />
               <CustomerStrip
                 value={customer}
@@ -1310,6 +1365,22 @@ function Counter({ storeName }: { storeName?: string }) {
           </div>,
           document.body,
         )}
+
+      {/* The QR charge card (#248). Gated on the figure as well as on the
+          cashier's tap: a card charging nought is not a charge, and the UPI row
+          can fall to nought behind the modal in only one way - a `freshCounter`
+          - which closes it anyway. */}
+      {charging && bill.split.upi_paise > 0 && (
+        <UpiCharge
+          amountPaise={bill.split.upi_paise}
+          adapter={payments}
+          onConfirmed={upiConfirmed}
+          onClose={() => {
+            setCharging(false);
+            scan.focus();
+          }}
+        />
+      )}
 
       {asking && (
         <ManagerPin
