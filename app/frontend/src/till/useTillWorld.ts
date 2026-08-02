@@ -13,6 +13,15 @@
 //
 // It reloads when the dataset lands and after every bill, because the local
 // shelf moves at Save & Print and the next scan has to read the new count.
+//
+// **The customer book is deliberately not here** (#245), and the reload is why.
+// Every other table on this hook is bounded by one store's shelf; the customer
+// list is all-KDPS and only ever grows, so putting it here would re-read the
+// whole business's phone book from IndexedDB into React state after every single
+// bill - a stall that gets worse every month, at the one screen where a stall is
+// a queue of customers. The typeahead reads it straight from Dexie by its
+// `mobile` index instead, which is what design.md's `searchCustomers` specifies
+// and what an index is for.
 
 import { useCallback, useEffect, useState } from "react";
 

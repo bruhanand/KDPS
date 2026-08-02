@@ -62,6 +62,7 @@ export interface TillCounts {
   salesmen: number;
   managers: number;
   gstSlabs: number;
+  customers: number;
   held: number;
 }
 
@@ -123,6 +124,7 @@ const EMPTY_COUNTS: TillCounts = {
   salesmen: 0,
   managers: 0,
   gstSlabs: 0,
+  customers: 0,
   held: 0,
 };
 
@@ -567,7 +569,7 @@ export class TillEngine {
    *  are counts and one small table - and it is the only writer of the snapshot's
    *  facts, so nothing on screen can drift from what is on disk. */
   async refresh(): Promise<void> {
-    const [items, stock, offers, creditNotes, salesmen, managers, gstSlabs, heldBills] =
+    const [items, stock, offers, creditNotes, salesmen, managers, gstSlabs, customers, heldBills] =
       await Promise.all([
         this.db.items.count(),
         this.db.stock.count(),
@@ -576,6 +578,7 @@ export class TillEngine {
         this.db.salesmen.count(),
         this.db.managers.count(),
         this.db.gstSlabs.count(),
+        this.db.customers.count(),
         listHolds(this.db),
       ]);
     const held = heldBills.length;
@@ -595,7 +598,7 @@ export class TillEngine {
 
     this.publish({
       ready: true,
-      counts: { items, stock, offers, creditNotes, salesmen, managers, gstSlabs, held },
+      counts: { items, stock, offers, creditNotes, salesmen, managers, gstSlabs, customers, held },
       held: heldBills,
       queue,
       pending: queue.length,

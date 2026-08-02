@@ -50,7 +50,7 @@ from django.utils.dateparse import parse_datetime
 
 from accounts.models import ScopeType, User
 from core.documents import DocStatus
-from masters.models import Cohort, GstSlab, Season, Sku
+from masters.models import Cohort, Customer, GstSlab, Season, Sku
 from sell.models import CreditNote, SellPolicy
 from stockledger.models import StockOnHand
 
@@ -70,6 +70,7 @@ SECTIONS = [
     "managers",
     "seasons",
     "policy",
+    "customers",
     "deleted",
 ]
 
@@ -588,6 +589,89 @@ def test_the_cursor_laps_backwards_so_a_late_commit_cannot_be_missed(till):
 
     assert cursor is not None
     assert cursor < before
+
+
+# --- #245: the customer list rides the same cursor ------------------------
+#
+# The one section in this payload that is deliberately **not** store-scoped. Every
+# other store-owned list here is narrowed to this counter on purpose, so a
+# customer section that were narrowed the same way would look right and be wrong:
+# a Deoghar regular walking into Ranchi has to be recognised there (grill Q6).
+
+
+def test_the_whole_customer_book_rides_down_on_a_bootstrap(till):
+    """Names and numbers only, and everybody's - no store filter, no history.
+
+    The absent columns are the point as much as the present ones: the till gets a
+    phone book, not a purchase record, so a device on a shop floor cannot answer
+    what a customer has ever bought or spent.
+    """
+    Customer.objects.create(mobile="9835211442", name="Sunita Devi", gstin="")
+    Customer.objects.create(mobile="9430011223", name="Ranchi Traders", gstin="20AAAAA0000A1Z5")
+
+    body = till["client"].get(URL).json()
+
+    assert body["customers"] == [
+        {"mobile": "9430011223", "name": "Ranchi Traders", "gstin": "20AAAAA0000A1Z5"},
+        {"mobile": "9835211442", "name": "Sunita Devi", "gstin": ""},
+    ]
+
+
+def test_a_bill_taken_at_another_store_reaches_this_counter_on_its_next_pull(
+    till, django_capture_on_commit_callbacks
+):
+    """AC2, end to end and through the accept pipeline rather than by INSERT.
+
+    The upsert that writes the master row fires on commit at whichever counter
+    took the bill, and this one hears about it by cursor alone - which is the
+    whole reason the section is unscoped.
+
+    The callbacks are captured and run by hand because a test's transaction never
+    commits: without that, the step this test is about would be skipped and the
+    assertion would pass or fail on nothing.
+    """
+    cursor = _cursor_now()
+    other = build_store(code="SEL-HZB")
+    stock_in(other, 2)
+    elsewhere = client_for(build_cashier(other, username="hzb_cashier"))
+    payload = bill_payload(
+        other,
+        build_salesman(other, code="ZZZZ"),
+        till_seq=1,
+        customer={"name": "Sunita Devi", "mobile": "+91 98352-11442", "gstin": ""},
+    )
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert elsewhere.post(SALES_URL, payload, format="json").status_code == 201, "the bill"
+
+    body = till["client"].get(URL, {"since": cursor}).json()
+
+    # The bare 10-digit form: the accept boundary collapses `+91 …` on both the
+    # bill and the master row, so the till and the analytics join meet on one
+    # spelling.
+    assert body["customers"] == [{"mobile": "9835211442", "name": "Sunita Devi", "gstin": ""}]
+
+
+def test_a_delta_carries_only_the_customers_that_changed(till):
+    """The list is all-KDPS and only ever grows, so a delta that re-sent it whole
+    would push every customer in the business down every till every five minutes.
+    """
+    known = Customer.objects.create(mobile="9835211442", name="Sunita Devi", gstin="")
+    cursor = _cursor_now()
+
+    quiet = till["client"].get(URL, {"since": cursor}).json()
+
+    assert quiet["customers"] == []
+
+    Customer.objects.filter(pk=known.pk).update(
+        name="Sunita Devi Kumari", updated_at=timezone.now()
+    )
+
+    moved = till["client"].get(URL, {"since": cursor}).json()
+
+    assert moved["customers"] == [
+        {"mobile": "9835211442", "name": "Sunita Devi Kumari", "gstin": ""}
+    ]
 
 
 def _cursor_now() -> str:

@@ -29,6 +29,7 @@ import type {
   TillCreditNote,
   TillGstSlab,
   TillItem,
+  TillKnownCustomer,
   TillManager,
   TillOffer,
   TillSalesman,
@@ -138,6 +139,11 @@ export class TillDb extends Dexie {
    *  disk is exactly the payload and nothing has to strip a key field back off
    *  it on read. */
   draft!: Table<DraftPayload, string>;
+  /** The counter's phone book (#245) - everybody KDPS has billed, keyed by the
+   *  mobile the accept boundary collapsed them to. All-KDPS rather than this
+   *  store's, so a regular is recognised wherever they walk in, and searched
+   *  offline because there is no lookup endpoint by design. */
+  customers!: Table<TillKnownCustomer, string>;
 
   constructor(storeCode: string) {
     super(databaseName(storeCode));
@@ -174,6 +180,13 @@ export class TillDb extends Dexie {
     // `customers` table design.md plans alongside it lands with #245 on the
     // next free version, not folded in here.
     this.version(3).stores({ draft: "" });
+    // The synced customer list (#245). A version of its own rather than an edit
+    // to version 3, and for the third time the reason is the same: a till that
+    // has been billing since #244 has unsynced money on disk, and rewriting a
+    // shipped version's schema is what makes Dexie throw that database away
+    // instead of upgrading it. Only the new table is named - a `stores` call
+    // lists what *changes*, so every table above is carried forward untouched.
+    this.version(4).stores({ customers: "mobile" });
   }
 }
 

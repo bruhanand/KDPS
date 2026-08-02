@@ -55,10 +55,12 @@ export function backoffMs(attempts: number): number {
  * One transaction, so the counter never bills off half a sync. Three shapes of
  * section, each for a stated reason (contract, step 3, amendment):
  *
- *   · **Deltaed** - items and stock arrive by watermark, are upserted by key, and
- *     lose rows only through `deleted`. A bootstrap replaces them wholesale,
- *     because a bootstrap reports nothing as deleted and a row that was withdrawn
- *     while the till was off would otherwise stay on the shelf for ever.
+ *   · **Deltaed** - items, stock and customers arrive by watermark and are
+ *     upserted by key. A bootstrap replaces them wholesale, because a bootstrap
+ *     reports nothing as deleted and a row that was withdrawn while the till was
+ *     off would otherwise stay on the shelf for ever. Items and stock also lose
+ *     rows through `deleted`; the customer list has no such channel and needs
+ *     none, because a customer row is never removed in v1.
  *   · **Sent whole every time** - store, tax slabs, salesmen and managers. The
  *     manager list is the one that matters: it is a set of override credentials,
  *     and a rung withdrawn at head office has to be withdrawn at the counter on
@@ -78,6 +80,7 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       db.managers,
       db.gstSlabs,
       db.seasons,
+      db.customers,
       db.meta,
       db.queue,
     ],
@@ -113,6 +116,14 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       if (payload.seasons) {
         await db.seasons.clear();
         await db.seasons.bulkPut(payload.seasons);
+      }
+      // Customers (#245): a watermark and an upsert by mobile, like the items.
+      // Guarded for the same rolling-deploy minutes the seasons are - an older
+      // server answers without the section, and that means "nothing to say", not
+      // "the phone book is empty".
+      if (payload.customers) {
+        if (payload.full) await db.customers.clear();
+        await db.customers.bulkPut(payload.customers);
       }
 
       // A withdrawal names a barcode and takes every season of that piece with

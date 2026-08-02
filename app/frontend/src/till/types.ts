@@ -120,6 +120,24 @@ export interface TillSeason {
   sort_order: number;
 }
 
+/** Somebody KDPS has billed before, as the last dataset pull left them (#245).
+ *
+ *  Deliberately a different type from `TillCustomer` even though the three fields
+ *  match today, because they are answers to different questions: `TillCustomer`
+ *  is who *this bill* is for and is snapshotted onto it, this is a row in the
+ *  shared phone book the typeahead searches. Only one of the two can grow a
+ *  field - a customer's last visit belongs on the master, never on a printed
+ *  bill - and collapsing them now is what would make that addition silently
+ *  change what every cart carries.
+ *
+ *  All-KDPS, not this store's: a Deoghar regular must be recognised in Ranchi
+ *  (grill Q6). No purchase history rides down with it. */
+export interface TillKnownCustomer {
+  mobile: string;
+  name: string;
+  gstin: string;
+}
+
 /** The shop floor's money dials. One today; the shape is here so a second is a
  *  field rather than a section. */
 export interface TillPolicy {
@@ -149,6 +167,15 @@ export interface DatasetPayload {
   managers: TillManager[];
   seasons: TillSeason[];
   policy: TillPolicy;
+  /** Everybody the business has billed, deltaed by the same cursor as the items.
+   *  No `deleted` sibling: a customer row is never removed in v1.
+   *
+   *  Optional because a server that predates #245 answers without it, and the
+   *  till has to read that absence as "nothing to say" rather than "the phone
+   *  book is empty" - a rolling deploy is exactly those few minutes. Spelled
+   *  optional rather than guarded-but-required so the compiler keeps the guard
+   *  honest; `seasons` above carries the same contract in the older spelling. */
+  customers?: TillKnownCustomer[];
   deleted: {
     items: string[];
     offers: number[];

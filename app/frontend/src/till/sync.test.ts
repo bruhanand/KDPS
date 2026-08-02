@@ -90,6 +90,102 @@ describe("the dataset landing", () => {
     expect(await db.seasons.count()).toBe(2);
   });
 
+  it("lands the customer list the typeahead reads (#245)", async () => {
+    const { db } = till();
+
+    await applyDataset(
+      db,
+      dataset({
+        customers: [
+          { mobile: "9835211442", name: "Sunita Devi", gstin: "" },
+          { mobile: "9430011223", name: "Ranchi Traders", gstin: "20AAAAA0000A1Z5" },
+        ],
+      }),
+    );
+
+    expect(await db.customers.count()).toBe(2);
+    expect(await db.customers.get("9430011223")).toMatchObject({ gstin: "20AAAAA0000A1Z5" });
+  });
+
+  it("adds a customer on a delta without dropping the ones it already knows", async () => {
+    // The list is all-KDPS and only grows, so a delta names one new shopper and
+    // must not be read as "these are the only customers there are".
+    const { db } = till();
+    await applyDataset(
+      db,
+      dataset({ customers: [{ mobile: "9835211442", name: "Sunita Devi", gstin: "" }] }),
+    );
+
+    await applyDataset(
+      db,
+      dataset({
+        full: false,
+        cursor: "later",
+        customers: [{ mobile: "9430011223", name: "Ranchi Traders", gstin: "" }],
+      }),
+    );
+
+    expect((await db.customers.toArray()).map((c) => c.mobile).sort()).toEqual([
+      "9430011223",
+      "9835211442",
+    ]);
+  });
+
+  it("takes the newer spelling of a name a delta re-states", async () => {
+    const { db } = till();
+    await applyDataset(
+      db,
+      dataset({ customers: [{ mobile: "9835211442", name: "Sunita Devi", gstin: "" }] }),
+    );
+
+    await applyDataset(
+      db,
+      dataset({
+        full: false,
+        cursor: "later",
+        customers: [{ mobile: "9835211442", name: "Sunita Devi Kumari", gstin: "" }],
+      }),
+    );
+
+    expect(await db.customers.count()).toBe(1);
+    expect((await db.customers.get("9835211442"))?.name).toBe("Sunita Devi Kumari");
+  });
+
+  it("rebuilds the customer list from a bootstrap rather than merging into it", async () => {
+    // A bootstrap carries the whole book by construction, so replacing is the
+    // only reading that can ever repair a till whose list drifted - and nothing
+    // is lost by it, because a customer row is never removed server-side.
+    const { db } = till();
+    await applyDataset(
+      db,
+      dataset({ customers: [{ mobile: "9835211442", name: "Sunita Devi", gstin: "" }] }),
+    );
+
+    await applyDataset(
+      db,
+      dataset({ customers: [{ mobile: "9430011223", name: "Ranchi Traders", gstin: "" }] }),
+    );
+
+    expect((await db.customers.toArray()).map((c) => c.mobile)).toEqual(["9430011223"]);
+  });
+
+  it("keeps the customer list when a server too old to send one answers", async () => {
+    // The rolling-deploy minutes again: absent is "nothing to say", not "nobody
+    // has ever shopped here". Wiping it would empty the typeahead at a counter
+    // that is mid-queue, and it would not refill until the next bootstrap.
+    const { db } = till();
+    await applyDataset(
+      db,
+      dataset({ customers: [{ mobile: "9835211442", name: "Sunita Devi", gstin: "" }] }),
+    );
+
+    const old = dataset({});
+    delete (old as { customers?: unknown }).customers;
+    await applyDataset(db, old);
+
+    expect(await db.customers.count()).toBe(1);
+  });
+
   it("keeps the same piece in two seasons apart", async () => {
     // A barcode is not a key: the same piece bought twice is two lots at two
     // ticket prices, and a counter that collapsed them would sell one at the
