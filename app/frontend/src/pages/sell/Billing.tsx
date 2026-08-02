@@ -1253,6 +1253,11 @@ function Counter({ storeName }: { storeName?: string }) {
               <CustomerStrip
                 value={customer}
                 storeStateCode={storeState}
+                // The counter's own phone book, for the typeahead (#249). Read
+                // through `engine.db` rather than a second `TillDb`, the same
+                // rule the draft follows - two Dexie connections to one
+                // database block each other through a version change.
+                db={engine?.db ?? null}
                 locked={locked}
                 // `editCustomer`, not `setCustomer`: the strip's fields are
                 // part of the same autosaved snapshot the cart is (#244), so

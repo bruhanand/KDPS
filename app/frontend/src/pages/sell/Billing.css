@@ -36,7 +36,16 @@
 .bill-top { min-height: 0; }
 
 .bill-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
+/* Element-qualified, and that is not decoration: a bare `.bill-scan` ties with
+   the app's generic `.input` on specificity - both are one class - so the
+   winner is whichever bundle chunk the bundler happens to emit last, and
+   `.input`'s `width: 100%` was winning. The scan box rendered 827px wide at
+   1366px, which pushed the lifecycle buttons onto rows of their own and made
+   the top band 352px tall - a third of a counter's screen spent on a box that
+   holds thirteen digits, and a third the rail then had to scroll for. Same
+   trap as `table.data th` and `input.bill-cell` below, same answer. (#243's
+   width, #249's measurement.) */
+input.bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
 .bill-lifecycle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* The autosave indicator (#244) - quiet on purpose, beside the bill number
@@ -249,14 +258,23 @@ select.bill-season { min-width: 0; }
 }
 
 /* The rail (#243): "both always visible" (design.md) holds whenever the
-   payment card plus the customer card fit the available height - true on
-   most counters, since neither is asked to grow here (#246/#249 are the
-   tickets that reshape their fields). When they do not fit - a laptop at the
-   1280px floor, or a persona whose stripped-section tab strip eats a row -
-   the column scrolls on its own rather than the alternative, which is worse:
-   its bottom half sliding under the footer with no way to reach it at all.
-   `.bill-lines` gets the same treatment (`min-height: 0` + its own
-   `overflow-y: auto`) for the identical reason. */
+   payment card plus the customer card fit the available height. When they do
+   not, the column scrolls on its own rather than the alternative, which is
+   worse: its bottom half sliding under the footer with no way to reach it at
+   all. `.bill-lines` gets the same treatment (`min-height: 0` + its own
+   `overflow-y: auto`) for the identical reason.
+
+   grill-decisions amendment 12 made that scroll a *temporary* exception, to be
+   deleted once #246 and #249 had trimmed the two cards enough to fit 1366×768.
+   Both have now trimmed them, and it does not fit - measured on this branch at
+   that size, as `deo.cashier`, with an empty bill: the rail's content is 532px
+   (payment 300 + gap 16 + customer 216, itself down from ~300) against 375px
+   of work area. The height is not in the cards. It is in the bands around
+   them - a 209px top strip (a persona tab row, then a page header carrying
+   eyebrow, title and bill number stacked), a 50px footer and 74px of page
+   padding - which is #243's frame, not this ticket's cards. So the exception
+   stays until that is ruled on, and it stays as `auto`, which means a counter
+   whose bands do leave room never sees a scrollbar at all. */
 .bill-pay { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
 .bill-panel { padding: 14px 16px; }
 .bill-panel .field { margin-top: 10px; }
@@ -339,6 +357,48 @@ select.bill-season { min-width: 0; }
   color: var(--caption); background: var(--band-edge-bg); border: 1px solid var(--band-edge-bd);
   font-weight: 600;
 }
+
+/* The customer card (#249). Two short fields on one row instead of three
+   stacked ones, and the registration behind a disclosure - between them that is
+   the height grill-decisions amendment 12 sent this ticket to find, so the rail
+   holds both cards at 1366×768 without a scrollbar of its own. A mobile number
+   and a first name both read fine in half of a 340px rail; a GSTIN does not,
+   which is the other reason it is the one that folds away. */
+.bill-customer-card .eyebrow { margin-top: 0; }
+.bill-customer-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.bill-panel .bill-customer-fields .field { margin-top: 0; }
+.bill-customer-fields .input { padding: 9px 11px; font-size: 14px; }
+/* The disclosure itself - quiet, because on most bills the answer is no. */
+.bill-business-open {
+  margin-top: 10px; padding: 6px 11px; font-size: 12.5px; font-weight: 600;
+  color: var(--muted);
+}
+/* The card's last word, and the one thing on it that is not a control: no
+   bottom margin, because a paragraph's default one is a card's worth of
+   padding again. */
+.bill-panel .bill-customer-note { margin: 8px 0 0; font-size: 12px; }
+
+/* The phone book, under the mobile field (#249, Q11: nothing pushes the
+   layout). Portaled to `document.body` and placed by `usePositionedPopover`,
+   which here is load-bearing twice: the rail is a scroll box of its own and
+   would clip an ordinary descendant invisibly, and a panel that pushed the card
+   down would move Save & Print while a cashier was reaching for it. Fixed
+   width, because a portaled node answers to no parent's column - and a
+   `max-height` for the same reason `.bill-float` carries one: `position: fixed`
+   ignores page scroll, so rows below the fold would be there and unreachable. */
+.bill-customer-float {
+  position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 32px);
+  overflow-y: auto; padding: 12px 14px;
+}
+.bill-customer-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+/* Name left, number right, one line each - the two things a cashier checks
+   against what the customer just said, in the order they said them. */
+.bill-customer-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: left; font-weight: 500; font-size: 13px; padding: 7px 11px;
+}
+.bill-customer-row .muted-cell { font-size: 12px; }
+.bill-customer-none { display: block; margin: 0 0 10px; font-size: 12.5px; }
 
 .bill-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
 .bill-note { display: flex; flex-direction: column; gap: 4px; }
@@ -424,5 +484,7 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
   .table-wrap.bill-grid-wrap { overflow: auto; }
   table.data.bill-grid thead th { position: static; }
   .bill-pay { margin-top: 16px; }
-  .bill-scan { width: 220px; }
+  /* Element-qualified for the same reason the desktop rule above is, and it
+     has to be, or it loses to that rule on specificity regardless of order. */
+  input.bill-scan { width: 220px; }
 }
