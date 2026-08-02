@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS - Design Component Inventory (Redesign Map)</title>
+<style>
+  /* This document renders itself in the app's own design language, so every
+     sample below is live: change a token here and watch the component change. */
+  :root {
+    --paper: #faf7f2; --surface: #fffdfb; --sidebar: #f1ece4; --sidebar-border: #e4dccf;
+    --hairline: #ece4d9; --inner: #f6f1ea;
+    --navy: #1f2d4d; --navy2: #2c3e63; --rust: #c4623f; --rust-soft: #e8a07f; --brand-red: #e53e35;
+    --ink: #222222; --muted: #837a6e; --caption: #9a8f80;
+    --green: #1f7a4d; --green-bg: #e7f4ee; --green-bd: #bfe3cf;
+    --amber: #9a6700; --amber-bg: #fdf3da; --amber-bd: #eddca8;
+    --blue: #1e5fa8;  --blue-bg: #e6f0fb;  --blue-bd: #bcd6f3;
+    --purple: #6b3fb0; --purple-bg: #f3edfb; --purple-bd: #e2d6f4;
+    --red: #a32a2a;   --red-bg: #fde8e8;   --red-bd: #f1c4c4;
+    --grey: #837a6e;  --grey-bg: #efeae3;  --grey-bd: #e4dccf;
+    --band-ai-bg: #f3edfb; --band-ai-bd: #e2d6f4;
+    --radius: 16px; --radius-inner: 11px;
+    --shadow-rest: 0 3px 14px rgba(20,30,60,.06);
+    --shadow-hover: 0 8px 26px rgba(20,30,60,.11);
+    --navy-fill: #1f2d4d; --navy-rgb: 31,45,77; --rust-rgb: 196,98,63;
+    --row-hover: #fbf7f1;
+    --mono: ui-monospace, Menlo, Consolas, "SFMono-Regular", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 32px 90px; }
+  h1 { font-size: 30px; font-weight: 700; color: var(--navy); letter-spacing: -.3px; margin: 0; }
+  h2 { font-size: 21px; font-weight: 700; color: var(--ink); margin: 46px 0 6px; padding-left: 12px; border-left: 4px solid var(--rust); }
+  h3 { font-size: 16.5px; font-weight: 600; color: var(--navy2); margin: 26px 0 6px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--rust); margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 6px 0 0; }
+  p { margin: 8px 0; }
+  code, .mono { font-family: var(--mono); font-size: .92em; }
+  code { background: var(--inner); border: 1px solid var(--hairline); border-radius: 5px; padding: 1px 6px; }
+  .card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); box-shadow: var(--shadow-rest); }
+  .section-card { padding: 20px 24px; margin: 14px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; padding: 10px 14px; background: var(--inner); color: var(--muted); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--hairline); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap { overflow: auto; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-rest); margin: 14px 0; }
+  .file { font-family: var(--mono); font-size: 12px; color: var(--caption); white-space: nowrap; }
+
+  /* live samples */
+  .sample { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 18px; background: var(--inner); border-radius: var(--radius-inner); margin: 10px 0; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; justify-content: center; border: 1px solid var(--sidebar-border); background: var(--surface); color: var(--ink); padding: 9px 15px; border-radius: var(--radius-inner); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--navy-fill); border-color: var(--navy-fill); color: #fff; }
+  .btn-cta { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
+  .btn-sm { padding: 5px 12px; font-size: 12.5px; }
+  .input { padding: 12px 14px; border: 1px solid var(--sidebar-border); border-radius: var(--radius-inner); font-size: 15px; background: var(--surface); color: var(--ink); width: 220px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; letter-spacing: .2px; border: 1px solid var(--grey-bd); background: var(--grey-bg); color: var(--grey); }
+  .chip-green { background: var(--green-bg); color: var(--green); border-color: var(--green-bd); }
+  .chip-amber { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-bd); }
+  .chip-red { background: var(--red-bg); color: var(--red); border-color: var(--red-bd); }
+  .chip-blue { background: var(--blue-bg); color: var(--blue); border-color: var(--blue-bd); }
+  .chip-purple { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-bd); }
+  .chip-navy { background: rgba(var(--navy-rgb), .09); color: var(--navy); border-color: rgba(var(--navy-rgb), .16); }
+  .sku-line { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+  .sku-line b { font-weight: 700; }
+  .sku-sep { color: var(--caption); }
+  .sku-chip { background: var(--surface); border: 1px solid var(--hairline); border-radius: 5px; padding: 1px 7px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .warn-note { background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--amber); border-radius: 10px; padding: 10px 13px; font-size: 13px; }
+  .ai-note { background: var(--band-ai-bg); border: 1px solid var(--band-ai-bd); color: var(--purple); border-radius: 10px; padding: 10px 13px; font-size: 13px; }
+  .ok-note { background: var(--green-bg); border: 1px solid var(--green-bd); color: var(--green); border-radius: 10px; padding: 10px 13px; font-size: 13px; }
+
+  /* swatches */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+  .sw { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--surface); }
+  .sw i { display: block; height: 42px; }
+  .sw span { display: block; padding: 6px 9px 7px; font-size: 11px; font-family: var(--mono); color: var(--muted); line-height: 1.4; }
+  .leverage { font-weight: 700; }
+  .lv-1 { color: var(--red); } .lv-2 { color: var(--amber); } .lv-3 { color: var(--blue); }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .toc { columns: 2; column-gap: 40px; font-size: 14px; }
+  .toc a { color: var(--navy); text-decoration: none; }
+  .toc a:hover { color: var(--rust); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">KDPS Operating System · Application design · 31 July 2026</p>
+  <h1>Design Component Inventory - the redesign map</h1>
+  <p class="lead">
+    Every visual building block the app is made of, drawn from the code on <code>main</code> as of today.
+    Redesign the components on this page and you have redesigned the whole application:
+    all ~30 wired screens are compositions of these pieces.
+    Sister document: <b>00-application-map.html</b> lists every <i>page</i>; this one lists every <i>component</i>.
+  </p>
+
+  <div class="card section-card">
+    <p class="eyebrow">Contents</p>
+    <div class="toc">
+      <p><a href="#leverage">0 · Where the design lives (leverage map)</a></p>
+      <p><a href="#tokens">1 · Design tokens (colour, radius, shadow, type)</a></p>
+      <p><a href="#primitives">2 · Core primitives</a></p>
+      <p><a href="#shell">3 · Application shell</a></p>
+      <p><a href="#shared">4 · Shared React components</a></p>
+      <p><a href="#domain">5 · Domain display primitives</a></p>
+      <p><a href="#patterns">6 · Shared page patterns</a></p>
+      <p><a href="#surfaces">7 · One-off surfaces</a></p>
+      <p><a href="#debt">8 · Redesign notes &amp; debt</a></p>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2 id="leverage">0 · Where the design lives - the leverage map</h2>
+  <p>
+    The whole visual system is nine files plus per-page one-offs.
+    The leverage column says how much of the app changes when you touch that file:
+    <span class="leverage lv-1">every screen</span> ·
+    <span class="leverage lv-2">many screens</span> ·
+    <span class="leverage lv-3">one surface</span>.
+  </p>
+  <div class="table-wrap"><table>
+    <tr><th>File</th><th>What it holds</th><th>Leverage</th></tr>
+    <tr>
+      <td class="file">src/index.css</td>
+      <td>The entire token set (light + dark in one file), type scale, buttons, inputs, chips, cards, tables, SKU line. <b>This is the design system proper.</b> Its header comment states the law: every colour is a token, dark mode is a single override block, no hex outside <code>:root</code>.</td>
+      <td><span class="leverage lv-1">every screen</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/shell/AppShell.css + .tsx</td>
+      <td>Sidebar, topbar, dropdown pattern, mobile drawer, print rules. The frame around every page.</td>
+      <td><span class="leverage lv-1">every screen</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/components/PageHeader.tsx</td>
+      <td>The one header every screen renders (crumb + title + lead + actions).</td>
+      <td><span class="leverage lv-1">every screen</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/pages/Booking.css</td>
+      <td><b>A de-facto second global stylesheet.</b> Despite the name, 17+ pages import it for: toolbar, section-card, form-row, select, modal, dropzone, notes, filter-bar, qty-stepper, mode-toggle, document cards, line editor, print rules.</td>
+      <td><span class="leverage lv-2">many screens</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/pages/PtMapper.css</td>
+      <td>Same story, smaller: btn-sm, stat cards, form grids, segmented control, stage stepper, pager, ok-note, spinner - imported by several non-PT-mapper screens.</td>
+      <td><span class="leverage lv-2">many screens</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/lib/format.tsx</td>
+      <td>Money, SkuLine, StatusChip, CommercialBadge, Stat, date formatting - the domain vocabulary on screen.</td>
+      <td><span class="leverage lv-2">many screens</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/components/*</td>
+      <td>Combobox, SearchBox, ScanScreen, approval kit, InboundQueueCard - the shared interactive components.</td>
+      <td><span class="leverage lv-2">many screens</span></td>
+    </tr>
+    <tr>
+      <td class="file">src/shell/GlobalSearch.css, src/theme/ThemeToggle.tsx</td>
+      <td>Top-bar search panel; three-segment theme pill.</td>
+      <td><span class="leverage lv-3">one surface</span></td>
+    </tr>
+    <tr>
+      <td class="file">Per-page CSS (Login, Home, Inventory, AccessMatrix, StoreDashboard, Till, ScanScreen, PlannedPage)</td>
+      <td>One-off surfaces, each in its own file; catalogued in §7.</td>
+      <td><span class="leverage lv-3">one surface</span></td>
+    </tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="tokens">1 · Design tokens</h2>
+  <p>
+    The design language is the <b>"Warm" direction, approved 28 Jun 2026</b>: a locked navy/rust brand palette
+    plus six semantic status colours and the five-layer band accents, on a warm paper canvas.
+    System fonts only; <code>ui-monospace</code> for IDs, vouchers and money.
+    Dark mode (PR #61) re-values these same tokens in one <code>html[data-theme="dark"]</code> block;
+    light values are locked byte-identical to the original design.
+    <b>A palette redesign is an edit to this one file.</b>
+  </p>
+
+  <h3>Surfaces &amp; text (warm canvas)</h3>
+  <div class="swatches">
+    <div class="sw"><i style="background:#faf7f2"></i><span>--paper<br>app background</span></div>
+    <div class="sw"><i style="background:#fffdfb"></i><span>--surface<br>card / panel / tile</span></div>
+    <div class="sw"><i style="background:#f1ece4"></i><span>--sidebar<br>warm beige rail</span></div>
+    <div class="sw"><i style="background:#f6f1ea"></i><span>--inner<br>inner box wash</span></div>
+    <div class="sw"><i style="background:#ece4d9"></i><span>--hairline<br>borders / dividers</span></div>
+    <div class="sw"><i style="background:#222222"></i><span>--ink<br>body text</span></div>
+    <div class="sw"><i style="background:#837a6e"></i><span>--muted<br>secondary text</span></div>
+    <div class="sw"><i style="background:#9a8f80"></i><span>--caption<br>captions</span></div>
+  </div>
+
+  <h3>Brand &amp; structure (locked)</h3>
+  <div class="swatches">
+    <div class="sw"><i style="background:#1f2d4d"></i><span>--navy<br>headings, primary fill</span></div>
+    <div class="sw"><i style="background:#2c3e63"></i><span>--navy2<br>h3, hover fill</span></div>
+    <div class="sw"><i style="background:#c4623f"></i><span>--rust<br>accent, active nav, eyebrow</span></div>
+    <div class="sw"><i style="background:#e8a07f"></i><span>--rust-soft</span></div>
+    <div class="sw"><i style="background:#e53e35"></i><span>--brand-red<br>reserved: wordmark, login, ONE key CTA per screen</span></div>
+  </div>
+  <p class="lead">
+    Dark mode splits navy into two roles: <code>--navy</code> brightens for text, while
+    <code>--navy-fill</code> stays a dark fill under white text.
+    Any colour rework must keep that split (the recorded gotcha from the dark-mode build).
+  </p>
+
+  <h3>Semantic status - six tones, each a text/background/border triple</h3>
+  <div class="sample">
+    <span class="chip chip-green">green · ok / open / matched</span>
+    <span class="chip chip-amber">amber · pending / SOR / variance</span>
+    <span class="chip chip-red">red · blocked / overdue / rejected</span>
+    <span class="chip chip-blue">blue · informational / correction</span>
+    <span class="chip chip-purple">purple · AI-touched (Rule 6)</span>
+    <span class="chip">grey · neutral / not required</span>
+  </div>
+  <p class="lead">Purple is not decoration - it is the reserved marker for anything AI produced. Keep that meaning in any redesign.</p>
+
+  <h3>Five-layer band accents</h3>
+  <p>
+    One accent per architecture layer, used for sidebar icons and the Home page bands:
+    master <span class="mono">#9aa1ad</span> · documents <span class="mono">navy</span> ·
+    ledgers <span class="mono">rust</span> · controls <span class="mono">amber</span> ·
+    intelligence <span class="mono">purple</span> · edges <span class="mono">blue</span> ·
+    store <span class="mono">green</span> · outbound <span class="mono">#b44d2d</span>.
+    These make the architecture legible in the UI; a redesign can restyle them but should keep the one-colour-per-layer idea.
+  </p>
+
+  <h3>Shape, elevation, layout constants</h3>
+  <ul>
+    <li><code>--radius: 16px</code> outer (cards, tables) · <code>--radius-inner: 11px</code> (buttons, inputs) · <code>999px</code> pills.</li>
+    <li>Two shadows only: <code>--shadow-rest</code> and <code>--shadow-hover</code> (deepened in dark mode).</li>
+    <li><code>--sidebar-w: 258px</code> (user-resizable 210-390) · <code>--topbar-h: 60px</code> · content column <code>.page-pad</code> max 1320px.</li>
+    <li>~20 bridge tokens (field-bg, row-hover, scrims, selection, drawer shadow) exist solely so dark mode can re-value them.</li>
+  </ul>
+
+  <h3>Type scale</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Class</th><th>Spec</th><th>Role</th></tr>
+    <tr><td class="mono">.h1</td><td>30px / 700 / navy / -0.3px</td><td>Page title (always with <code>.h2-rust</code> left bar)</td></tr>
+    <tr><td class="mono">.h2</td><td>21px / 700 / ink</td><td>Section heading; <code>.h2-rust</code> adds the 4px rust bar</td></tr>
+    <tr><td class="mono">.h3</td><td>17px / 600 / navy2</td><td>Card heading</td></tr>
+    <tr><td class="mono">.eyebrow</td><td>12px / 700 / uppercase / rust</td><td>Kicker above titles and card sections</td></tr>
+    <tr><td class="mono">.lead</td><td>15px / muted</td><td>Explanatory line under a title</td></tr>
+    <tr><td class="mono">.mono / .tabular</td><td>ui-monospace / tabular-nums</td><td>Doc numbers, barcodes, money columns</td></tr>
+    <tr><td class="mono">.crumb-link</td><td>dotted underline</td><td>The clickable screen name inside the header caption</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="primitives">2 · Core primitives <span class="file">(index.css)</span></h2>
+
+  <h3>Buttons</h3>
+  <div class="sample">
+    <button class="btn">Default</button>
+    <button class="btn btn-primary">Primary (navy)</button>
+    <button class="btn btn-cta">CTA (brand red - one per screen)</button>
+    <button class="btn btn-sm">Small</button>
+    <button class="btn" style="padding:12px 18px;font-size:15px;">Large</button>
+  </div>
+  <p class="lead">
+    Variants: <code>.btn</code> · <code>.btn-primary</code> · <code>.btn-cta</code> · <code>.btn-block</code> ·
+    <code>.btn-lg</code> · <code>.btn-sm</code> (the last defined in PtMapper.css - see §8).
+    Also <code>.icon-btn</code> (38px square, topbar) and <code>.line-del</code> (bare icon delete in table rows).
+  </p>
+
+  <h3>Form controls</h3>
+  <div class="sample">
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);">
+      Field label <input class="input" placeholder="The .field + .input pair">
+    </label>
+    <select class="input" style="width:180px;"><option>.select</option></select>
+  </div>
+  <ul>
+    <li><code>.field</code> + <code>.input</code> - labelled input with navy focus ring (index.css).</li>
+    <li><code>.select</code> - native select, same skin (Booking.css).</li>
+    <li><code>.qty-stepper</code> - +/- quantity control, 40px touch targets (Booking.css).</li>
+    <li><code>.dropzone</code> - dashed file-drop target, rust on hover (Booking.css).</li>
+    <li><code>.check-row</code>, <code>.remember-toggle</code>, <code>.toggle-chip</code> - checkbox rows and chip toggles (PtMapper.css).</li>
+    <li><code>Combobox</code> - the only rich control; see §4.</li>
+  </ul>
+
+  <h3>Chips - one primitive, tone-driven</h3>
+  <div class="sample">
+    <span class="chip chip-navy">Outright</span>
+    <span class="chip chip-amber">SOR</span>
+    <span class="chip chip-green">Approved</span>
+    <span class="chip chip-red">Rejected</span>
+    <span class="chip chip-purple">AI mapped</span>
+    <span class="chip">No approval needed</span>
+  </div>
+  <p class="lead">
+    <code>.chip</code> + <code>.chip-{green|amber|red|blue|purple|navy}</code>.
+    Also <code>.chip-picker</code>/<code>.chip-pick</code> (chip row as a multi-select) and
+    <code>.status-pill</code> (chip at 11.5px). Every status in the app - document state, approval state,
+    commercial model, sync state - renders through this one primitive.
+  </p>
+
+  <h3>Card &amp; table</h3>
+  <div class="sample" style="display:block;">
+    <div class="card" style="padding:16px 20px;margin-bottom:12px;">
+      <p class="eyebrow" style="margin:0 0 4px;">Section card</p>
+      <span class="sku-line"><b>ARROW</b><span class="sku-sep">·</span>SH-4471<span class="sku-chip">Blue</span><span class="sku-chip">M</span></span>
+      &nbsp;&nbsp;<span class="mono">26-27/DEO/SAL/74</span>&nbsp;&nbsp;<span class="tabular">₹28,50,000</span>
+    </div>
+    <div class="table-wrap" style="margin:0;"><table>
+      <tr><th>Voucher</th><th>Status</th><th style="text-align:right;">Value</th></tr>
+      <tr><td class="mono">26-27/RAN/GRN/112</td><td><span class="chip chip-green">Matched</span></td><td class="mono" style="text-align:right;">₹4,72,120</td></tr>
+      <tr><td class="mono">26-27/DEO/TRF/19</td><td><span class="chip chip-amber">Pending</span></td><td class="mono" style="text-align:right;">₹88,400</td></tr>
+    </table></div>
+  </div>
+  <ul>
+    <li><code>.card</code> - the surface primitive: warm white, hairline border, 16px radius, resting shadow.</li>
+    <li><code>.section-card</code> - card + standard padding; the unit every form and detail screen is stacked from (130 uses).</li>
+    <li><code>.table-wrap</code> + <code>table.data</code> - the list-screen table: uppercase muted headers on inner wash, row hover, <code>.num</code> right-aligned mono columns. ~50 screens use it.</li>
+    <li><code>.lines-table</code> - the editable variant (inputs in cells) for document line editors.</li>
+    <li><code>.card-grid</code> + <code>.bk-card</code> - card-per-document grid with progress bar (bookings, receive queue).</li>
+    <li><code>.stat-card</code> / <code>.stat-grid</code> / <code>.kpi</code> - number tiles (PtMapper stats, Home dashboard).</li>
+  </ul>
+
+  <h3>Notes (inline callouts)</h3>
+  <div class="sample" style="flex-direction:column;align-items:stretch;">
+    <div class="warn-note">.warn-note - variance flagged, never blocked (Rule 5)</div>
+    <div class="ok-note">.ok-note - saved / posted confirmation, dismissable</div>
+    <div class="ai-note">.ai-note - purple fence around anything AI produced (Rule 6)</div>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2 id="shell">3 · Application shell <span class="file">(src/shell/)</span></h2>
+  <p>The permanent frame: sidebar left, topbar above content, on every authenticated screen.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Component</th><th>File</th><th>What it is</th></tr>
+    <tr><td><b>Sidebar</b></td><td class="file">AppShell.tsx/.css</td>
+      <td>Warm beige rail. Brand block (red "K" mark + wordmark), then sections from the nav manifest (<code>navConfig</code>): each an icon medallion tinted by its layer accent + uppercase label. Collapsible sections (persisted), drag-to-reorder items (persisted), drag-resizable 210-390px, one-line rows for single-item sections and D10 "folds". Active item: rust wash + 3px rust bar. Mobile: off-canvas drawer with scrim.</td></tr>
+    <tr><td><b>Topbar</b></td><td class="file">AppShell.tsx/.css</td>
+      <td>60px surface bar: mobile menu button · UnitSwitcher · GlobalSearch · bell · user menu.</td></tr>
+    <tr><td><b>UnitSwitcher</b></td><td class="file">AppShell.tsx</td>
+      <td>The working-context pill (store / brand / all units) with GSTIN chip; locked variant with padlock for single-store people. Switching remounts the page content so every screen refetches under the new unit.</td></tr>
+    <tr><td><b>GlobalSearch</b></td><td class="file">GlobalSearch.tsx/.css</td>
+      <td>Whole-system search in the topbar: pill input, grouped results panel (<code>.search-group</code> / <code>.search-hit</code> with title, sub, MRP side). Distinct from the in-page SearchBox (§4).</td></tr>
+    <tr><td><b>ApprovalsBell</b></td><td class="file">AppShell.tsx</td>
+      <td>Bell + live count badge (<code>.bell-count</code>, "9+" cap) of documents waiting on <i>this</i> person; links to the approvals inbox; shows nothing when nothing waits.</td></tr>
+    <tr><td><b>UserMenu</b></td><td class="file">AppShell.tsx</td>
+      <td>Avatar (initials on navy), name + role; dropdown holds scope label, ThemeToggle and sign-out.</td></tr>
+    <tr><td><b>Dropdown pattern</b></td><td class="file">AppShell.css</td>
+      <td><code>.dropdown</code> + <code>.dropdown-backdrop</code> + <code>.dropdown-head</code> + <code>.dropdown-item</code> - the shared popover used by switcher and user menu.</td></tr>
+    <tr><td><b>ThemeToggle</b></td><td class="file">theme/ThemeToggle.tsx</td>
+      <td>Three-segment pill: Light / Dark / System (<code>.theme-seg</code>).</td></tr>
+    <tr><td><b>Print rule</b></td><td class="file">AppShell.css</td>
+      <td>A page opting in with <code>.pt-print</code> prints as the document alone - shell hidden (transfer PT, #72).</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="shared">4 · Shared React components <span class="file">(src/components/)</span></h2>
+  <div class="table-wrap"><table>
+    <tr><th>Component</th><th>File</th><th>What it is / the behaviour a redesign must keep</th></tr>
+    <tr><td><b>PageHeader</b></td><td class="file">PageHeader.tsx</td>
+      <td>The one header on every screen: eyebrow crumb (derived from the same nav manifest as the sidebar, so the two can never disagree - enforced by <code>pageVocabulary.test.ts</code>), rust-barred h1, optional lead, actions pushed right. <code>HostedPageContext</code> lets a folded page (#170) host four screens as tabs under a single header.</td></tr>
+    <tr><td><b>Combobox</b></td><td class="file">Combobox.tsx/.css</td>
+      <td>Select-only searchable dropdown - the Excel data-validation control, not free text. Typing filters; only a listed value commits; clear button; 60-option window; ★-marked suggested values float to top; <code>field</code> and in-table <code>cell</code> sizes.</td></tr>
+    <tr><td><b>SearchBox</b></td><td class="file">SearchBox.tsx/.css</td>
+      <td>The in-page list filter (#102), one control on every list screen. Two habits in one box: typed input debounced 220ms; wedge-scanner input (whole barcode + Enter) commits immediately. Screen owns the committed term, box owns the keystrokes.</td></tr>
+    <tr><td><b>ScanScreen</b></td><td class="file">ScanScreen.tsx/.css</td>
+      <td>The full-screen, phone-first scan surface (#68/#71) reused by every scan flow: dispatch, receive, count, returns. Big running count, per-line tallies, ok/wrong beeps (WebAudio), invisible wedge-scanner input + manual fallback, undo, modes for damaged/extra buckets, strict-expected receive, notes on shortfall. Scan-is-truth. Its own dark-toned visual language - closer to a device screen than a form.</td></tr>
+    <tr><td><b>Approval kit</b></td><td class="file">approval.tsx</td>
+      <td><code>ApprovalTrail</code> (the Maker · Checker card every wired document shows, with "Ask again" after rejection), <code>ApprovalPill</code> (status chip), <code>ApprovalSteps</code> (multi-step route as chevron-linked chips, #172), plus kind→route maps for the inbox.</td></tr>
+    <tr><td><b>InboundQueueCard</b></td><td class="file">InboundQueueCard.tsx</td>
+      <td>The inbound work queue (GRNs awaiting PT, PTs in progress) + its <code>useInboundQueue</code> hook; shared by Home and Inbound.</td></tr>
+    <tr><td><b>AccessDenied / ProtectedRoute</b></td><td class="file">auth/</td>
+      <td>The RBAC refusal screen and the route guard around it.</td></tr>
+    <tr><td><b>SyncLight</b></td><td class="file">till/SyncLight.tsx</td>
+      <td>The POS till's one always-visible status: a word + number, never a colour alone ("Synced", "3 waiting", "Bill refused"). Lives on Sell screens, deliberately not in the shell.</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="domain">5 · Domain display primitives <span class="file">(src/lib/format.tsx)</span></h2>
+  <p>Small, everywhere, and rule-bearing - these encode domain law, so a redesign may restyle but must not reshape them.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Primitive</th><th>Renders</th><th>The rule it carries</th></tr>
+    <tr><td><b>Money</b> / formatINR</td><td><span class="tabular mono">₹28,50,000</span> · short form <span class="mono">₹2.41 Cr / ₹3.5 L</span></td>
+      <td>Integer paise in, Indian Lakh/Crore grouping out, tabular numerals. Display only - no float ever touches a write path (ADR-0004). Partners: <code>rupeesToPaise</code> / <code>paiseToRupees</code> for inputs, digit arithmetic only.</td></tr>
+    <tr><td><b>SkuLine</b></td><td><span class="sku-line"><b>ARROW</b><span class="sku-sep">·</span>SH-4471<span class="sku-chip">Blue</span><span class="sku-chip">M</span></span></td>
+      <td>The single SKU-grain primitive: Brand · Style · Colour · Size, never style-only.</td></tr>
+    <tr><td><b>StatusChip</b></td><td>chip, tone auto-mapped from status word</td>
+      <td>open→green, pending→amber, blocked/overdue→red, ai→purple, else navy.</td></tr>
+    <tr><td><b>CommercialBadge</b></td><td>chip per commercial model</td>
+      <td>Outright→navy, SOR→amber, Correction→blue, else purple - the two-axis model made visible.</td></tr>
+    <tr><td><b>Stat</b></td><td>label-over-value number block</td><td>Inline-styled; the small sibling of .stat-card / .kpi.</td></tr>
+    <tr><td><b>formatDateTime</b></td><td><span class="mono">1 Aug, 5:30 pm</span></td>
+      <td>en-IN, to the minute - every use is a time somebody was told.</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="patterns">6 · Shared page patterns <span class="file">(Booking.css · PtMapper.css · Inventory.css)</span></h2>
+  <p>
+    These are the layout idioms nearly every wired screen is assembled from.
+    They live in page-named CSS files but are imported across the app (see §8).
+  </p>
+  <div class="table-wrap"><table>
+    <tr><th>Pattern</th><th>Classes</th><th>Where felt</th></tr>
+    <tr><td><b>Toolbar</b></td><td class="mono">.toolbar + .spacer</td><td>Top of every screen: PageHeader renders into it; filters and actions ride it. 29+ screens.</td></tr>
+    <tr><td><b>Stacked section cards</b></td><td class="mono">.section-card</td><td>The universal page anatomy: header, then cards stacked down the column. 130 uses.</td></tr>
+    <tr><td><b>Form grid</b></td><td class="mono">.form-row · .form-grid · .wide-form</td><td>Responsive auto-fit field grids in every create/edit card.</td></tr>
+    <tr><td><b>Filter bar</b></td><td class="mono">.filter-bar</td><td>Chips + selects + SearchBox row under the toolbar on list screens.</td></tr>
+    <tr><td><b>Modal</b></td><td class="mono">.modal-backdrop · .modal · .modal-head</td><td>The only overlay pattern: scrim + 760px card. Confirmations, pickers, dashboards config.</td></tr>
+    <tr><td><b>Document card grid</b></td><td class="mono">.card-grid · .bk-*</td><td>Card-per-document with mono number, brand, meta, rust progress bar (bookings, GRN queue).</td></tr>
+    <tr><td><b>Line editor</b></td><td class="mono">.lines-table · .line-del</td><td>Editable document lines (booking lines, PT rows, count sheets).</td></tr>
+    <tr><td><b>Mode toggle</b></td><td class="mono">.mode-toggle · .mode-btn</td><td>Big radio-cards for choosing a flow (receive with/without booking, count modes).</td></tr>
+    <tr><td><b>Segmented control</b></td><td class="mono">.seg · .seg-btn</td><td>Small tab-like switch inside a card (PT-mapper views, ledger scopes).</td></tr>
+    <tr><td><b>Fold tabs</b></td><td class="mono">.page-tabs · .page-tab</td><td>D10 folded pages: one page hosting sibling screens as tabs under one PageHeader.</td></tr>
+    <tr><td><b>Stage stepper</b></td><td class="mono">.stage-stepper · .stage-step</td><td>Pipeline position (PT file: uploaded → mapped → review → done).</td></tr>
+    <tr><td><b>Pager</b></td><td class="mono">.pager · .pager-info</td><td>Table pagination.</td></tr>
+    <tr><td><b>Store lock</b></td><td class="mono">.store-lock</td><td>The pinned-context pill on screens that refuse to cross stores.</td></tr>
+    <tr><td><b>Variance marking</b></td><td class="mono">.variance-row · .variance-tag</td><td>Amber-washed rows + tag: flagged, never blocked (Rule 5).</td></tr>
+    <tr><td><b>Review queue</b></td><td class="mono">.review-* · .bulk-bar</td><td>The human-review list anatomy (PT-mapper review, proposals).</td></tr>
+    <tr><td><b>Planned stub</b></td><td class="mono">.planned-*</td><td>The honest "coming soon" card for the ~20 unbuilt screens: medallion, stamp, what-it-will-do notes.</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="surfaces">7 · One-off surfaces</h2>
+  <p>Five surfaces have their own visual identity beyond the shared system - each is a deliberate exception, each redesigned on its own terms.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Surface</th><th>File</th><th>Identity</th></tr>
+    <tr><td><b>Login</b></td><td class="file">Login.css</td>
+      <td>The split hero: deep-navy brand panel (theme-invariant <code>--hero-navy</code>, the five layers listed) beside the sign-in card; demo-credential chips; the one screen where brand-red leads.</td></tr>
+    <tr><td><b>Home</b></td><td class="file">Home.css</td>
+      <td>Greeting, configurable KPI tiles (drag-reorder, <code>.kpi</code>), then the five-layer <b>bands</b> - tinted panels (<code>.band-edge/-ledger/-ai</code>) grouping links by architecture layer, with the purple <code>.ai-fence</code> around AI content.</td></tr>
+    <tr><td><b>Store dashboard</b></td><td class="file">StoreDashboard.css</td>
+      <td>The live store day view: <code>.dash-block</code>, collection rows, day-close strip.</td></tr>
+    <tr><td><b>Till / POS</b></td><td class="file">sell/Till.css</td>
+      <td>The counter surface (#180): till cards, queue rows, the <code>.till-halt</code> stop state, SyncLight. Deliberately calmer and bigger - a device screen, not an office form. The POS billing screen (#181) builds on it.</td></tr>
+    <tr><td><b>ScanScreen</b></td><td class="file">ScanScreen.css</td>
+      <td>Full-screen phone-first scan surface - its own header, tallies, mode chips, confirm footer (§4).</td></tr>
+    <tr><td><b>Access matrix</b></td><td class="file">AccessMatrix.css</td>
+      <td>The ratified permission grid: sticky role heads, locked/editing/moved cell states.</td></tr>
+  </table></div>
+
+  <!-- ================================================================ -->
+  <h2 id="debt">8 · Redesign notes &amp; debt worth clearing on the way</h2>
+  <div class="card section-card">
+    <p><b>The redesign path of least regret, in order:</b></p>
+    <ul>
+      <li><b>1 - Tokens first.</b> Everything cascades from <code>index.css</code>. Change palette, radius, shadow, type scale there; both themes live in that one file. The dark block re-values the same names, so every token change must be made twice (light + dark) or it will only half-land.</li>
+      <li><b>2 - Shell second.</b> AppShell (sidebar + topbar + dropdowns) is the frame around everything; PageHeader is the top of every page.</li>
+      <li><b>3 - Primitives third.</b> Buttons, chips, inputs, card, table - restyle once, felt everywhere.</li>
+      <li><b>4 - Patterns fourth.</b> The §6 idioms (toolbar, section-card stack, modal, filter bar, line editor).</li>
+      <li><b>5 - The six one-off surfaces last</b>, each on its own terms.</li>
+    </ul>
+    <p><b>Debt a redesign should clear:</b></p>
+    <ul>
+      <li><b>Booking.css and PtMapper.css are load-bearing far beyond their names.</b> 17+ screens import Booking.css for toolbar/section-card/modal/select; several import PtMapper.css for btn-sm/stat-card/ok-note. First move of any redesign: lift the shared classes into a real shared stylesheet (or into index.css) so "Booking" styles stop owning the whole app's anatomy. StockOnHand currently imports <i>both</i> because ok-note's base and its dismiss button live in different files.</li>
+      <li><b>A few components style inline instead of via tokens' classes</b> - <code>Stat</code>, <code>ApprovalSteps</code> spacing - fine today, but they will drift from a retheme unless moved into CSS.</li>
+      <li><b>Reserved meanings to preserve:</b> brand-red = one key CTA per screen; purple = AI-touched only; the six status tones; the layer accents; mono = IDs and money; word-plus-number for the sync light (never colour alone).</li>
+      <li><b>Locked light theme:</b> the dark-mode build locked light values byte-identical. A redesign consciously unlocks that - fine, but say so, since the dark theme was derived from those exact values.</li>
+    </ul>
+  </div>
+
+  <p class="lead" style="margin-top:40px;">
+    Sources: <span class="mono">app/frontend/src</span> on main, 31 Jul 2026 ·
+    sister doc <span class="mono">00-application-map.html</span> (page inventory) ·
+    design language "Warm", approved 28 Jun 2026 · dark mode PR #61.
+  </p>
+
+</div>
+</body>
+</html>
