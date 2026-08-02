@@ -1253,6 +1253,11 @@ function Counter({ storeName }: { storeName?: string }) {
               <CustomerStrip
                 value={customer}
                 storeStateCode={storeState}
+                // The counter's own phone book, for the typeahead (#249). Read
+                // through `engine.db` rather than a second `TillDb`, the same
+                // rule the draft follows - two Dexie connections to one
+                // database block each other through a version change.
+                db={engine?.db ?? null}
                 locked={locked}
                 // `editCustomer`, not `setCustomer`: the strip's fields are
                 // part of the same autosaved snapshot the cart is (#244), so
@@ -1277,11 +1282,11 @@ function Counter({ storeName }: { storeName?: string }) {
           <div
             ref={scanFloat.popoverRef}
             className="bill-float"
-            style={{
-              top: scanFloat.at.top,
-              left: scanFloat.at.left,
-              maxHeight: scanFloat.at.maxHeight,
-            }}
+            // Applied whole, never field by field: the hook anchors a `"below"`
+            // popover by whichever edge leaves it room, and a style that named
+            // only `top` would strand a flipped one where the last placement
+            // put it (`PopoverPlacement`).
+            style={{ ...scanFloat.at }}
           >
             {unknown && (
               <NotInSystem

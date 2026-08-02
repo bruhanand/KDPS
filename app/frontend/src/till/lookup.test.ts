@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import "fake-indexeddb/auto";
 
-import { describePiece, olderSeasonFirst, resolveScan, searchPieces } from "./lookup";
-import { item, season } from "./testSupport";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  describePiece,
+  mobilePrefixes,
+  olderSeasonFirst,
+  resolveScan,
+  searchCustomers,
+  searchPieces,
+} from "./lookup";
+import { freshTill, item, season } from "./testSupport";
 
 const SEASONS = [season("SS24", 1, "closed"), season("FW25", 2), season("SS26", 3)];
 
@@ -126,6 +135,117 @@ describe("the tag that will not scan", () => {
     }));
 
     expect(searchPieces(many, "shirt").length).toBe(8);
+  });
+});
+
+describe("the number a customer is reading out (#249)", () => {
+  const tills: (() => void)[] = [];
+  afterEach(() => {
+    while (tills.length) tills.pop()!();
+  });
+
+  async function phoneBook(rows: { mobile: string; name?: string; gstin?: string }[]) {
+    const till = freshTill();
+    tills.push(till.close);
+    await till.db.customers.bulkPut(
+      rows.map((row) => ({ mobile: row.mobile, name: row.name ?? "", gstin: row.gstin ?? "" })),
+    );
+    return till.db;
+  }
+
+  it("says nothing until the third digit", async () => {
+    const db = await phoneBook([{ mobile: "9835211442", name: "Sunita Devi" }]);
+
+    expect(await searchCustomers(db, "98")).toEqual([]);
+    expect((await searchCustomers(db, "983")).map((c) => c.name)).toEqual(["Sunita Devi"]);
+  });
+
+  it("hands back the whole row, gstin and all, so picking one fills the card", async () => {
+    const db = await phoneBook([
+      { mobile: "9835211442", name: "Sunita Devi", gstin: "10AAAAA0000A1Z5" },
+    ]);
+
+    expect(await searchCustomers(db, "98352")).toEqual([
+      { mobile: "9835211442", name: "Sunita Devi", gstin: "10AAAAA0000A1Z5" },
+    ]);
+  });
+
+  it("finds the same customer whether the counter types the country code or not", async () => {
+    // The book is keyed on the collapsed ten-digit form, so `+91 98352...`
+    // has to reach it - and `91...` is an ordinary mobile too, so both are
+    // searched rather than one being guessed at.
+    const db = await phoneBook([
+      { mobile: "9835211442", name: "Sunita Devi" },
+      { mobile: "9183000111", name: "Ravi Kumar" },
+    ]);
+
+    expect((await searchCustomers(db, "+91 98352")).map((c) => c.name)).toEqual(["Sunita Devi"]);
+    expect((await searchCustomers(db, "09835")).map((c) => c.name)).toEqual(["Sunita Devi"]);
+    expect((await searchCustomers(db, "918")).map((c) => c.name)).toEqual(["Ravi Kumar"]);
+  });
+
+  it("never asks the book for a prefix shorter than the floor", () => {
+    // `091` collapsed naively is `91`, which is half the phone book.
+    expect(mobilePrefixes("091")).toEqual(["091"]);
+    expect(mobilePrefixes("98")).toEqual([]);
+    expect(mobilePrefixes("+91 983")).toEqual(["91983", "983"]);
+  });
+
+  it("puts the customers somebody named above the bare numbers", async () => {
+    const db = await phoneBook([
+      { mobile: "9830000001" },
+      { mobile: "9830000002" },
+      { mobile: "9839999999", name: "Sunita Devi" },
+    ]);
+
+    expect((await searchCustomers(db, "983", 2)).map((c) => c.mobile)).toEqual([
+      "9839999999",
+      "9830000001",
+    ]);
+  });
+
+  it("does not let one spelling of the number starve the other", async () => {
+    // `+91 983` searches `91983…` and `983…`. Read as one union window the
+    // `91983…` rows sort first and fill it, and the customer the cashier
+    // actually meant never appears - the book is deliberately the one
+    // unbounded all-KDPS table, so a full window is the normal case.
+    const db = await phoneBook([
+      ...Array.from({ length: 30 }, (_, i) => ({
+        mobile: `91983${String(i).padStart(5, "0")}`,
+        name: `Ninety One ${i}`,
+      })),
+      { mobile: "9839999999", name: "Sunita Devi" },
+    ]);
+
+    const found = await searchCustomers(db, "+91 983");
+    expect(found.map((c) => c.name)).toContain("Sunita Devi");
+  });
+
+  it("shows five, because somebody reads this with a customer waiting", async () => {
+    const db = await phoneBook(
+      Array.from({ length: 20 }, (_, i) => ({
+        mobile: `98350000${String(i).padStart(2, "0")}`,
+        name: `Customer ${i}`,
+      })),
+    );
+
+    expect((await searchCustomers(db, "9835")).length).toBe(5);
+  });
+
+  it("finds nobody rather than refusing, for a number never billed here", async () => {
+    const db = await phoneBook([{ mobile: "9835211442", name: "Sunita Devi" }]);
+
+    expect(await searchCustomers(db, "77712")).toEqual([]);
+  });
+
+  it("answers with silence when the phone book cannot be read at all", async () => {
+    // A typeahead is a convenience; a database that will not open must not be
+    // able to stop a bill (Rule 5).
+    const till = freshTill();
+    tills.push(till.close);
+    till.db.close();
+
+    expect(await searchCustomers(till.db, "9835")).toEqual([]);
   });
 });
 

@@ -24,7 +24,8 @@
 // exact `(barcode, season)` outright rather than re-deciding. The two only need
 // to agree about what a *good* answer looks like, and they do.
 
-import type { TillItem, TillSeason, TillStock } from "./types";
+import type { TillDb } from "./db";
+import type { TillItem, TillKnownCustomer, TillSeason, TillStock } from "./types";
 
 /** Everything the counter knows that bears on a scan. */
 export interface ScanWorld {
@@ -108,6 +109,104 @@ function matchRank(row: TillItem, q: string): number | null {
   if (row.brand.toLowerCase().includes(q)) return 3;
   if (row.item.toLowerCase().includes(q)) return 4;
   return null;
+}
+
+/** How many digits the counter has to have typed before the phone book answers
+ *  (#249). Three is the ticket's number, and it is a floor on the *typed*
+ *  value: fewer than that and half the shop matches, which is a list nobody
+ *  reads and a scroll of IndexedDB nobody needed. */
+export const CUSTOMER_SEARCH_MIN = 3;
+
+/**
+ * The spellings of a part-typed mobile that could be sitting in the phone book.
+ *
+ * The book is keyed on the bare ten-digit form - the accept boundary collapses
+ * `+91 98765-43210`, `09876543210` and `9876543210` to one customer
+ * (`sell.services.customers.normalise_mobile`, mirrored here). But a *prefix*
+ * cannot be collapsed the same way: that rule reads the whole number's length,
+ * and a cashier three digits in has not typed a length yet. `91` is also a
+ * perfectly ordinary start to an Indian mobile, so stripping it is a guess
+ * either way.
+ *
+ * So this guesses neither and searches both: the digits as typed, plus the
+ * digits with a country or trunk prefix taken off. Candidates shorter than the
+ * floor are dropped rather than searched - `091` would otherwise ask the book
+ * for everything starting `91`.
+ */
+export function mobilePrefixes(typed: string): string[] {
+  const digits = (typed.match(/\d/g) ?? []).join("");
+  if (digits.length < CUSTOMER_SEARCH_MIN) return [];
+  const candidates = [digits];
+  if (digits.startsWith("91")) candidates.push(digits.slice(2));
+  if (digits.startsWith("0")) candidates.push(digits.slice(1));
+  return [...new Set(candidates)].filter((p) => p.length >= CUSTOMER_SEARCH_MIN);
+}
+
+/**
+ * Who the counter has billed before, under the number being typed (#249, D-3).
+ *
+ * Read straight off Dexie's `mobile` index rather than out of the till's
+ * in-memory world, and that is the whole reason this is a function taking a
+ * `db` instead of another array on `ScanWorld`: the phone book is the one
+ * all-KDPS, unbounded table on the counter (grill Q6 - a Deoghar regular is
+ * recognised in Ranchi), `useTillWorld` reloads after every bill, and holding
+ * it in memory would re-read the entire business's customers from IndexedDB at
+ * each sale, worsening every month, at the one screen where a stall is a queue
+ * of people (design.md, amended at #245).
+ *
+ * The window read from the index is wider than the five shown, so that which
+ * five a cashier sees is decided here (`namedFirst`, and the sharing-out
+ * below) rather than by whichever numbers happen to sort lowest.
+ *
+ * Never throws: a phone book that cannot be read is a typeahead that says
+ * nothing, not a bill that stops (Rule 5).
+ */
+export async function searchCustomers(
+  db: TillDb,
+  typed: string,
+  limit = 5,
+): Promise<TillKnownCustomer[]> {
+  const prefixes = mobilePrefixes(typed);
+  if (!prefixes.length) return [];
+  try {
+    // One read per candidate spelling, and then the five are shared out between
+    // them a row at a time rather than ranked in one heap.
+    //
+    // Both halves of that matter. A single union read takes the lowest keys of
+    // the whole match set, and every `91983…` sorts below every `983…` - so on
+    // a book big enough to fill the window, a cashier typing `+91 983` would
+    // get a screenful of numbers that merely start `91` and not one of the ones
+    // they meant. Ranking the merged rows afterwards does not fix it: the same
+    // ordering wins again. Sharing the list out does, and it is the honest
+    // answer to a genuinely ambiguous prefix - neither reading of what was
+    // typed is allowed to crowd the other off the screen.
+    const windows = await Promise.all(
+      prefixes.map(async (prefix) =>
+        (await db.customers.where("mobile").startsWith(prefix).limit(limit * 5).toArray()).sort(
+          namedFirst,
+        ),
+      ),
+    );
+    const picked = new Map<string, TillKnownCustomer>();
+    for (let depth = 0; picked.size < limit && depth < limit; depth += 1) {
+      for (const window of windows) {
+        const row = window[depth];
+        if (row && !picked.has(row.mobile)) picked.set(row.mobile, row);
+        if (picked.size === limit) break;
+      }
+    }
+    return [...picked.values()].sort(namedFirst);
+  } catch {
+    return [];
+  }
+}
+
+/** A master built out of bills is full of mobiles nobody ever gave a name with,
+ *  and five nameless numbers are a list that answers nothing - so a row
+ *  somebody named comes first, and equals are ordered by the number itself so
+ *  the same three digits give the same five twice. */
+function namedFirst(a: TillKnownCustomer, b: TillKnownCustomer): number {
+  return Number(Boolean(b.name)) - Number(Boolean(a.name)) || a.mobile.localeCompare(b.mobile);
 }
 
 /**
