@@ -151,14 +151,13 @@
           <div class="m-chips"><span>Exact</span><span>₹2,900</span><span>₹3,000</span></div>
           <div class="m-tr"><span>Card</span><span class="amt">2,000</span></div>
           <div class="m-tr"><span>UPI · <u>show QR</u></span><span class="amt">0</span></div>
-          <div class="m-tr"><span>+ Credit note</span><span></span></div>
           <div class="m-bal green"><span>Change to give</span><span>₹152</span></div>
         </div>
         <div class="m-card">
           <div class="cap">Customer</div>
           <div class="m-field">98352…</div>
-          <div class="m-hits">Sunita Devi · 9835211442 · last visit 14 Jun</div>
-          <div class="m-hits">Sunil Kr · 9835299801 · new this year</div>
+          <div class="m-hits">Sunita Devi · 9835211442</div>
+          <div class="m-hits">Sunil Kumar · 9835299801</div>
           <div class="m-field" style="color:#c9ced8">Name</div>
           <div style="font-size:10px; color:var(--blue)">Business bill? add GSTIN ▸</div>
         </div>
@@ -188,20 +187,20 @@
 <h3>The payment card, rebuilt</h3>
 <ol>
   <li><b>"To pay ₹X"</b> — the hero number, updating live as lines enter.</li>
-  <li><b>Tender rows: Cash · Card · UPI · + Credit note — and these rows <i>are</i> split payment.</b> Any combination, no separate "split" button or mode: put an amount on one row, the balance line shows what's left, put the rest on another. Tapping into an empty amount box <b>pre-fills the remaining balance</b>; typing over it splits further. Example: ₹4,848 bill → 2,000 on Card → tap UPI, it offers 2,848, overtype 2,000 → tap Cash, it offers 848 → customer hands ₹1,000 → green "Change to give ₹152". This is the Oracle/Zoho/ERPNext pattern; the research found the explicit "Split payment" button (Shopify, Square) is the weaker one — an extra step on every mixed payment, and Square's version voids all legs if the split takes over five minutes. Credit notes stay dynamic rows with the cached balance/expiry check.</li>
+  <li><b>Tender rows: Cash · Card · UPI — and these rows <i>are</i> split payment.</b> Any combination, no separate "split" button or mode: put an amount on one row, the balance line shows what's left, put the rest on another. Tapping into an empty amount box <b>pre-fills the remaining balance</b>; typing over it splits further. Example: ₹4,848 bill → 2,000 on Card → tap UPI, it offers 2,848, overtype 2,000 → tap Cash, it offers 848 → customer hands ₹1,000 → green "Change to give ₹152". This is the Oracle/Zoho/ERPNext pattern; the research found the explicit "Split payment" button (Shopify, Square) is the weaker one — an extra step on every mixed payment, and Square's version voids all legs if the split takes over five minutes. <b>Counter credit notes are retired</b> by POS counter redesign grill Q3/Q3b.</li>
   <li><b>Quick chips under Cash</b>: Exact, and two round-ups (next ₹100 / ₹500) — one tap records what the customer handed over. <span class="badge b-open">Ruled yes — §4 D-2</span></li>
   <li><b>One balance line, colour-coded</b>: red <b>"Still to pay ₹X"</b> until covered, flipping to green <b>"Change to give ₹X"</b> the moment cash exceeds the bill. "Cash received" folds into the cash row rather than being a separate block.</li>
   <li><b>UPI row carries "show QR."</b> Entering an amount and tapping it opens the charge card: the amount huge, a QR panel (mock today, hardware later), and the states <i>Generating → Awaiting (Cancel · Check status) → Success (ref captured, bill proceeds) / Failed (retry or another tender) / Unknown ("can't reach the bank — check again")</i>. Built behind a payment adapter with a mock, the same shape as the print adapter, so the hardware slice later touches no screen.</li>
-  <li><b>Manager authorisation</b> (over-cap discount, doubtful credit note) stays a button on this card, opening the same PIN modal.</li>
-  <li>When an exchange nets in the customer's favour, the card swaps to the <b>"Owed to the customer"</b> credit-note card, unchanged.</li>
+  <li><b>Manager authorisation</b> no longer covers discounts or credit notes. Its surviving counter role is the late-exchange window override, recorded on the bill.</li>
+  <li>An exchange may never net in the customer's favour: the outgoing pieces must be equal-or-up, and Save &amp; Print refuses a short exchange with a plain explanation (POS counter redesign grill Q3/Q3b).</li>
 </ol>
 
 <h3>The customer card, rebuilt</h3>
 <ul>
-  <li><b>Mobile first.</b> From the third digit, matching customers list <b>directly under the field</b> — name, mobile, last visit. Enter (or tap) attaches; the card then shows the name and a small history chip ("3 visits · last 14 Jun").</li>
+  <li><b>Mobile first.</b> From the third digit, matching customers list <b>directly under the field</b> — name and mobile only. Enter (or tap) attaches. No visit count, last-visit date, spend, or other purchase history is shipped to the till.</li>
   <li><b>Unknown number → "bill to a new customer"</b> inline: name, nothing else. The bill still works with no customer at all.</li>
   <li><b>GSTIN moves behind a "Business bill?" disclosure.</b> It matters on a minority of bills; when opened it behaves exactly as today (state-code check, tax-kind banner).</li>
-  <li>This needs something the till doesn't have yet: a <b>customer lookup</b>. Today mobile/name are free text stored on the bill only. The till is offline-first, so the natural shape is a synced local customer list, like items and offers. <span class="badge b-open">Ruled: customer master, all-KDPS, synced — §4 D-3</span></li>
+  <li>The <b>Customer master is now built</b>: every till syncs all-KDPS mobile/name/GSTIN rows for offline lookup, while bills keep their text snapshots. Past bills are fetched only through the online, store-scoped bill search in counter return mode. <span class="badge b-open">Ruled: customer master, all-KDPS, synced — §4 D-3</span></li>
 </ul>
 
 <h3>What explicitly does not change</h3>

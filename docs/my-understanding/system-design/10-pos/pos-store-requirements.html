@@ -204,7 +204,7 @@
 <h3>C · Payment</h3>
 <table>
   <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
-  <tr><td>C1</td><td><b>Modes: Cash, Card, UPI</b> — the three real rails — plus <b>Credit Note</b> (from an exchange/return). Coupon and Sodexo are dropped as unused.</td><td><span class="badge b-keep">Keep-shape</span></td></tr>
+  <tr><td>C1</td><td><b>Modes: Cash, Card, UPI</b> — the three real rails. Counter credit notes are retired by POS counter redesign grill Q3/Q3b; Coupon and Sodexo remain dropped as unused.</td><td><span class="badge b-lock">Locked</span></td></tr>
   <tr><td>C2</td><td><b>Split payment on one bill</b> — amounts across several modes, exactly as the current panel works. (The design corpus never confirmed this; the screenshots settle that stores have it today. See decision D-2 to ratify.)</td><td><span class="badge b-keep">Keep-shape</span> <span class="badge b-new">Decision</span></td></tr>
   <tr><td>C3</td><td><b>Tendered-cash and change</b> at the bottom of the panel, as today.</td><td><span class="badge b-keep">Keep-shape</span></td></tr>
   <tr><td>C4</td><td><b>Credit (udhaar) stays a tag, not a ledger</b> — the conscious omission stands until receivables are designed. The bill can record "on credit", nothing chases it yet.</td><td><span class="badge b-lock">Locked</span></td></tr>
@@ -214,10 +214,10 @@
 <h3>D · Returns and exchange</h3>
 <table>
   <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
-  <tr><td>D1</td><td><b>Exchange in one bill</b>, as the current Return tick + return-voucher netting works: return leg + new items, one net amount. Underneath it is a proper Exchange document linked to the original bill, reason-coded.</td><td><span class="badge b-lock">Locked</span> <span class="badge b-keep">Keep-shape</span></td></tr>
-  <tr><td>D2</td><td><b>Credit is what the customer actually paid</b> for the returned piece, never its MRP; the new piece charges at today's live price and offer.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>D1</td><td><b>Exchange in one bill</b>: return legs + new items, linked to the original bill and reason-coded. Outgoing pieces must be worth at least the returned paid value; Save &amp; Print refuses anything short.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>D2</td><td><b>Returned value is what the customer actually paid</b> for the piece, never its MRP; the new piece charges at today's live price and offer.</td><td><span class="badge b-lock">Locked</span></td></tr>
   <tr><td>D3</td><td><b>A returned piece goes back to shelf if good, to quarantine if damaged</b>, feeding the defective flow.</td><td><span class="badge b-lock">Locked</span></td></tr>
-  <tr><td>D4</td><td><b>Return without a new purchase</b> (plain refund or a credit note to spend later) — the current POS has a Sales Return F9 and a Credit Note tender; the design only covers exchange. Needs a decision (D-4).</td><td><span class="badge b-new">Decision</span></td></tr>
+  <tr><td>D4</td><td><b>No return without an equal-or-higher new purchase.</b> No cash/card/UPI refund and no credit note: money that entered KDPS never leaves. Superseded and closed by POS counter redesign grill Q3/Q3b (2 Aug 2026).</td><td><span class="badge b-lock">Locked</span></td></tr>
 </table>
 
 <h3>E · Reprint and customer search</h3>
@@ -278,7 +278,7 @@
 
 <div class="card">
   <h3>D-2 · Ratify split payment</h3>
-  <p>The design corpus left split-tender open; the current POS plainly has it and stores use it. Recommendation: ratify it — one bill, amounts across cash/card/UPI/credit-note, which must sum to the bill amount.</p>
+  <p>The design corpus left split-tender open; the current POS plainly has it and stores use it. Ratified shape: one bill, amounts across cash/card/UPI, which must sum to the bill amount. The former credit-note tender is superseded by POS counter redesign Q3/Q3b.</p>
 </div>
 
 <div class="card">
@@ -287,8 +287,8 @@
 </div>
 
 <div class="card">
-  <h3>D-4 · Return without an exchange</h3>
-  <p>Exchange is fully designed; a plain return is not. The current POS has Sales Return (F9) and a Credit Note tender, so stores clearly handle "money back or credit later" today. Decide the policy (refund in cash? credit note only? window? manager approval?) — then the design is a small extension of the exchange document.</p>
+  <h3>D-4 · Return without an exchange — closed</h3>
+  <p><b>Superseded and ruled by POS counter redesign grill Q3/Q3b (2 Aug 2026):</b> there is no plain return, refund, or counter credit note. A return exists only inside an exchange against the original bill, and the customer takes pieces of equal or greater paid value. The return window remains data; a late exchange uses the recorded manager-override path.</p>
 </div>
 
 <div class="card">
@@ -341,7 +341,7 @@
 <!-- ============================================================ -->
 <section>
 <h2>7 · One-line summary</h2>
-<p>The POS is the current RetailJI screen kept in shape and habit, rebuilt on the KDPS kernel underneath — scan-first, offline-first, append-only, rulebook-driven discounts, salesman on every line — with seven decisions (salesman granularity, split tender, membership, plain returns, the B2B corner, the F10 approval flow, and the offer tie-break) to close before the screen design starts.</p>
+<p>The POS is the current RetailJI screen kept in shape and habit, rebuilt on the KDPS kernel underneath — scan-first, offline-first, append-only, rulebook-driven discounts, salesman on every line. The return question is closed: exchange only, equal-or-up, no refund or counter credit note (POS counter redesign Q3/Q3b).</p>
 </section>
 
 <footer>

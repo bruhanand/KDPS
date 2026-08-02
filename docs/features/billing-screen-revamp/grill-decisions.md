@@ -85,11 +85,10 @@ Narrower than that, the frame degrades honestly: bands stack, the page scrolls a
 No separate compact design.
 A till is a laptop in landscape - stated, not assumed.
 
-## Q10 · Find a bill: stays a jump
+## Q10 · Find a bill: moves into counter return mode (superseded 2 Aug 2026)
 
-**Ruling: keep the jump to the Customers tab.**
-Autosave (Q2-Q3) makes leaving and returning free - the draft is exactly where it was.
-No overlay duplicate of the past-bill search; revisit only if cashiers complain.
+**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q2/Q7.**
+The Customers tab retires. Return mode finds the original bill through three doors on the counter: scan the receipt barcode, type the bill number, or search the Customer master by mobile/name and choose from that store's matching past bills. The till's Customer list contains no purchase history; the third door uses the existing store-scoped bill-search endpoint online and says it needs the line when offline.
 
 ## Q11 · Floating prompts, one pattern
 
@@ -105,7 +104,7 @@ The payment rail, customer card, and footer never move a pixel.
 - Step 2 (payment card) absorbs Q4; **plus the autosave + Undo work from Q2-Q3 and the qty-increment rule from Q1 land with the frame/cart work**.
 - Step 3 (UPI charge card) absorbs Q5.
 - Step 4 (customer master + typeahead) absorbs Q6 - backend model + bootstrap sync + UI.
-- Step 5 (polish) absorbs Q7 and Q8.
+- Step 5 (polish) absorbs Q7 and Q8. The later counter redesign owns Q10's replacement flow.
 
 Next: Phase 2, `/contract-designer`.
 
