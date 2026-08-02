@@ -26,7 +26,7 @@ def backfill_customers(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("sell", "0013_daily_check_dials_and_flag_note"),
+        ("sell", "0014_upi_stamp"),
         ("masters", "0008_customer"),
     ]
 
