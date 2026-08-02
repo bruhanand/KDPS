@@ -45,6 +45,15 @@
 .till-pin-card .btn { margin-top: 14px; }
 .till-pin-card .ok-note, .till-pin-card .till-alert { margin-top: 12px; }
 
+/* The scan tones (#247, grill Q8). The same narrow shape as the PIN card above,
+   and for the same reason: it is one switch somebody sets when the counter is
+   installed, not something a shift opens this page to look at. */
+.till-sound-card { margin-top: 22px; max-width: 420px; }
+.till-sound-card .muted-cell { display: block; font-size: 12.5px; }
+.till-sound-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.till-sound-row .btn { display: inline-flex; align-items: center; gap: 7px; }
+.till-sound-row .muted-cell { margin: 0; }
+
 /* The two recovery cards (#189). Full width and above the counts, because a
    counter that cannot bill is not something to scroll past. */
 .till-recover {

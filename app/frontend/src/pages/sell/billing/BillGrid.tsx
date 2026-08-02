@@ -1,23 +1,30 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import { Money } from "../../../lib/format";
+import { formatINR, Money } from "../../../lib/format";
 import { qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
+import { hasSlab, ratePercent } from "../../../till/tax";
 import { RupeeInput } from "./RupeeInput";
 
 /** Item · Brand · Barcode · Design · Size · Qty · Rate · Disc ₹ · GST ·
- *  Salesman · Net · remove. */
+ *  Salesman · Net · remove.
+ *
+ *  GST was eight per cent of a counter screen for a rate and a rupee figure on
+ *  every line - twelve numbers to answer a question that gets asked once a bill,
+ *  at the end, about the whole bill. Grill Q7 collapsed it to a badge and moved
+ *  the answer behind the footer's figure; the three points it frees go where
+ *  the ruling sent them - two to the item name, one to the discount box. */
 const COLUMN_WIDTHS = [
-  "11%",
+  "13%",
   "8%",
   "12%",
   "8%",
   "5%",
   "7%",
   "8%",
-  "8%",
-  "8%",
+  "9%",
+  "5%",
   "12%",
   "9%",
   "4%",
@@ -115,11 +122,7 @@ export function Lines({
                 <DiscountCell line={line} locked={locked} onEdit={onEdit} />
               </td>
               <td className="num">
-                {line.gst_rate}%
-                <br />
-                <span className="muted-cell">
-                  <Money paise={line.gst_paise} />
-                </span>
+                <GstBadge line={line} />
               </td>
               <td>
                 <select
@@ -183,6 +186,37 @@ export function Lines({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Which slab this piece was taxed at, and nothing else (#247, grill Q7).
+ *
+ * "Enough to catch a wrong slab at a glance" was the ruling, and the rate is the
+ * whole of that: a ₹4,999 jacket showing 5% is the mistake worth seeing from
+ * across the counter, and the rupee figure beside it never helped anybody see
+ * it. The bill's own tax total, and where it came from, is one click away in the
+ * footer.
+ *
+ * A line nothing has priced yet is blank rather than "0%": that piece is not
+ * zero-rated, it is unpriced, and the box asking for its price is two columns
+ * away saying so.
+ */
+function GstBadge({ line }: { line: PricedLine }) {
+  // `hasSlab`, the same test the breakup panel filters on - two spellings of
+  // "this line has no slab" can disagree, and a badge saying 0% beside a panel
+  // that left the line out is the counter telling two stories.
+  if (!hasSlab(line.gst_rate)) return <span className="muted-cell">-</span>;
+  return (
+    <span
+      className="bill-gst-badge"
+      data-testid={`bill-gst-${line.line_no}`}
+      // The rupees are still one hover away for anybody who wants them - the
+      // ruling took them off the screen, not out of the world.
+      title={`GST on this line: ${formatINR(line.gst_paise)}`}
+    >
+      {ratePercent(line.gst_rate)}
+    </span>
   );
 }
 

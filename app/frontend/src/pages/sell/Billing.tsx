@@ -35,10 +35,12 @@ import { takeParkedExchange } from "../../till/exchange";
 import type { Exchange } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
 import { tillToday } from "../../till/pricing";
-import { storeStateCodeOf } from "../../till/gstin";
+import { storeStateCodeOf, taxKindFor } from "../../till/gstin";
+import type { B2bTaxKind } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import type { Ask } from "../../till/pin";
 import { browserPrintAdapter } from "../../till/print";
+import { playTone, toneForScan } from "../../till/sounds";
 import { receiptHtml } from "../../till/receipt";
 import type { Payment } from "../../till/tender";
 import type { TillSnapshot } from "../../till/engine";
@@ -56,6 +58,7 @@ import { Lines } from "./billing/BillGrid";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
+import { TaxFigure } from "./billing/TaxFigure";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
@@ -455,6 +458,10 @@ function Counter({ storeName }: { storeName?: string }) {
   // split. Null until the counter's identity has synced, and null is *not* a
   // state code: see `storeStateCodeOf` and `toDraft`.
   const storeState = storeStateCodeOf(world.store);
+  // Which heads the tax breakup shows, derived exactly as `CustomerStrip` shows
+  // it and `toDraft` sends it: a counter that has not learned its own state
+  // raises no tax invoice at all, so there is nothing to split.
+  const taxKind: B2bTaxKind = storeState === null ? "none" : taxKindFor(customer.gstin, storeState);
   const bill = useMemo(
     () =>
       priceCart(cart, world, today, {
@@ -490,6 +497,13 @@ function Counter({ storeName }: { storeName?: string }) {
   );
 
   const defaultSalesman = lastPicked ?? world.lastSalesman;
+
+  /** Whether this counter makes a noise at all (#247, grill Q8) - set on Till &
+   *  Sync, held in the counter's own database, so it is the same answer for
+   *  whoever is standing here next. The fallback is for the type only: this
+   *  component does not render without a counter (`BillingPage` narrows), and
+   *  sound on is the shipped default either way. */
+  const muted = till?.muted ?? false;
 
   /** Empty the scan box and put down whatever it was asking about.
    *
@@ -539,10 +553,15 @@ function Counter({ storeName }: { storeName?: string }) {
       onScreenRef.current = { ...onScreenRef.current, cart: next };
       setCart(next);
       startingANewBill();
+      // The cashier is looking at the customer, not at the screen (#247, grill
+      // Q8). A tag that belongs to two live seasons has landed a line but is
+      // still asking which one (`SeasonCell`), and that is a buzz: the ruling is
+      // about what still needs a person, not about whether a row appeared.
+      playTone(toneForScan({ resolved: true, ambiguous: alternatives.length > 1 }), muted);
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [cart, clearScan, defaultSalesman, pushCartUndo, startingANewBill],
+    [cart, clearScan, defaultSalesman, muted, pushCartUndo, startingANewBill],
   );
 
   /**
@@ -581,13 +600,14 @@ function Counter({ storeName }: { storeName?: string }) {
         // sentence and an offer rather than a refusal. The suggestion list is
         // still worth a look first - the commonest reason a tag does not
         // resolve is that it was mistyped, not that the piece is new.
+        playTone(toneForScan({ resolved: false, ambiguous: false }), muted);
         setUnknown(found.barcode);
         setTyped(code.trim());
         return;
       }
       takePiece(found.chosen, found.candidates, found.stock);
     },
-    [takePiece, world],
+    [muted, takePiece, world],
   );
 
   function editLine(key: string, patch: Partial<CartLine>) {
@@ -1309,7 +1329,7 @@ function Counter({ storeName }: { storeName?: string }) {
       {/* Footer: pinned, visible from the first scan to the last. Reprint,
           then Save & Print - the one visually primary button on the screen. */}
       <div className="bill-foot">
-        <Totals bill={bill} />
+        <Totals bill={bill} taxKind={taxKind} />
         <div className="bill-actions">
           {blocked && (
             <span className="bill-blocked" data-testid="bill-blocked">
@@ -1751,7 +1771,13 @@ function ExchangeBack({
   );
 }
 
-function Totals({ bill }: { bill: ReturnType<typeof priceCart> }) {
+function Totals({
+  bill,
+  taxKind,
+}: {
+  bill: ReturnType<typeof priceCart>;
+  taxKind: B2bTaxKind;
+}) {
   return (
     <div className="bill-totals" data-testid="bill-totals">
       <Figure label="Pieces" value={String(bill.pieces)} />
@@ -1773,7 +1799,10 @@ function Totals({ bill }: { bill: ReturnType<typeof priceCart> }) {
       {bill.round_paise !== 0 && (
         <Figure label="Rounding" value={<Money paise={bill.round_paise} />} />
       )}
-      <Figure label="Tax included" value={<Money paise={bill.gst_paise} />} />
+      {/* Not a `Figure` any more (#247, grill Q7): the tax figure is the way
+          into the breakup that used to be twelve numbers down the grid, and it
+          words itself from the same rule the paper does (`tax.taxLabel`). */}
+      <TaxFigure bill={bill} kind={taxKind} />
       <Figure label="Net" value={<Money paise={bill.net_paise} />} testId="bill-net" strong />
     </div>
   );

@@ -108,6 +108,11 @@ export interface TillSnapshot {
    *  financial year. The screen's ticks, and the reason a receipt cannot go in
    *  twice; unlike `handover`, nothing on a screen can clear it. */
   paperEntered: number[];
+  /** The scan tones are off on this counter (#247, grill Q8). In the snapshot
+   *  rather than read per screen because two screens want it at once - Billing
+   *  plays the tone, Till & Sync draws the switch - and a switch that could
+   *  disagree with what the counter is actually doing is worse than no switch. */
+  muted: boolean;
 }
 
 const EMPTY_COUNTS: TillCounts = {
@@ -144,6 +149,7 @@ function initialSnapshot(storeCode: string): TillSnapshot {
     lockHeld: true,
     handover: null,
     paperEntered: [],
+    muted: false,
   };
 }
 
@@ -476,6 +482,17 @@ export class TillEngine {
     await writeMeta(this.db, META.lastSalesman, salesmanId);
   }
 
+  /** Turn the scan tones off, or back on (#247, grill Q8).
+   *
+   *  Written to the counter's own database for the same reason the salesman
+   *  default is: it is a fact about this machine on this shop floor, so it has
+   *  to survive a reload and be true for whoever is standing at it next - not a
+   *  preference that resets every morning and has to be found again. */
+  async setMuted(muted: boolean): Promise<void> {
+    await writeMeta(this.db, META.muted, muted);
+    await this.refresh();
+  }
+
   private async bootstrapIfNewDay(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     if ((await readMeta(this.db, META.bootstrapDay, "")) === today) return;
@@ -567,6 +584,7 @@ export class TillEngine {
     const register = await readMeta<RegisterPayload | null>(this.db, META.register, null);
     const syncedAt = await readMeta<string | null>(this.db, META.syncedAt, null);
     const handover = await readMeta<HandoverState | null>(this.db, META.handover, null);
+    const muted = await readMeta<boolean>(this.db, META.muted, false);
     const paperEntered = await paperEntries(this.db, financialYear());
     const nextNumber = await previewNextNumber(this.db, this.storeCode);
     const online = navigator.onLine;
@@ -585,6 +603,7 @@ export class TillEngine {
       register,
       handover,
       paperEntered,
+      muted,
       syncedAt,
       nextNumber,
       online,

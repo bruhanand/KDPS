@@ -16,6 +16,7 @@
 import { changeFor } from "./cart";
 import { TENDER_WORDS } from "./tender";
 import { splitTax, taxKindFor } from "./gstin";
+import { taxLabel } from "./tax";
 import type { B2bTaxKind } from "./gstin";
 import { describePiece } from "./lookup";
 import type {
@@ -122,11 +123,14 @@ export function receiptHtml(
   // on a customer's copy. A bill that gives back more than it sells gives the tax
   // back too, so it says so, and the figure is the amount rather than a minus.
   const givesTaxBack = bill.totals.gst_paise < 0;
-  const taxLabel = givesTaxBack ? "Tax given back" : "Tax included";
+  // The two words come from `tax.ts` rather than from here, because the footer
+  // and the breakup panel now say the same thing about the same number (#247)
+  // and the paper is the one that must not be argued with.
+  const label = taxLabel(bill.totals.gst_paise);
   const taxPaise = Math.abs(bill.totals.gst_paise);
   const taxRows =
     taxKind === "none"
-      ? [[taxLabel, money(taxPaise)]]
+      ? [[label, money(taxPaise)]]
       : splitTax(taxPaise, taxKind).map(
           (part) =>
             [`${part.label} ${givesTaxBack ? "given back" : "included"}`, money(part.paise)] as [
