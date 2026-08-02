@@ -49,7 +49,11 @@ export function Lines({
     );
   }
   return (
-    <div className="table-wrap">
+    // `bill-grid-wrap` (not just `.table-wrap`) so Billing.css can scope the
+    // sticky-header override to this table alone - the exchange table shares
+    // `.bill-lines` and keeps the generic wrap's own scroll/rounded-corner
+    // behaviour.
+    <div className="table-wrap bill-grid-wrap">
       <table className="data bill-grid" data-testid="bill-lines">
         {/* Fixed widths, not content widths. All twelve columns D10 names have
             to be on the counter's screen at once - a Net column that scrolled

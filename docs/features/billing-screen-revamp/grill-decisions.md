@@ -109,3 +109,14 @@ The payment rail, customer card, and footer never move a pixel.
 - Step 5 (polish) absorbs Q7 and Q8.
 
 Next: Phase 2, `/contract-designer`.
+
+---
+
+## Amendments - 2 August 2026
+
+Issue #243 built the frame from Q9/Q11 above, then live QA at 1366×768 (the size most counters use) found the payment + customer rail's own content taller than the space the frame leaves it - `Save & Print` landed behind the `Change` line, and the customer card was pushed off screen with no way to reach it. The round-1 review handed the question to Anand rather than guessing; he ruled the same day. Recorded here rather than edited into Q11 above, so what was decided on 1 Aug and what was added on 2 Aug both survive.
+
+**12. The rail gets a temporary internal scrollbar** (amends Q11's "the payment rail, customer card, and footer never move a pixel").
+That sentence still governs the footer and still governs *what pushes the layout* (nothing does - floating prompts still portal over the grid, per Q11, unchanged). It did not anticipate the rail's own content outgrowing the rail.
+Ruling: `overflow-y: auto` on the rail column only, so a cashier can always reach every control (Rule 5, flag-don't-block - never hide a control, never block the screen) - a temporary, deliberate exception to "only the line list scrolls" that ships now rather than blocking #243 on #246/#249's card-trimming work.
+**Exit condition:** #246 and #249 must shrink the payment and customer cards until the rail's content fits at 1366×768 without its own scrollbar - at that point the exception is deleted, not renegotiated, and design.md line "the line list inside it is the only `overflow-y: auto`" becomes true again.

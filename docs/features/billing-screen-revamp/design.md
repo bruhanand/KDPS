@@ -1,5 +1,7 @@
 # Billing screen revamp - Phase 3: technical design
 
+> **Amended 2 Aug 2026.** Issue #243's round-1 review found the payment + customer rail taller than the space available at 1366×768 - "the line list is the only `overflow-y: auto`" (line below) was not achievable without trimming the two rail cards, which is #246's and #249's scope, not #243's. Anand ruled: the rail gets its own **temporary** `overflow-y: auto` so nothing is ever unreachable (flag-don't-block); #246/#249 must shrink the cards until that scrollbar disappears, restoring the single-scroll rule this doc describes. Read **`grill-decisions.md` § Amendments - 2 August 2026** first; where the two disagree, the amendment wins.
+
 ## Summary
 
 The Billing route becomes a fixed-height frame that fills the content area exactly once - top strip, work area, pinned footer - with the line list as the only scrolling region.
@@ -35,7 +37,7 @@ Nothing posts; no ledger is touched.
 - `Billing.tsx` (~2000 lines) splits: the route keeps `Counter` (state, wiring, top strip, footer) and the big pieces move to `pages/sell/billing/` - `BillGrid.tsx` (Lines + cells), `PaymentCard.tsx`, `CustomerCard.tsx`, `UpiCharge.tsx`, `HeldBills.tsx` (moved in). Pure mechanical extraction; no behaviour moves in the same commit as the layout change.
 - The frame: `.bill-page { height: calc(100dvh - var(--topbar-h)); display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden }` - rows are PageHeader, the one-line alert strip, the work area, the footer. The work area is `grid-template-columns: minmax(0,1fr) 340px; min-height: 0`; the line list inside it is the only `overflow-y: auto`, with `position: sticky` column headers. This respects the AppShell contract (".content is the only box that scrolls") by making the page exactly content-height so `.content` never scrolls on this route; below 1280px a media query lets the bands stack and `.content` scroll again (grill G-2).
 - Top strip = the existing `PageHeader` row: `lead` stays the bill number + "Draft · saved" indicator; `actions` carries SyncLight, the ScanBox, and the four lifecycle buttons (Find a bill, Held bills (n), Hold bill, New bill).
-- All stacked banners collapse into the single alert row; the second-window/storage-lost block keeps its current full-takeover behaviour (Rule 5 hard case, unchanged).
+- All stacked banners collapse into the single alert row; the second-window/storage-lost block keeps its current full-takeover behaviour (Rule 5 hard case, unchanged). **Amended (round-2 review, #243):** keying in from paper is a third exception, for the same reason - its date field and "Not this one" exit are controls, not banner text, so they render off `paper !== null` in their own band instead of taking turns on the alert line; only `blocked`, `loading`, `no-price-list`, `print-problem`, `note`, `gift` and `holds-due` compete for that one line now.
 
 **Floating prompts (grill G-4)**
 
@@ -105,6 +107,9 @@ The bill's commit path is identical in every outcome - the charge card only deci
 - Server: house `refusal_body` codes only - the four new refusals are all `VALIDATION` with precise messages; the upsert step has **no** error path by design (logged, swallowed, bill stands).
 - Till: flag-never-block throughout - a failed draft write logs to console and the bill continues (the draft is a safety net, not a gate); a failed sound is ignored; adapter `unknown` is a visible state, never converted to `failed` on the till's own clock.
 - The frame never hides a hard block: `till.blocked` (second window / storage lost) still replaces the whole work area.
+- **Amended (round-2 review, #243):** the alert-strip precedence in `pickBillAlert` ranks `print-problem` ahead of `note`, since `save()` always sets the save-confirmation note before attempting to print - so a print failure never goes silent behind "Bill saved."
+- **Amended (round-2 review, second pass, #243):** ranking `print-problem` above `note` is only safe because `printProblem` cannot outlive the bill it belongs to - `takePiece`/`takeUnknown` clear it on the next scan and `resumeHold` clears it before swapping in a held bill's cart, so `holdBill`'s and `resumeHold`'s own failure notes are never buried behind a stale printer banner from an earlier bill. A live (not stale) print problem still outranks `answerHold`'s note - keeping or letting go a held bill from the review list is independent of the open cart, so that conflict is a real one, not staleness; left as a residual (`deviations.md`).
+- **Amended (round-6 correctness review, #243):** the scan float (`Suggestions`/`NotInSystem`) is portaled to `document.body`, so it structurally escapes the takeover unless gated explicitly - a scan could still run `applyScan -> takePiece`/`takeUnknown` and append to `cart.lines` with no grid on screen to show it. The portal now renders only when `!counterBlocked`, the same Rule 5 corollary already applied to the lifecycle buttons (`e58fcf9`) and the scan box itself (round-5).
 
 ## Assumptions made
 

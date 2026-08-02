@@ -28,30 +28,77 @@ import type { RefObject } from "react";
  * flyout per section sharing one trigger ref, and moving straight from one
  * section to the next has to re-place the popover, which a boolean that stayed
  * `true` would not do.
+ *
+ * A third caller (Billing's scan-box prompts, #243) needed two more things a
+ * button-only, right-of-trigger hook could not give it: the trigger is an
+ * `<input>`, and the prompt has to hang *below* the box rather than beside it,
+ * because it shares the row with the payment rail and a right-anchored panel
+ * would land on top of that. Both are parameters rather than forks - `T` for
+ * the element type, `side` for which edge it is measured from - so the
+ * sidebar flyout and the profile panel, which pass neither, get back exactly
+ * the behaviour they had.
  */
-export interface PositionedPopover {
+/** Pure placement math for {@link usePositionedPopover}, pulled out so it can
+ *  be pinned down in a test without a DOM: the two bugs this has already had
+ *  (round 2 clamped the wrong axis, round 3's `maxHeight` formula never fired)
+ *  were both placement-formula mistakes a plain unit test would have caught. */
+export function placePopover(
+  trigger: { top: number; bottom: number; left: number; right: number },
+  viewport: { width: number; height: number },
+  popoverSize: number,
+  side: "right" | "below",
+  margin = 8,
+): { top: number; left: number; maxHeight?: number } {
+  if (side === "below") {
+    const maxLeft = viewport.width - popoverSize - margin;
+    const top = trigger.bottom + margin;
+    const left = Math.max(margin, Math.min(trigger.left, maxLeft));
+    const maxHeight = Math.max(120, viewport.height - top - margin);
+    return { top, left, maxHeight };
+  }
+  const maxTop = viewport.height - popoverSize - margin;
+  const top = Math.max(margin, Math.min(trigger.top, maxTop));
+  const left = trigger.right + margin;
+  return { top, left };
+}
+
+export interface PositionedPopover<T extends HTMLElement = HTMLButtonElement> {
   /** Where to render it, in viewport coordinates. `null` until it has been
    *  placed - render nothing before that, or it flashes at the top-left
-   *  corner on the way to its real spot. */
-  at: { top: number; left: number } | null;
+   *  corner on the way to its real spot. `maxHeight` is only set on the
+   *  `"below"` side, where the popover grows downward by an amount CSS alone
+   *  cannot bound: a `100vh`-based rule has no way to know how far down the
+   *  page the trigger sits, so a popover starting well below the top of the
+   *  viewport would still be let to run past the bottom. Apply it as an
+   *  inline style on the popover; `"right"` callers keep clamping `top`
+   *  against their own measured height instead, unaffected. */
+  at: { top: number; left: number; maxHeight?: number } | null;
   /** Goes on the control the popover hangs off. */
-  triggerRef: RefObject<HTMLButtonElement>;
+  triggerRef: RefObject<T>;
   /** Goes on the portaled popover. It holds the node for the outside-click
    *  test, and re-places against the popover's real height the moment it is in
    *  the DOM - before that there is nothing to measure. */
   popoverRef: (node: HTMLDivElement | null) => void;
 }
 
-export function usePositionedPopover(
+export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
   openKey: string | null,
   onClose: () => void,
-  /** Stand-in height for the first placement, before the popover has ever
-   *  mounted. Pass the popover's CSS `max-height` where it has one, so the
-   *  first clamp is conservative rather than optimistic. */
-  fallbackHeight = 0,
-): PositionedPopover {
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  /** Stand-in size for the first placement, before the popover has ever
+   *  mounted: height on the `"right"` side (clamped against the bottom of the
+   *  screen), width on the `"below"` side (clamped against the right edge).
+   *  Pass the popover's CSS max on whichever axis that is, so the first clamp
+   *  is conservative rather than optimistic. */
+  fallbackSize = 0,
+  /** Which edge of the trigger the popover is measured from. `"right"` (the
+   *  rail flyout, the profile panel) clamps vertically, because the trigger
+   *  sits in a column that can run the height of the screen. `"below"` (the
+   *  scan box) clamps horizontally instead, because the trigger sits in a row
+   *  near the right edge of the page. */
+  side: "right" | "below" = "right",
+): PositionedPopover<T> {
+  const [at, setAt] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
+  const triggerRef = useRef<T>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   // Held in a ref so the listener effect can key on `openKey` alone. Callers
@@ -64,16 +111,26 @@ export function usePositionedPopover(
   const place = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    const margin = 8;
     const rect = trigger.getBoundingClientRect();
-    const height = popoverRef.current?.offsetHeight ?? fallbackHeight;
-    const maxTop = window.innerHeight - height - margin;
-    const top = Math.max(margin, Math.min(rect.top, maxTop));
-    const left = rect.right + margin;
-    setAt((current) =>
-      current && current.top === top && current.left === left ? current : { top, left },
+    const popoverSize =
+      side === "below"
+        ? (popoverRef.current?.offsetWidth ?? fallbackSize)
+        : (popoverRef.current?.offsetHeight ?? fallbackSize);
+    const { top, left, maxHeight } = placePopover(
+      rect,
+      { width: window.innerWidth, height: window.innerHeight },
+      popoverSize,
+      side,
     );
-  }, [fallbackHeight]);
+    setAt((current) =>
+      current &&
+      current.top === top &&
+      current.left === left &&
+      current.maxHeight === maxHeight
+        ? current
+        : { top, left, maxHeight },
+    );
+  }, [fallbackSize, side]);
 
   useEffect(() => {
     if (!openKey) {
