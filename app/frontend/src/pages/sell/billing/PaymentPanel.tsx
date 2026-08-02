@@ -1,4 +1,4 @@
-import { KeyRound, Plus, X } from "lucide-react";
+import { CheckCircle2, KeyRound, Plus, QrCode, X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
 import type { priceCart } from "../../../till/cart";
@@ -43,12 +43,15 @@ export function PaymentPanel({
   locked,
   onChange,
   onAsk,
+  onShowQr,
 }: {
   bill: ReturnType<typeof priceCart>;
   payment: Payment;
   locked: boolean;
   onChange: (patch: Partial<Payment>) => void;
   onAsk: () => void;
+  /** Open the QR charge card against whatever the UPI row is taking (#248). */
+  onShowQr: () => void;
 }) {
   const { split } = bill;
   // An exchange whose returns outweigh its sales pays the *customer*, and it pays
@@ -128,14 +131,25 @@ export function PaymentPanel({
           locked={locked}
           onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
         />
-        <TenderRow
-          testId="bill-upi"
-          label="UPI"
-          paise={payment.upi_paise}
-          prefillPaise={offerIf(payment.upi_paise === 0, owed)}
-          locked={locked}
-          onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
-        />
+        <div className="bill-upi-block">
+          <TenderRow
+            testId="bill-upi"
+            label="UPI"
+            paise={payment.upi_paise}
+            prefillPaise={offerIf(payment.upi_paise === 0, owed)}
+            locked={locked}
+            onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
+          />
+          <UpiProof
+            confirmed={split.upi_confirmed}
+            // Disabled rather than hidden while the row is empty: there is
+            // nothing to charge yet, and a button that appears and disappears
+            // as a figure is typed is a control moving under a cashier's hand
+            // (the standing "never hide a control" rule).
+            locked={locked || split.upi_paise <= 0}
+            onShowQr={onShowQr}
+          />
+        </div>
       </div>
 
       <Notes
@@ -229,6 +243,50 @@ function CashChips({
           <Money paise={paise} />
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * How the UPI row is being proved (#248, grill Q5).
+ *
+ * Either the bank said so through the charge card - and then it says which
+ * reference, because a stamp with nothing behind it is not a proof - or it is
+ * the cashier's own word, which is what "show QR" is offered instead of. Both
+ * are allowed, forever: billing never stops on the internet, and the control on
+ * a vouched-for payment is that the day close shows the two totals apart.
+ *
+ * The button stays on screen while the bill is confirmed so a cashier who
+ * charged the wrong figure can charge again - editing the UPI box drops the
+ * stamp on its own (`confirmedUpiOf`), and this is the way back from there.
+ */
+function UpiProof({
+  confirmed,
+  locked,
+  onShowQr,
+}: {
+  confirmed: TenderSplit["upi_confirmed"];
+  locked: boolean;
+  onShowQr: () => void;
+}) {
+  return (
+    <div className="bill-upi-proof">
+      <button
+        type="button"
+        className="btn bill-upi-open"
+        data-testid="bill-upi-show-qr"
+        disabled={locked}
+        onClick={onShowQr}
+      >
+        <QrCode size={14} />
+        Show QR
+      </button>
+      {confirmed && (
+        <span className="bill-upi-confirmed" data-testid="bill-upi-confirmed">
+          <CheckCircle2 size={13} />
+          Bank confirmed · {confirmed.reference}
+        </span>
+      )}
     </div>
   );
 }
