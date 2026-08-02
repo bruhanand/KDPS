@@ -142,11 +142,12 @@ export function PaymentPanel({
           />
           <UpiProof
             confirmed={split.upi_confirmed}
-            // Disabled rather than hidden while the row is empty: there is
-            // nothing to charge yet, and a button that appears and disappears
-            // as a figure is typed is a control moving under a cashier's hand
-            // (the standing "never hide a control" rule).
-            locked={locked || split.upi_paise <= 0}
+            // Disabled rather than hidden, both times: there is nothing to
+            // charge on an empty row, and nothing left to charge on one the
+            // bank has already confirmed. A button that appeared and vanished
+            // as a figure was typed would be a control moving under a
+            // cashier's hand (the standing "never hide a control" rule).
+            locked={locked || split.upi_paise <= 0 || split.upi_confirmed !== null}
             onShowQr={onShowQr}
           />
         </div>
@@ -256,9 +257,12 @@ function CashChips({
  * are allowed, forever: billing never stops on the internet, and the control on
  * a vouched-for payment is that the day close shows the two totals apart.
  *
- * The button stays on screen while the bill is confirmed so a cashier who
- * charged the wrong figure can charge again - editing the UPI box drops the
- * stamp on its own (`confirmedUpiOf`), and this is the way back from there.
+ * A row the bank has already confirmed cannot be charged again from here, and
+ * that is a money guard rather than tidiness: with real hardware behind the
+ * adapter, a second "Show QR" against a payment that has already gone through
+ * is a second collection from the same customer. The way back is to change what
+ * the row is taking - editing the box drops the stamp on its own
+ * (`confirmedUpiOf`) and the button comes live again with it.
  */
 function UpiProof({
   confirmed,
