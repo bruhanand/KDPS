@@ -348,6 +348,7 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
           paise={line.disc_paise}
           locked={locked || line.cap_paise === 0 || lockedOnOffer}
           placeholder="0"
+          maxPaise={line.cap_paise}
           onChange={(paise) => onEdit(line.key, { disc_paise: clampManualDiscount(paise ?? 0, line.cap_paise) })}
         />
       </span>
