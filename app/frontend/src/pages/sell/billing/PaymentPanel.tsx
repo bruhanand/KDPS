@@ -2,17 +2,26 @@ import { KeyRound, Plus, X } from "lucide-react";
 
 import { Money } from "../../../lib/format";
 import type { priceCart } from "../../../till/cart";
-import { newNote } from "../../../till/tender";
-import type { NoteStanding, Payment } from "../../../till/tender";
+import { cashChips, newNote, notePrefillFor, prefillFor } from "../../../till/tender";
+import type { NoteStanding, Payment, TenderSplit } from "../../../till/tender";
 import { RupeeInput } from "./RupeeInput";
 
 /**
- * The four trimmed modes, the notes among them, and what is still unpaid (#182).
+ * The four trimmed modes, the notes among them, and what is still unpaid (#182,
+ * rebuilt by #246 around one rule: what is still owed is always on screen, and
+ * tapping a tender row fills it).
  *
  * The cash box is deliberately not a controlled copy of the derived figure: the
  * cash tender is `null` until somebody types in it, meaning "whatever is left of
  * the bill", so an all-cash sale needs no keystrokes and a split says out loud
  * that it is one. Clearing the box hands the row back to the balance.
+ *
+ * There is no split-payment *mode*, and never was: the rows are the split. What
+ * #246 adds is the arithmetic a cashier was doing in their head between them -
+ * tapping an empty row offers the remainder (`prefillFor`), typing over it
+ * splits, and one colour-coded line says whether money is still coming in or
+ * going back out. None of it moves a figure `splitOf` computes, so the day-close
+ * numbers are the same numbers.
  */
 export function PaymentPanel({
   bill,
@@ -48,6 +57,20 @@ export function PaymentPanel({
       </section>
     );
   }
+  // The same figure `priceCart` resolved the split against (`Math.max(net, 0)`,
+  // cart.ts) - a panel that asked about a different bill would offer a prefill
+  // the close-validation then refused. The branch above already means this is
+  // never negative; the clamp keeps that true if the two are ever reordered.
+  const netPaise = Math.max(bill.net_paise, 0);
+  const owed = prefillFor(split, netPaise);
+  // The cash row is what the customer is handing notes against, so the chips are
+  // read off it rather than off `balance_paise` - which is nought on the
+  // ordinary all-cash panel, the one sale the chips were asked for.
+  const chips = cashChips(split.cash_paise);
+  // Hidden when the bill takes no cash at all - but never while it holds a
+  // figure somebody typed, which would strand it off screen (Rule 5).
+  const showReceived = split.cash_paise > 0 || payment.cash_received_paise > 0;
+
   return (
     <section className="card section-card bill-panel">
       <p className="eyebrow">To pay</p>
@@ -56,18 +79,42 @@ export function PaymentPanel({
       </p>
 
       <div className="bill-tenders">
-        <TenderRow
-          testId="bill-cash"
-          label="Cash"
-          paise={split.cash_paise}
-          derived={payment.cash_paise === null}
-          locked={locked}
-          onChange={(paise) => onChange({ cash_paise: paise })}
-        />
+        <div className="bill-cash-block">
+          <TenderRow
+            testId="bill-cash"
+            label="Cash"
+            paise={split.cash_paise}
+            // Empty in the sense the prefill cares about: the row shows the
+            // balance it is about to absorb, but nobody has typed in it yet.
+            prefillPaise={payment.cash_paise === null ? owed : null}
+            derived={payment.cash_paise === null}
+            locked={locked}
+            onChange={(paise) => onChange({ cash_paise: paise })}
+          />
+          <CashChips
+            chips={chips}
+            locked={locked}
+            onPick={(paise) => onChange({ cash_received_paise: paise })}
+          />
+          {showReceived && (
+            <TenderRow
+              testId="bill-cash-received"
+              label="Cash received"
+              paise={payment.cash_received_paise}
+              // Never prefilled: what the customer physically handed over is the
+              // one figure on this panel the till has no business guessing - the
+              // chips are how it is offered, one deliberate tap at a time.
+              locked={locked}
+              quiet
+              onChange={(paise) => onChange({ cash_received_paise: paise ?? 0 })}
+            />
+          )}
+        </div>
         <TenderRow
           testId="bill-card"
           label="Card"
           paise={payment.card_paise}
+          prefillPaise={payment.card_paise === 0 ? owed : null}
           locked={locked}
           onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
         />
@@ -75,6 +122,7 @@ export function PaymentPanel({
           testId="bill-upi"
           label="UPI"
           paise={payment.upi_paise}
+          prefillPaise={payment.upi_paise === 0 ? owed : null}
           locked={locked}
           onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
         />
@@ -83,6 +131,9 @@ export function PaymentPanel({
       <Notes
         notes={split.notes}
         locked={locked}
+        prefillFor={(standing) =>
+          standing.note.amount_paise === 0 ? notePrefillFor(split, netPaise, standing) : null
+        }
         onChange={(index, patch) =>
           onChange({
             notes: payment.notes.map((note, i) => (i === index ? { ...note, ...patch } : note)),
@@ -94,46 +145,119 @@ export function PaymentPanel({
         }
       />
 
-      <div className="bill-row">
-        <span>Still to pay</span>
-        <span
-          data-testid="bill-balance"
-          className={split.balance_paise === 0 ? "" : "bill-unpaid"}
-        >
-          <Money paise={split.balance_paise} />
-        </span>
-      </div>
-
-      <div className="field">
-        <label htmlFor="bill-cash-received">Cash received</label>
-        <RupeeInput
-          testId="bill-cash-received"
-          label="Cash received"
-          paise={payment.cash_received_paise}
-          locked={locked}
-          placeholder="0"
-          onChange={(paise) => onChange({ cash_received_paise: paise ?? 0 })}
-        />
-      </div>
-      <div className="bill-row">
-        <span>Change</span>
-        <span data-testid="bill-change">
-          <Money paise={split.change_paise} />
-        </span>
-      </div>
+      <BalanceLine split={split} />
 
       <Authorised bill={bill} locked={locked} onAsk={onAsk} />
     </section>
   );
 }
 
+/**
+ * The one line that says where the money stands - red while the bill is short,
+ * green when there is change to hand back, and never both at once (#246).
+ *
+ * It replaced a "Still to pay" row and a "Change" row that were on screen
+ * together, each answering with a ₹0 for most of the bill's life. Two figures
+ * that are nearly always nought teach a cashier to stop reading them, which is
+ * the opposite of what the one number that matters is for.
+ *
+ * Over-tendered is its own red rather than a green: `change_paise` is measured
+ * against the *cash* tender, so a bill overpaid by card has money on it that is
+ * not change and that nobody can hand back. Calling that green would say the
+ * sale is fine when `whyPaymentCannotClose` is about to refuse it.
+ */
+function BalanceLine({ split }: { split: TenderSplit }) {
+  const { balance_paise, change_paise } = split;
+  if (balance_paise > 0) {
+    return (
+      <p className="bill-balance-line is-short" data-testid="bill-balance-line">
+        <span>Still to pay</span>
+        <span data-testid="bill-balance">
+          <Money paise={balance_paise} />
+        </span>
+      </p>
+    );
+  }
+  if (balance_paise < 0) {
+    return (
+      <p className="bill-balance-line is-short" data-testid="bill-balance-line">
+        <span>Over by</span>
+        <span data-testid="bill-balance">
+          <Money paise={-balance_paise} />
+        </span>
+      </p>
+    );
+  }
+  if (change_paise > 0) {
+    return (
+      <p className="bill-balance-line is-change" data-testid="bill-balance-line">
+        <span>Change to give</span>
+        <span data-testid="bill-change">
+          <Money paise={change_paise} />
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="bill-balance-line is-settled" data-testid="bill-balance-line">
+      <span>Nothing left to pay</span>
+      <span data-testid="bill-balance">
+        <Money paise={0} />
+      </span>
+    </p>
+  );
+}
+
+/**
+ * The quick-cash chips (grill Q4): what the customer is most likely to hand
+ * over for the cash half of this bill, one tap each.
+ *
+ * They record `cash_received_paise` and nothing else - the tender rows are
+ * untouched, so a chip can never change what the bill takes, only what the
+ * change line answers. Exact is first because it is the common one and because
+ * it closes that line to nought.
+ */
+function CashChips({
+  chips,
+  locked,
+  onPick,
+}: {
+  chips: number[];
+  locked: boolean;
+  onPick: (paise: number) => void;
+}) {
+  if (!chips.length) return null;
+  return (
+    <div className="bill-chips" data-testid="bill-cash-chips">
+      {chips.map((paise, index) => (
+        <button
+          key={paise}
+          type="button"
+          className="btn bill-chip"
+          data-testid={`bill-cash-chip-${index}`}
+          aria-label={`Cash received: ${index === 0 ? "the exact amount, " : ""}${paise / 100} rupees`}
+          disabled={locked}
+          onClick={() => onPick(paise)}
+        >
+          {index === 0 && <span className="bill-chip-tag">Exact</span>}
+          <Money paise={paise} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** One mode's amount. `derived` is the cash row following the balance - it shows
- *  the figure it is about to take without pretending a person typed it. */
+ *  the figure it is about to take without pretending a person typed it.
+ *  `quiet` is the cash-received row, which is a note to self about the drawer
+ *  rather than a tender, and reads as one. */
 function TenderRow({
   testId,
   label,
   paise,
   derived,
+  quiet,
+  prefillPaise = null,
   locked,
   onChange,
 }: {
@@ -141,11 +265,13 @@ function TenderRow({
   label: string;
   paise: number;
   derived?: boolean;
+  quiet?: boolean;
+  prefillPaise?: number | null;
   locked: boolean;
   onChange: (paise: number | null) => void;
 }) {
   return (
-    <div className="bill-tender">
+    <div className={quiet ? "bill-tender is-quiet" : "bill-tender"}>
       <label htmlFor={testId}>
         {label}
         {derived && (
@@ -160,6 +286,7 @@ function TenderRow({
         paise={paise}
         locked={locked}
         placeholder="0"
+        prefillPaise={prefillPaise}
         onChange={onChange}
       />
     </div>
@@ -170,12 +297,14 @@ function TenderRow({
 function Notes({
   notes,
   locked,
+  prefillFor,
   onChange,
   onAdd,
   onRemove,
 }: {
   notes: NoteStanding[];
   locked: boolean;
+  prefillFor: (standing: NoteStanding) => number | null;
   onChange: (index: number, patch: { number?: string; amount_paise?: number }) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
@@ -201,6 +330,7 @@ function Notes({
               paise={standing.note.amount_paise}
               locked={locked}
               placeholder="0"
+              prefillPaise={prefillFor(standing)}
               onChange={(paise) => onChange(index, { amount_paise: paise ?? 0 })}
             />
             <button
