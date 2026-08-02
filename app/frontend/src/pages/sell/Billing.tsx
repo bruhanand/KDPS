@@ -554,9 +554,10 @@ function Counter({ storeName }: { storeName?: string }) {
   // Which one banner the frame's alert strip shows (#243) - see `pickBillAlert`.
   // `blocked` never wins a line here: a blocked counter takes over the whole
   // work area below instead, which is the stronger treatment Rule 5 asks for.
+  // `paper` is not a flag here either, for the same reason: see the block
+  // below, which renders off `paper !== null` directly.
   const alert = pickBillAlert({
     blocked: Boolean(till?.blocked),
-    paper: paper !== null,
     loading: !world.loaded,
     noPriceList: world.loaded && !world.items.length,
     printProblem: Boolean(printProblem),
@@ -564,6 +565,11 @@ function Counter({ storeName }: { storeName?: string }) {
     gift: bill.entitlements.length > 0,
     holdsDue: toReview.length > 0,
   });
+
+  // Shared by the three lifecycle buttons below - one call site instead of
+  // three identical ones, mirroring `alert`'s own `blocked: Boolean(till?.blocked)`
+  // just above.
+  const counterBlocked = Boolean(till?.blocked);
 
   /** Dismissing the scan box's floating prompts (G-4) is the same act as
    *  answering "not that" by hand: put down the question and give the cursor
@@ -627,7 +633,7 @@ function Counter({ storeName }: { storeName?: string }) {
                   // blocked-counter takeover replaces entirely - toggling this
                   // while blocked would flip the label with nothing to show
                   // for it, so it is disabled along with the actions below.
-                  disabled={Boolean(till?.blocked)}
+                  disabled={counterBlocked}
                   onClick={() => setShowHolds((open) => !open)}
                 >
                   {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
@@ -636,7 +642,7 @@ function Counter({ storeName }: { storeName?: string }) {
                   type="button"
                   className="btn"
                   data-testid="bill-hold"
-                  disabled={Boolean(till?.blocked) || !cart.lines.length || saving}
+                  disabled={counterBlocked || !cart.lines.length || saving}
                   onClick={() => void holdBill()}
                 >
                   <PauseCircle size={15} />
@@ -646,7 +652,7 @@ function Counter({ storeName }: { storeName?: string }) {
                   type="button"
                   className="btn"
                   data-testid="bill-new"
-                  disabled={Boolean(till?.blocked) || saving}
+                  disabled={counterBlocked || saving}
                   onClick={newBill}
                 >
                   New bill
@@ -656,7 +662,7 @@ function Counter({ storeName }: { storeName?: string }) {
           }
         />
 
-        {alert === "paper" && (
+        {paper !== null && (
           <div className="bill-paper" data-testid="bill-paper">
             <div>
               <strong>Entering printed bill {paper}</strong> - this one was rung up on the
@@ -941,16 +947,23 @@ export function outstandingPaperSeq(
   return missing.includes(asked) ? asked : null;
 }
 
-/** Which one of the counter's eight possible banners to show (#243).
+/** Which one of the counter's seven possible banners to show (#243).
  *
  *  Every one of these used to be its own paragraph, stacking - a bill with a
  *  gift earned, a note from an exchange, and holds waiting review could carry
  *  three banners at once, each pushing the totals further down the page. The
  *  frame gives them one line, so something has to decide which one wins when
- *  several are true at once. */
+ *  several are true at once.
+ *
+ *  `paper` is not one of the seven: keying in a printed bill needs its date
+ *  field and its "Not this one" exit live the whole time it is active, not
+ *  only when it happens to win this line (round-2 finding - a failed save in
+ *  paper mode set `note`, which hid both controls with only "start a new
+ *  bill" left to escape by). It renders from its own always-on band
+ *  (`paper !== null`, see `Counter`) instead, the same way `blocked` renders
+ *  from the work area instead of this line. */
 export type BillAlertKind =
   | "blocked"
-  | "paper"
   | "loading"
   | "no-price-list"
   | "print-problem"
@@ -960,7 +973,6 @@ export type BillAlertKind =
 
 export interface BillAlertFlags {
   blocked: boolean;
-  paper: boolean;
   loading: boolean;
   noPriceList: boolean;
   printProblem: boolean;
@@ -980,21 +992,28 @@ export interface BillAlertFlags {
  * blocked counter takes over the whole work area instead (see `Counter`),
  * which is the stronger treatment the rule asks for.
  *
- * `note` is second, ahead of `paper`/`loading`/`no-price-list`, because it is
- * the one channel every failure on this screen reports through (`save`,
- * `holdBill`, `resumeHold`, `answerHold` all funnel their catch block into it).
- * Before the collapse these banners stacked, so an error note was never hidden
- * behind a mode banner - a mode is a lesser alert than an error, not the other
- * way round, and a cashier who does not see why Save failed either re-submits
- * a bill that already went through or walks away thinking one never did.
+ * `print-problem` is second, ahead of `note`: `save()` sets both in the same
+ * order every time printing fails after a successful commit (`setNote` then
+ * `await print(receipt)`, which is the only place `printProblem` is ever set
+ * true) - so whenever the two coincide, `note` is always that save's own "Bill
+ * saved" line, never an unrelated error, and letting `note` win would bury the
+ * one thing on this screen that tells the cashier the receipt did not print
+ * and Reprint is what to press (round-2 finding).
+ *
+ * `note` is third, ahead of `loading`/`no-price-list`, because it is the one
+ * channel every failure on this screen reports through (`save`, `holdBill`,
+ * `resumeHold`, `answerHold` all funnel their catch block into it). Before the
+ * collapse these banners stacked, so an error note was never hidden behind a
+ * mode banner - a mode is a lesser alert than an error, not the other way
+ * round, and a cashier who does not see why Save failed either re-submits a
+ * bill that already went through or walks away thinking one never did.
  */
 export function pickBillAlert(flags: BillAlertFlags): BillAlertKind | null {
   if (flags.blocked) return "blocked";
+  if (flags.printProblem) return "print-problem";
   if (flags.note) return "note";
-  if (flags.paper) return "paper";
   if (flags.loading) return "loading";
   if (flags.noPriceList) return "no-price-list";
-  if (flags.printProblem) return "print-problem";
   if (flags.gift) return "gift";
   if (flags.holdsDue) return "holds-due";
   return null;

@@ -102,7 +102,6 @@ describe("which printed bill this screen is entering", () => {
 function noAlerts(over: Partial<BillAlertFlags> = {}): BillAlertFlags {
   return {
     blocked: false,
-    paper: false,
     loading: false,
     noPriceList: false,
     printProblem: false,
@@ -128,34 +127,39 @@ describe("which one banner the counter shows", () => {
     // Rule 5: collapsing to one line must not soften the second-window hard
     // block - it wins outright rather than taking turns with a lesser alert.
     expect(
-      pickBillAlert(
-        noAlerts({ blocked: true, paper: true, printProblem: true, holdsDue: true }),
-      ),
+      pickBillAlert(noAlerts({ blocked: true, printProblem: true, holdsDue: true })),
     ).toBe("blocked");
   });
 
-  it("an error note outranks keying in from paper", () => {
-    // save/holdBill/resumeHold/answerHold all report their failure through
-    // `note` - it must not go silent just because paper mode is also active.
-    expect(pickBillAlert(noAlerts({ paper: true, noPriceList: true, note: true }))).toBe(
-      "note",
+  it("a print problem outranks the save confirmation note", () => {
+    // `save()` sets both in this order every time printing fails after a
+    // successful commit - `note` is always that save's own "Bill saved" line
+    // when this coincides, never an unrelated error, so it must not bury the
+    // one thing that tells the cashier the receipt did not print (round-2
+    // finding: Billing.tsx:993).
+    expect(pickBillAlert(noAlerts({ printProblem: true, note: true }))).toBe(
+      "print-problem",
     );
   });
 
-  it("keys in from paper still outranks a stale price list", () => {
-    expect(pickBillAlert(noAlerts({ paper: true, noPriceList: true }))).toBe("paper");
+  it("an error note outranks a stale price list", () => {
+    // save/holdBill/resumeHold/answerHold all report their failure through
+    // `note` - it must not go silent just because the till is between other
+    // states too.
+    expect(pickBillAlert(noAlerts({ noPriceList: true, note: true }))).toBe("note");
   });
 
   it("follows the counter's own stacking order end to end", () => {
-    // blocked > note > paper > loading > no price list > print problem > gift
-    // > holds due - error notes moved second so a mode banner never hides one.
+    // blocked > print problem > note > loading > no price list > gift > holds
+    // due. `paper` is not in this list at all - see the doc comment on
+    // `BillAlertKind`; it renders from its own always-on band instead of
+    // taking turns on this line.
     const order: (keyof BillAlertFlags)[] = [
       "blocked",
+      "printProblem",
       "note",
-      "paper",
       "loading",
       "noPriceList",
-      "printProblem",
       "gift",
       "holdsDue",
     ];
