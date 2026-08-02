@@ -162,7 +162,7 @@
   <tr><td>Cashiers work at roughly double normal speed, read the screen from ~80 cm, and split attention between screen, customer and queue.</td><td>Big fonts on the numbers that matter; the bill total must be readable at a glance; no small click targets in the hot path.</td></tr>
   <tr><td>Every extra step, screen or confirmation slows the line; validate only where it is critical.</td><td>The hot path is scan → scan → payment key → done. No dialog boxes inside it. Confirmations only where money or stock could go wrong.</td></tr>
   <tr><td>An error costs up to ten times the transaction time.</td><td>Prevent instead of punish: auto-applied discounts, auto GST, auto salesman default — the cashier types almost nothing.</td></tr>
-  <tr><td>POS design must assume misconduct exists (documented cashier theft patterns).</td><td>Voids, over-cap discounts and reprints are gated and logged with who/when — silently, without slowing the honest path.</td></tr>
+  <tr><td>POS design must assume misconduct exists (documented cashier theft patterns).</td><td>Voids and reprints are gated and logged with who/when. Manual discount has an absolute HO-configured cap; there is no counter override (POS redesign Q5/Q5b).</td></tr>
   <tr><td>Park / hold a sale is a standard feature of every major POS.</td><td>We add <b>Hold Bill</b> — the current POS lacks it, and its absence is felt every time a customer runs for one more item.</td></tr>
   <tr><td>Returns and exchange handled inside the same transaction is the industry norm.</td><td>Confirms the current Return-tick-in-the-same-bill gesture we already decided to keep.</td></tr>
   <tr><td>Layouts are assigned per register/user and kept configurable (Dynamics 365 model).</td><td>Our screen definition lives as data per store/role where cheap to do — Rule 12 again.</td></tr>
@@ -185,7 +185,7 @@
 <h3>Behaviour rules (the invisible part)</h3>
 <ul>
   <li><b>Scan is instant and offline</b> — local item/price/offer/stock data; stock under the barcode shows at scan, exactly as today's "Total Stock" readout.</li>
-  <li><b>Offers apply themselves</b> as lines enter; the Offer Detail area lists what fired, per brand. Manual discount within the role's cap is a keystroke; over the cap, the bill will not close without a manager's OK, recorded on the bill.</li>
+  <li><b>Offers apply themselves</b> as lines enter; the Offer Detail area lists what fired, per brand. Manual discount is capped by HO configuration (10% default) with no manager PIN or till override; an offered line gets no extra manual discount unless HO explicitly enables stacking.</li>
   <li><b>Ambiguous barcode</b> (several live seasons): one-tap "which season?" — the only question the screen is ever allowed to ask mid-sale, and it never blocks billing.</li>
   <li><b>Printer checked before Save &amp; Print</b>; if it is off, the bill still saves and the screen says so, with Reprint one tap away.</li>
   <li><b>Saved means saved</b>: append-only, reprint only, corrections by reversal — the store's own rule.</li>

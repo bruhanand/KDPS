@@ -87,7 +87,7 @@ A till is a laptop in landscape - stated, not assumed.
 
 ## Q10 · Find a bill: moves into counter return mode (superseded 2 Aug 2026)
 
-**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q2/Q7.**
+**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q2.**
 The Customers tab retires. Return mode finds the original bill through three doors on the counter: scan the receipt barcode, type the bill number, or search the Customer master by mobile/name and choose from that store's matching past bills. The till's Customer list contains no purchase history; the third door uses the existing store-scoped bill-search endpoint online and says it needs the line when offline.
 
 ## Q11 · Floating prompts, one pattern

@@ -78,7 +78,7 @@
   <li>The <b>line grid in the middle</b> with the same columns staff read today: item name, brand, barcode, design no., size, qty, rate, discount % and amount, GST, salesman, amount, net amount.</li>
   <li>The <b>payment panel on the right</b>: bill amount at top, one row per payment mode, tendered cash and change at the bottom.</li>
   <li>The <b>customer strip at the bottom</b>: member/mobile, name, address.</li>
-  <li>The <b>big action buttons</b> (Save &amp; Print, Print, Search) and the F-key habits (F5 print, F8 new invoice, F9 sales return) where they make sense.</li>
+  <li>The <b>big action buttons</b> stay visible, with the current accelerators beside them: F2 Hold · F3 Look up / Find bill · F4 New bill · F9 Pay &amp; Print · Esc back to scan/dismiss error · Enter for the next bill on the finish overlay (POS counter redesign Q4). The former F5/F8/F9 mapping is superseded.</li>
 </ul>
 <p>Keeping the shape does <b>not</b> mean keeping the junk. Dead controls (the never-used Coupon tile, Sodexo, Backup buttons, the column-width fiddling toolbar) go, and the known bugs get fixed underneath (section 5). The stores should feel "same screen, but it never hangs", not "new software to learn".</p>
 </section>
@@ -128,7 +128,7 @@
   <tr>
     <td><b>Payment panel</b>: Cash, Card (bank), UPI, Wallet, Credit Note, Coupon, Credit, Tender Cash</td>
     <td>Amount boxes per mode — the current POS already does <b>split payment</b> across modes on one bill.</td>
-    <td>Keep Cash / Card / UPI / Credit Note; Coupon is unused noise; Wallet and Credit need a decision (section 4).</td>
+    <td>Keep Cash / Card / UPI. Credit Note, Coupon, Wallet and other legacy tender rows do not enter the new counter; POS counter redesign Q3/Q3b explicitly retires counter note issue and redemption.</td>
   </tr>
   <tr>
     <td><b>Customer strip</b>: Member ID, mobile, name, address, GSTIN, member disc %, wallet balance, "is WhatsApp"</td>
@@ -196,7 +196,7 @@
 <table>
   <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
   <tr><td>B1</td><td><b>Offers apply themselves.</b> HO pushes the live rulebook to the till; as items scan, the right offer lands per item (best brand offer + stackable store-wide/bank add-ons). No cashier typing a % from memory. The owner's words: rule set by HO, counter staff just chooses.</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
-  <tr><td>B2</td><td><b>Manual discount is capped per role.</b> Below the cap the cashier may apply it; above the cap the bill will not close without a manager's OK, recorded on the bill.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>B2</td><td><b>Manual discount has an absolute HO-configured cap</b> (10% default). The till cannot exceed it: no manager PIN and no override. A line already carrying an offer gets no extra manual discount unless HO configuration explicitly allows stacking (POS counter redesign Q5/Q5b).</td><td><span class="badge b-lock">Locked</span></td></tr>
   <tr><td>B3</td><td><b>Every discounted line records the evidence</b>: MRP, discount, final price, which rule fired, who billed, who approved, who funds it. Feeds the daily applied-vs-rulebook check.</td><td><span class="badge b-lock">Locked</span></td></tr>
   <tr><td>B4</td><td><b>No-discount styles are skipped automatically.</b></td><td><span class="badge b-lock">Locked</span></td></tr>
 </table>
@@ -254,7 +254,7 @@
   <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
   <tr><td>H1</td><td><b>The till sees only its own store's data.</b> No whole-company master browsing from a counter.</td><td><span class="badge b-lock">Locked</span></td></tr>
   <tr><td>H2</td><td><b>The cashier never sees cost or margin</b>, and cannot lift the discount cap. The nine-role access matrix already on main governs this.</td><td><span class="badge b-lock">Locked</span></td></tr>
-  <tr><td>H3</td><td><b>Manager override at the counter</b> (for over-cap discounts, and whatever else design puts behind it) is recorded on the bill with who and when.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>H3</td><td><b>Manager override at the counter survives only for a late-exchange window.</b> Discounts have no override; HO moves the configured cap. A late exchange records who authorised it and when.</td><td><span class="badge b-lock">Locked</span></td></tr>
 </table>
 
 <h3>I · The store's day around the bill</h3>
