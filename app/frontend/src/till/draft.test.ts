@@ -14,19 +14,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addPiece, emptyCart, newKey } from "./cart";
 import type { Cart } from "./cart";
 import type { TillDb } from "./db";
-import {
-  clearDraft,
-  persistDraft,
-  readDraft,
-  rekeyDraft,
-  restoredCart,
-  restoredCustomer,
-} from "./draft";
+import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "./draft";
 import type { DraftPayload } from "./draft";
 import { newLegKey } from "./exchange";
 import type { ExchangeLeg } from "./exchange";
 import { covers, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
 import type { Ask, Authorisation } from "./pin";
+import { tillToday } from "./pricing";
 import { freshTill, item } from "./testSupport";
 import { emptyPayment } from "./tender";
 import type { TillCustomer } from "./types";
@@ -75,13 +69,18 @@ afterEach(() => {
 });
 
 describe("writing the draft through", () => {
-  it("reproduces the cart, the customer and the paper number exactly", async () => {
+  it("reproduces the cart, the customer and the paper state exactly", async () => {
     const cart = cartOf();
     const customer: TillCustomer = { name: "Mrs Sharma", mobile: "9876543210", gstin: "" };
 
-    await persistDraft(db, cart, customer, 305);
+    await persistDraft(db, cart, customer, 305, "2026-08-01T09:15");
 
-    expect(await readDraft(db)).toMatchObject({ cart, customer, paper: 305 });
+    expect(await readDraft(db)).toMatchObject({
+      cart,
+      customer,
+      paper: 305,
+      paperAt: "2026-08-01T09:15",
+    });
   });
 
   it("is nothing at all until something has been saved", async () => {
@@ -89,16 +88,16 @@ describe("writing the draft through", () => {
   });
 
   it("overwrites what was there before - one row, not a history", async () => {
-    await persistDraft(db, cartOf(), NO_CUSTOMER, null);
+    await persistDraft(db, cartOf(), NO_CUSTOMER, null, null);
     const second = { ...cartOf(), lines: [] };
 
-    await persistDraft(db, second, NO_CUSTOMER, null);
+    await persistDraft(db, second, NO_CUSTOMER, null, null);
 
     expect((await readDraft(db))?.cart.lines).toHaveLength(0);
   });
 
   it("clears on commit success, New bill, and Hold", async () => {
-    await persistDraft(db, cartOf(), NO_CUSTOMER, null);
+    await persistDraft(db, cartOf(), NO_CUSTOMER, null, null);
 
     await clearDraft(db);
 
@@ -109,7 +108,7 @@ describe("writing the draft through", () => {
     const failing = vi.spyOn(db.draft, "put").mockRejectedValue(new Error("storage full"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(persistDraft(db, cartOf(), NO_CUSTOMER, null)).resolves.toBeUndefined();
+    await expect(persistDraft(db, cartOf(), NO_CUSTOMER, null, null)).resolves.toBeUndefined();
 
     expect(failing).toHaveBeenCalled();
     expect(logged).toHaveBeenCalled();
@@ -129,42 +128,109 @@ describe("writing the draft through", () => {
   });
 });
 
-describe("landing the read back on screen (the mount race)", () => {
+describe("the one restore decision (the 2 Aug 2026 atomic-restore and draft-age rulings)", () => {
   const draft: DraftPayload = {
     cart: cartOf(),
     customer: { name: "Mrs Sharma", mobile: "9876543210", gstin: "" },
     paper: null,
+    paperAt: null,
     savedAt: "2026-08-01T09:00:00.000Z",
   };
+  const savedDay = tillToday(new Date(draft.savedAt));
+  const nextDay = tillToday(new Date("2026-08-02T09:00:00.000Z"));
 
-  it("applies the draft onto a screen nothing has touched yet", () => {
-    expect(restoredCart(emptyCart(), draft)).toEqual(draft.cart);
-    expect(restoredCustomer(NO_CUSTOMER, draft)).toEqual(draft.customer);
+  it("an empty screen restores all four parts from one snapshot", () => {
+    const withPaper: DraftPayload = { ...draft, paper: 61, paperAt: "2026-08-01T09:05" };
+
+    const decision = restoredDraft(
+      { cart: emptyCart(), customer: NO_CUSTOMER },
+      withPaper,
+      savedDay,
+      true,
+    );
+
+    expect(decision).toEqual({ kind: "apply", draft: withPaper });
   });
 
-  it("drops a read that lost the race to a piece already scanned", () => {
-    // The read was issued at mount; a piece landing on the bill before it comes
-    // back is realer than what it would restore, so the scan stands.
-    const alreadyScanning = { ...emptyCart(), lines: [cartOf().lines[0]] };
+  it("a live cart plus an empty customer strip restores neither half", () => {
+    // Round-2's defect: the exchange hand-off (or a scan) landing on the cart
+    // must not leave the customer strip's own emptiness free to pull in a
+    // different, crashed bill's name, mobile and GSTIN.
+    const decision = restoredDraft({ cart: cartOf(), customer: NO_CUSTOMER }, draft, savedDay, true);
 
-    expect(restoredCart(alreadyScanning, draft)).toBe(alreadyScanning);
+    expect(decision).toEqual({ kind: "drop" });
   });
 
-  it("drops a read that lost the race to the exchange hand-off", () => {
-    // `Billing.tsx` takes a parked exchange on mount too, in no guaranteed order
-    // against this read. Landing second must not erase it.
+  it("an exchange leg on an otherwise empty cart also drops the draft whole", () => {
     const withExchange: Cart = {
       ...emptyCart(),
       exchange: { original: { fy: "26-27", till_seq: 40, doc_number: "26-27/DEO/SAL/40" }, lines: [] },
     };
 
-    expect(restoredCart(withExchange, draft)).toBe(withExchange);
+    const decision = restoredDraft(
+      { cart: withExchange, customer: NO_CUSTOMER },
+      draft,
+      savedDay,
+      true,
+    );
+
+    expect(decision).toEqual({ kind: "drop" });
   });
 
-  it("leaves a customer field somebody already typed alone", () => {
+  it("an empty cart plus a customer field somebody already typed restores neither half", () => {
     const typing: TillCustomer = { name: "Sharma Traders", mobile: "", gstin: "" };
 
-    expect(restoredCustomer(typing, draft)).toBe(typing);
+    const decision = restoredDraft({ cart: emptyCart(), customer: typing }, draft, savedDay, true);
+
+    expect(decision).toEqual({ kind: "drop" });
+  });
+
+  it("a draft saved yesterday is not auto-applied", () => {
+    const decision = restoredDraft(
+      { cart: emptyCart(), customer: NO_CUSTOMER },
+      draft,
+      nextDay,
+      true,
+    );
+
+    expect(decision).toEqual({ kind: "stale", draft });
+  });
+
+  it("a same-day draft is auto-applied", () => {
+    const decision = restoredDraft(
+      { cart: emptyCart(), customer: NO_CUSTOMER },
+      draft,
+      savedDay,
+      true,
+    );
+
+    expect(decision).toEqual({ kind: "apply", draft });
+  });
+
+  it("a paper draft whose number the counter no longer holds is not applied", () => {
+    const paperDraft: DraftPayload = { ...draft, paper: 61, paperAt: "2026-08-01T09:05" };
+
+    const decision = restoredDraft(
+      { cart: emptyCart(), customer: NO_CUSTOMER },
+      paperDraft,
+      savedDay,
+      false,
+    );
+
+    expect(decision).toEqual({ kind: "paper-conflict", draft: paperDraft });
+  });
+
+  it("a paper conflict is flagged ahead of the age check, not silently swallowed by it", () => {
+    const paperDraft: DraftPayload = { ...draft, paper: 61, paperAt: "2026-08-01T09:05" };
+
+    const decision = restoredDraft(
+      { cart: emptyCart(), customer: NO_CUSTOMER },
+      paperDraft,
+      nextDay,
+      false,
+    );
+
+    expect(decision).toEqual({ kind: "paper-conflict", draft: paperDraft });
   });
 });
 
@@ -174,6 +240,7 @@ describe("rekeying a draft at restore (the crash-restore line-identity ruling, 2
       cart: { ...cartOf(), ...overrides },
       customer: NO_CUSTOMER,
       paper: null,
+      paperAt: null,
       savedAt: "2026-08-01T09:00:00.000Z",
     };
   }

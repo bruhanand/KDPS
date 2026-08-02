@@ -145,6 +145,12 @@
 .bill-hold-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bill-alert .btn { margin-left: auto; }
 
+/* A flagged draft (#244) offers two answers, not one - `.bill-alert .btn`'s
+   own `margin-left: auto` would push both to the right independently and
+   spread them apart, so they are grouped and pushed as one instead. */
+.bill-pending-draft-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.bill-pending-draft-actions .btn { margin-left: 0; }
+
 /* The work area (#243): left the grid, right the rail (payment above,
    customer below - both "today's 264px rail is too narrow for tender rows
    plus chips; ~340px is the floor", design.md). `min-height: 0` is load-bearing

@@ -16,6 +16,7 @@ import { newKey } from "./cart";
 import type { Cart } from "./cart";
 import type { TillDb } from "./db";
 import { newLegKey } from "./exchange";
+import { tillToday } from "./pricing";
 import type { TillCustomer } from "./types";
 
 /** The one row this table ever holds - an outbound key, so nothing on the
@@ -23,18 +24,23 @@ import type { TillCustomer } from "./types";
 const DRAFT_KEY = "current";
 
 /** Everything needed to restore mid-scan - the cart (lines, exchange and
- *  payment together), the customer strip, and which printed bill this counter
- *  was re-entering, if any.
+ *  payment together), the customer strip, which printed bill this counter was
+ *  re-entering (if any) and the date off that paper, and when this row was
+ *  last written.
  *
- *  `paper` rides along because the row would not be the whole screen without
- *  it, but restoring it is not this file's job: paper mode is deliberately
- *  never held in React state (`Billing.tsx`'s `outstandingPaperSeq`), always
- *  re-derived from the address bar, and a restore that pushed it back into the
- *  URL would fight that design rather than lean on it. */
+ *  Restoring `paper`/`paperAt` onto the screen is not this file's job: paper
+ *  mode is deliberately never held in React state (`Billing.tsx`'s
+ *  `outstandingPaperSeq`), always re-derived from the address bar, and a
+ *  restore that pushed it back into the URL is `Billing.tsx`'s call to make -
+ *  this file only decides *whether* the snapshot as a whole should land. */
 export interface DraftPayload {
   cart: Cart;
   customer: TillCustomer;
   paper: number | null;
+  /** The date and time off the printed copy, `<input type="datetime-local">`
+   *  shape (`Billing.tsx`'s `localNow`) - null whenever `paper` is, since
+   *  there is no paper without a re-entry in progress. */
+  paperAt: string | null;
   savedAt: string;
 }
 
@@ -45,9 +51,13 @@ export async function persistDraft(
   cart: Cart,
   customer: TillCustomer,
   paper: number | null,
+  paperAt: string | null,
 ): Promise<void> {
   try {
-    await db.draft.put({ cart, customer, paper, savedAt: new Date().toISOString() }, DRAFT_KEY);
+    await db.draft.put(
+      { cart, customer, paper, paperAt, savedAt: new Date().toISOString() },
+      DRAFT_KEY,
+    );
   } catch (error) {
     console.error("persistDraft failed - the bill continues without a safety net", error);
   }
@@ -80,26 +90,81 @@ export async function clearDraft(db: TillDb): Promise<void> {
   }
 }
 
-// --- landing the read back on screen (the mount race, #244 binding rule 6) --
+// --- landing the read back on screen (the mount race, #244 binding rule 6, --
+// --- and the 2 Aug 2026 atomic-restore and draft-age rulings) ---------------
 //
 // The read is issued at mount and IndexedDB answers whenever it answers, so by
 // the time it lands the screen may already have moved on - a piece scanned
 // before the read came back, or the exchange hand-off `Billing.tsx` takes on
 // mount landing first or second, in either order. Whichever is on screen by
-// then is realer than a saved draft, so these never overwrite it; they only
-// fill in what is still empty. Pure, so the race's outcome is a value to
-// assert on rather than a timing a test has to win.
+// then is realer than a saved draft, so a draft never overwrites it.
+//
+// The round-2 defect was asking that question twice - once for the cart, once
+// for the customer strip - so an exchange landing on the cart could leave the
+// customer strip's own (separate) "is it empty" check free to pull in a name,
+// mobile and GSTIN from a different, crashed bill. One predicate now, asked
+// once over the whole snapshot: cart lines, exchange legs and customer fields
+// together. Anything real anywhere on that list drops the draft whole; nothing
+// real anywhere applies it whole. Never a blend of the two.
+//
+// Pure, so the mount race's outcome - and the same-day and paper checks that
+// gate it - are values to assert on rather than a timing a test has to win.
 
-/** The cart to show once the read lands - `onScreen` if anything is already on
- *  it, else the draft. */
-export function restoredCart(onScreen: Cart, draft: DraftPayload): Cart {
-  return onScreen.lines.length || onScreen.exchange ? onScreen : draft.cart;
+/** What this read decided, for `Billing.tsx` to act on:
+ *
+ *   · `drop` - real content is already on screen; the draft is not applied.
+ *   · `apply` - nothing real is on screen, the draft was saved today, and its
+ *     paper state (if any) still matches what the counter is on: restore the
+ *     whole snapshot.
+ *   · `stale` - otherwise identical to `apply`, but the draft is from a
+ *     previous business day (Rule 11, "deadlines are data, not memory" -
+ *     `savedAt` is checked, never assumed). Not auto-applied; parked for the
+ *     cashier to resume or drop.
+ *   · `paper-conflict` - the draft was mid a paper re-entry, and the paper
+ *     number it names is no longer one `outstandingPaperSeq` regards as
+ *     outstanding, or the address bar already asks for a different one.
+ *     Applying the cart and customer anyway while silently dropping or
+ *     rewriting the paper state is exactly the "mix a restored half with an
+ *     on-screen state nobody chose" failure rule 0 forbids - so this, too, is
+ *     parked for the cashier rather than resolved silently. */
+export type DraftRestoration =
+  | { kind: "drop" }
+  | { kind: "apply"; draft: DraftPayload }
+  | { kind: "stale"; draft: DraftPayload }
+  | { kind: "paper-conflict"; draft: DraftPayload };
+
+/** Is there anything on screen a restore would have to mix with, rather than
+ *  replace whole - a cart line, an exchange leg, or a customer field somebody
+ *  already typed. */
+function somethingRealOnScreen(onScreen: { cart: Cart; customer: TillCustomer }): boolean {
+  return (
+    onScreen.cart.lines.length > 0 ||
+    Boolean(onScreen.cart.exchange) ||
+    Boolean(onScreen.customer.name || onScreen.customer.mobile || onScreen.customer.gstin)
+  );
 }
 
-/** Same rule for the customer strip: a name, mobile or GSTIN already typed
- *  wins over what was parked. */
-export function restoredCustomer(onScreen: TillCustomer, draft: DraftPayload): TillCustomer {
-  return onScreen.name || onScreen.mobile || onScreen.gstin ? onScreen : draft.customer;
+/**
+ * The one restore decision for the whole snapshot (2 Aug 2026 rulings).
+ *
+ * `paperOk` is computed by the caller, not here: whether a draft's `paper`
+ * still matches what the counter and the address bar currently say needs
+ * `outstandingPaperSeq` and a live `TillSnapshot`, which are `Billing.tsx`'s
+ * to read, not this file's. A draft with no paper claim (`paper: null`) is
+ * `paperOk` whenever the counter is not mid a *different* paper re-entry
+ * either - see `Billing.tsx`'s call site.
+ */
+export function restoredDraft(
+  onScreen: { cart: Cart; customer: TillCustomer },
+  draft: DraftPayload,
+  today: string,
+  paperOk: boolean,
+): DraftRestoration {
+  if (somethingRealOnScreen(onScreen)) return { kind: "drop" };
+  if (!paperOk) return { kind: "paper-conflict", draft };
+  return tillToday(new Date(draft.savedAt)) === today
+    ? { kind: "apply", draft }
+    : { kind: "stale", draft };
 }
 
 // --- crash-restore line identity (ruled, 2 Aug 2026) ------------------------
