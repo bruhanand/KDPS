@@ -1,26 +1,18 @@
 import { useLayoutEffect } from "react";
 
-import { refreshThemeColour } from "../theme/theme";
-
-/** Enter the document-wide counter room and return its exact cleanup. Exported
- *  as the browser seam behind the hook so StrictMode's setup/cleanup cycle is
- *  testable without coupling a test to React internals. */
-export function enterCounterRoom(
-  root: HTMLElement,
-  refresh: () => void = refreshThemeColour,
-): () => void {
+/** Mark the scanner-first workspace without replacing the application's theme.
+ *  Exported as the browser seam so StrictMode cleanup stays directly testable. */
+export function enterCounterRoom(root: HTMLElement): () => void {
   const previousRoom = root.dataset.room;
   root.dataset.room = "counter";
-  refresh();
 
   return () => {
     if (previousRoom === undefined) delete root.dataset.room;
     else root.dataset.room = previousRoom;
-    refresh();
   };
 }
 
-/** A layout effect prevents a warm frame painting before the dark room enters. */
+/** Apply operational counter roles before the first frame, then restore them. */
 export function useCounterRoom(): void {
   useLayoutEffect(() => enterCounterRoom(document.documentElement), []);
 }
