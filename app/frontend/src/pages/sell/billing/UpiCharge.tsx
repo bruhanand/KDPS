@@ -79,8 +79,14 @@ export function UpiCharge({
   // handler on a node nothing has focused never fires (`ManagerPin` gets away
   // with the same handler because it focuses its PIN box). Re-focusing matters
   // as much as the first focus, because the buttons come and go with the state
-  // - the one the cashier last pressed can be unmounted by the answer that
-  // arrives, and focus would fall to the body with it.
+  // - the one the cashier last pressed is unmounted by the answer that arrives,
+  // and focus falls off the card with it.
+  //
+  // It only holds because the dialog carries `data-wedge-ignore` (below). The
+  // scan box patrols every 400ms and takes the cursor back off anything that is
+  // not a person typing, so without that attribute this focus is reclaimed
+  // within half a second - which is how browser QA found Escape dead again
+  // after an answer landed.
   useEffect(() => {
     dialog.current?.focus();
   }, [standing.state]);
@@ -159,6 +165,11 @@ export function UpiCharge({
         role="dialog"
         aria-label="UPI payment"
         data-state={standing.state}
+        // This card owns the keyboard while it is open (`useScanBox`). Without
+        // it the scan box's patrol pulls the cursor back behind the modal, and
+        // a wedge scanner fired at a counter mid-charge would type a barcode
+        // into a bill nobody can see and add a line to it.
+        data-wedge-ignore
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Escape") onClose();
