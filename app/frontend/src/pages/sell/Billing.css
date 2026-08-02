@@ -212,6 +212,16 @@ select.bill-cell {
 }
 .bill-grid td.num .bill-cell { text-align: right; }
 select.bill-season { min-width: 0; }
+/* Which slab the line was taxed at (#247, grill Q7) - "a quiet badge", so it is
+   a wash and a hairline rather than a colour that means something. The three
+   status colours on this screen are all warnings (`.bill-overcap` red,
+   `.bill-offer` green), and a rate is neither good nor bad news. */
+.bill-gst-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  color: var(--muted); background: var(--inner); border: 1px solid var(--hairline);
+}
+
 .bill-overcap {
   display: block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--red);
 }
@@ -303,6 +313,34 @@ select.bill-season { min-width: 0; }
 .bill-figure { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
 .bill-figure-label { font-size: 11.5px; text-transform: uppercase; color: var(--caption); }
 .bill-figure-strong { font-size: 20px; font-weight: 700; }
+
+/* The tax figure as a way in (#247, grill Q7). It has to keep reading as one of
+   the footer's figures - a cashier reads this number out - so the button is
+   stripped back to the text and given a dotted underline, the shell's usual
+   "there is more behind this" mark, rather than a box that would make one
+   number in a row of six look like an action. */
+.bill-tax-open {
+  appearance: none; background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  border-bottom: 1px dashed var(--caption);
+}
+.bill-tax-open:hover { border-bottom-color: var(--ink); }
+
+/* Floating over the footer rather than inside it (Q11: nothing pushes the
+   layout), portaled to `document.body` and placed by `usePositionedPopover`.
+   Fixed width for the same reason `.bill-float` has one: a portaled node
+   answers to no parent's column. */
+.bill-tax-panel {
+  position: fixed; z-index: 40; width: 320px; max-width: calc(100vw - 32px);
+  padding: 14px 16px;
+}
+.bill-tax-panel .eyebrow { margin-bottom: 8px; }
+table.data.bill-tax-rows { font-size: 12.5px; width: 100%; }
+table.data.bill-tax-rows th { padding: 6px 4px; }
+table.data.bill-tax-rows td { padding: 6px 4px; }
+.bill-tax-split { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.bill-tax-split .bill-row { margin-top: 6px; }
+.bill-tax-panel .muted-cell { display: block; margin-top: 8px; font-size: 11.5px; }
 
 .bill-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bill-actions .btn { display: inline-flex; align-items: center; gap: 7px; }

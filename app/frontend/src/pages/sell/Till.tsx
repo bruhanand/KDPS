@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Check, HardDriveDownload, RefreshCw, Replace } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  HardDriveDownload,
+  RefreshCw,
+  Replace,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
@@ -11,6 +19,7 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import type { TillEngine, TillSnapshot } from "../../till/engine";
 import { slabFor, splitLine } from "../../till/pricing";
+import { playTone } from "../../till/sounds";
 import type { BillDraft, HandoverState } from "../../till/types";
 import "./Till.css";
 
@@ -195,6 +204,7 @@ export default function TillPage() {
         </div>
       )}
 
+      <ScanSounds engine={engine} muted={till.muted} />
       <CounterPin />
       <TestBill />
     </div>
@@ -595,6 +605,51 @@ function CounterPin() {
       >
         {saving ? "Setting…" : "Set my PIN"}
       </button>
+    </section>
+  );
+}
+
+/**
+ * The counter's noise, on or off (#247, grill Q8).
+ *
+ * Here rather than on the Billing screen, and per counter rather than per
+ * person, because that is what it is about: one till stands next to the music
+ * and another sits in a back office, and neither is head office's decision or a
+ * cashier's login's. It is one switch and it takes effect on the next scan.
+ *
+ * Pressing it plays the tone it is turning on, which is the only honest way to
+ * answer "is the sound working?" - a shop with the machine's volume down would
+ * otherwise turn the setting on and off all afternoon.
+ */
+function ScanSounds({ engine, muted }: { engine: TillEngine; muted: boolean }) {
+  return (
+    <section className="card till-card till-sound-card">
+      <h2 className="h3">Scan sounds</h2>
+      <p className="muted-cell">
+        A short tick when a scan puts a piece on the bill, and a different, lower buzz when it
+        does not - an unknown tag, or a piece the counter needs told which season it is. Set on
+        this counter, and it stays set.
+      </p>
+      <div className="till-sound-row">
+        <button
+          type="button"
+          className="btn"
+          data-testid="till-sound-toggle"
+          aria-pressed={!muted}
+          onClick={() => {
+            void engine.setMuted(!muted);
+            // Turning it back on plays the tick, so the answer to "did that
+            // work?" is the sound itself rather than a sentence about it.
+            if (muted) playTone("tick", false);
+          }}
+        >
+          {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+          {muted ? "Turn the sounds on" : "Turn the sounds off"}
+        </button>
+        <span className="muted-cell" data-testid="till-sound-state">
+          {muted ? "Silent." : "This counter ticks and buzzes."}
+        </span>
+      </div>
     </section>
   );
 }
