@@ -48,13 +48,32 @@ export function placePopover(
   popoverSize: number,
   side: "right" | "below",
   margin = 8,
-): { top: number; left: number; maxHeight?: number } {
+): { top?: number; bottom?: number; left: number; maxHeight?: number } {
   if (side === "below") {
     const maxLeft = viewport.width - popoverSize - margin;
-    const top = trigger.bottom + margin;
     const left = Math.max(margin, Math.min(trigger.left, maxLeft));
-    const maxHeight = Math.max(120, viewport.height - top - margin);
-    return { top, left, maxHeight };
+    const below = viewport.height - (trigger.bottom + margin) - margin;
+    const above = trigger.top - margin - margin;
+    // Below the trigger is where a prompt belongs, and it stays there for as
+    // long as there is more room there - which for the scan box, sitting in
+    // the top strip, is always (#243).
+    //
+    // The customer typeahead (#249) hangs off a field near the *bottom* of the
+    // rail, where "below" is a hundred-odd pixels: five customers in a box the
+    // height of two, with the rest behind a scrollbar the cashier has to find
+    // while somebody reads their number out. Anchoring to the trigger's top
+    // edge instead - `bottom` rather than `top`, so no height has to be
+    // measured and nothing has to flash in the wrong place first - puts the
+    // whole list on screen. This is the clamp promise the hook already makes
+    // for the `"right"` side, kept for the other one.
+    if (above > below) {
+      return {
+        bottom: viewport.height - trigger.top + margin,
+        left,
+        maxHeight: Math.max(120, above),
+      };
+    }
+    return { top: trigger.bottom + margin, left, maxHeight: Math.max(120, below) };
   }
   const maxTop = viewport.height - popoverSize - margin;
   const top = Math.max(margin, Math.min(trigger.top, maxTop));
@@ -71,8 +90,14 @@ export interface PositionedPopover<T extends HTMLElement = HTMLButtonElement> {
    *  page the trigger sits, so a popover starting well below the top of the
    *  viewport would still be let to run past the bottom. Apply it as an
    *  inline style on the popover; `"right"` callers keep clamping `top`
-   *  against their own measured height instead, unaffected. */
-  at: { top: number; left: number; maxHeight?: number } | null;
+   *  against their own measured height instead, unaffected.
+   *
+   *  Exactly one of `top` and `bottom` is set, and `"below"` callers must
+   *  apply both (the undefined one is a no-op in a React style object): a
+   *  trigger with more room above it than below is anchored by its top edge
+   *  instead, and a caller passing only `top` would leave that popover
+   *  wherever the last placement put it. `"right"` always sets `top`. */
+  at: { top?: number; bottom?: number; left: number; maxHeight?: number } | null;
   /** Goes on the control the popover hangs off. */
   triggerRef: RefObject<T>;
   /** Goes on the portaled popover. It holds the node for the outside-click
@@ -97,7 +122,12 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
    *  near the right edge of the page. */
   side: "right" | "below" = "right",
 ): PositionedPopover<T> {
-  const [at, setAt] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
+  const [at, setAt] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    maxHeight?: number;
+  } | null>(null);
   const triggerRef = useRef<T>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -116,7 +146,7 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
       side === "below"
         ? (popoverRef.current?.offsetWidth ?? fallbackSize)
         : (popoverRef.current?.offsetHeight ?? fallbackSize);
-    const { top, left, maxHeight } = placePopover(
+    const { top, bottom, left, maxHeight } = placePopover(
       rect,
       { width: window.innerWidth, height: window.innerHeight },
       popoverSize,
@@ -125,10 +155,11 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
     setAt((current) =>
       current &&
       current.top === top &&
+      current.bottom === bottom &&
       current.left === left &&
       current.maxHeight === maxHeight
         ? current
-        : { top, left, maxHeight },
+        : { top, bottom, left, maxHeight },
     );
   }, [fallbackSize, side]);
 

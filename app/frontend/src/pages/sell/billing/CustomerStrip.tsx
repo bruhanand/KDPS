@@ -248,7 +248,15 @@ export function CustomerStrip({
             ref={float.popoverRef}
             className="card section-card bill-customer-float"
             data-testid="bill-customer-float"
-            style={{ top: float.at.top, left: float.at.left, maxHeight: float.at.maxHeight }}
+            // Both edges: the mobile field sits low on the rail, so the hook
+            // anchors this list by the field's *top* and it grows upward -
+            // only one of the two is ever set.
+            style={{
+              top: float.at.top,
+              bottom: float.at.bottom,
+              left: float.at.left,
+              maxHeight: float.at.maxHeight,
+            }}
           >
             {rows.length > 0 ? (
               <>

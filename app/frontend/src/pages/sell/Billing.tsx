@@ -1283,7 +1283,10 @@ function Counter({ storeName }: { storeName?: string }) {
             ref={scanFloat.popoverRef}
             className="bill-float"
             style={{
+              // Both edges: the hook anchors a `"below"` popover by whichever
+              // one leaves it room, and only one of the two is ever set.
               top: scanFloat.at.top,
+              bottom: scanFloat.at.bottom,
               left: scanFloat.at.left,
               maxHeight: scanFloat.at.maxHeight,
             }}
