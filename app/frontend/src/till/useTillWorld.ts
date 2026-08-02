@@ -13,6 +13,15 @@
 //
 // It reloads when the dataset lands and after every bill, because the local
 // shelf moves at Save & Print and the next scan has to read the new count.
+//
+// **The customer book is deliberately not here** (#245), and the reload is why.
+// Every other table on this hook is bounded by one store's shelf; the customer
+// list is all-KDPS and only ever grows, so putting it here would re-read the
+// whole business's phone book from IndexedDB into React state after every single
+// bill - a stall that gets worse every month, at the one screen where a stall is
+// a queue of customers. The typeahead reads it straight from Dexie by its
+// `mobile` index instead, which is what design.md's `searchCustomers` specifies
+// and what an index is for.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,7 +32,6 @@ import type {
   TillCreditNote,
   TillGstSlab,
   TillItem,
-  TillKnownCustomer,
   TillManager,
   TillOffer,
   TillPolicy,
@@ -50,11 +58,6 @@ export interface TillWorld {
   /** Who may authorise an exception here, with the hash their PIN is checked
    *  against. Empty until an administrator grants somebody the rung. */
   managers: TillManager[];
-  /** Everybody KDPS has billed, as the last sync left them - the list the
-   *  customer typeahead searches. In memory for the same reason the items are:
-   *  the search runs on every keystroke in the mobile box, and an await between
-   *  a digit and the suggestions is an await the counter feels. */
-  customers: TillKnownCustomer[];
   policy: TillPolicy;
   store: TillStoreIdentity | null;
   /** The salesman the counter credited last, defaulted onto the next line so a
@@ -72,7 +75,6 @@ const EMPTY: TillWorld = {
   salesmen: [],
   creditNotes: [],
   managers: [],
-  customers: [],
   policy: DEFAULT_POLICY,
   store: null,
   lastSalesman: null,
@@ -91,7 +93,7 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
 
   const load = useCallback(async (): Promise<TillWorld> => {
     if (!db) return EMPTY;
-    const [items, stock, offers, seasons, slabs, salesmen, creditNotes, managers, customers] =
+    const [items, stock, offers, seasons, slabs, salesmen, creditNotes, managers] =
       await Promise.all([
         db.items.toArray(),
         db.stock.toArray(),
@@ -101,7 +103,6 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
         db.salesmen.toArray(),
         db.creditNotes.toArray(),
         db.managers.toArray(),
-        db.customers.toArray(),
       ]);
     return {
       items,
@@ -115,7 +116,6 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
       // which is a different sentence with a different remedy.
       creditNotes,
       managers,
-      customers,
       policy: await readMeta<TillPolicy>(db, META.policy, DEFAULT_POLICY),
       store: await readMeta<TillStoreIdentity | null>(db, META.store, null),
       lastSalesman: await readMeta<number | null>(db, META.lastSalesman, null),

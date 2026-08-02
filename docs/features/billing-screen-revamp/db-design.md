@@ -75,7 +75,7 @@ Runs in the same migration, before the check constraints are added.
 
 ---
 
-## Till-local schema (Dexie, `src/till/db.ts`) - version 3
+## Till-local schema (Dexie, `src/till/db.ts`) - versions 3 and 4
 
 Not a server database, but it is a real schema with migrations, so it is designed here rather than improvised.
 
@@ -88,4 +88,7 @@ Notes:
 
 - Typeahead search is a prefix scan on `mobile` plus an in-memory filter on `name`; acceptable at current list sizes, revisit only if the list crosses ~10⁵ rows.
 - The **undo stack is in-memory only**, deliberately: after a crash the draft restores but undo history does not - undoing across a restart would undo actions the cashier can no longer see the context of.
-- `queue`, `held`, `meta` and all existing tables are unchanged; the version-3 migration only adds the two tables.
+- `queue`, `held`, `meta` and all existing tables are unchanged; the migrations only add the two tables.
+- **As shipped, the two tables land in two versions, not one**: `draft` in version 3 (#244) and `customers` in version 4 (#245).
+  Folding a second table into a version that has already shipped is what makes Dexie discard the database rather than upgrade it - and that database holds bills the server has never seen.
+  A new table is always a new version here.

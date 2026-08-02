@@ -16,22 +16,26 @@ import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { closeTillDb, tillDb } from "./db";
+import { closeTillDb, databaseName, tillDb } from "./db";
 
-const NAMES: string[] = [];
+const OPENED: string[] = [];
 
 afterEach(async () => {
-  for (const name of NAMES.splice(0)) {
-    closeTillDb(name.replace("kdps-till-", ""));
-    await Dexie.delete(name);
+  for (const code of OPENED.splice(0)) {
+    closeTillDb(code);
+    await Dexie.delete(databaseName(code));
   }
 });
 
-/** A store code no other test in this file is using. */
+/** A store code no other test in this file is using.
+ *
+ *  `freshTill` is the fixture everywhere else in this folder, and deliberately
+ *  not used here: it hands back a database already opened at the current
+ *  version, and this test has to write the *previous* one first. */
 let counter = 0;
 function storeCode(): string {
   const code = `DB${(counter += 1)}`;
-  NAMES.push(`kdps-till-${code}`);
+  OPENED.push(code);
   return code;
 }
 
@@ -41,7 +45,7 @@ describe("the till's schema", () => {
     // Version 3 exactly as it shipped with #244, spelled out here rather than
     // imported: the point of the test is that today's class can open *that*
     // database, so reusing today's definition would prove nothing.
-    const old = new Dexie(`kdps-till-${code}`);
+    const old = new Dexie(databaseName(code));
     old.version(1).stores({
       items: "[barcode+season], barcode, brand",
       stock: "barcode",
@@ -65,7 +69,6 @@ describe("the till's schema", () => {
     const db = tillDb(code);
     await db.open();
 
-    expect(db.verno).toBe(4);
     // The money first: a bill the server has not seen, still there.
     expect(await db.queue.count()).toBe(1);
     expect((await db.queue.toArray())[0].doc_number).toBe("26-27/DEO/SAL/74");

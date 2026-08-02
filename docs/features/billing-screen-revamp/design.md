@@ -50,7 +50,7 @@ Nothing posts; no ledger is touched.
 
 **Autosave (`src/till/draft.ts` - new)**
 
-- Dexie `version(3).stores({ customers: "mobile", draft: "" })` - additive only, per the version(2) precedent.
+- Dexie: `version(3).stores({ draft: "" })` then `version(4).stores({ customers: "mobile" })` - additive only, per the version(2) precedent, and one version per table because the two ship in separate tickets (#244, #245).
 - The draft row (fixed key `"current"`): `{cart, customer: {name, mobile, gstin}, paper, savedAt}` - everything needed to restore mid-scan.
 - Write-through: `Counter` funnels every `setCart`/customer-field change through one `persistDraft()` (per-action; the objects are small and already immutable). Cleared on commit success, New bill, and Hold (hold moves it to `held` as today).
 - Restore on mount: read via `engine.db` (never a second `TillDb`), guarded by the `current`-flag race pattern from `useTillWorld` - a read that loses the StrictMode/remount race is dropped, not applied.
@@ -80,7 +80,10 @@ Nothing posts; no ledger is touched.
 - `lookup.ts` gains `searchCustomers(db, prefix)`: Dexie prefix scan on the `customers` table's `mobile` key plus in-memory name filter, top 5.
 - Typeahead popover under the mobile field; pick fills name+mobile (and gstin when the row has one); unknown number shows the inline "new customer" affordance (name only).
 - GSTIN moves behind the "Business bill?" disclosure; its validation/tax-kind behaviour is untouched.
-- `sync.ts applyDataset` adds the customers block using the items pattern minus deletions: `clear()` on `full`, unconditional `bulkPut` (upsert by mobile) every pull. `useTillWorld` and `TillCounts` gain the table read/count.
+- `sync.ts applyDataset` adds the customers block using the items pattern minus deletions: `clear()` on `full`, unconditional `bulkPut` (upsert by mobile) every pull. `TillCounts` gains the count.
+- **Amended at build (#245):** `useTillWorld` deliberately does **not** read this table.
+  It is the one all-KDPS, unbounded table on the till, and that hook reloads after every bill - so holding the book in memory would re-read the whole business's customers from IndexedDB at each sale, worsening every month, at the one screen where a stall is a queue of customers.
+  `searchCustomers` reads Dexie by the `mobile` index instead, which is what the line above already specifies.
 
 **Polish**
 

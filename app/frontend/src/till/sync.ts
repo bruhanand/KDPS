@@ -117,11 +117,10 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
         await db.seasons.clear();
         await db.seasons.bulkPut(payload.seasons);
       }
-      // Customers (#245) are deltaed like the items - a watermark and an upsert
-      // by mobile - but with no `deleted` sibling, because a customer row is
-      // never removed in v1. Guarded for the same rolling-deploy minutes the
-      // seasons are: an older server answers without the section, and that means
-      // "nothing to say", not "the phone book is empty".
+      // Customers (#245): a watermark and an upsert by mobile, like the items.
+      // Guarded for the same rolling-deploy minutes the seasons are - an older
+      // server answers without the section, and that means "nothing to say", not
+      // "the phone book is empty".
       if (payload.customers) {
         if (payload.full) await db.customers.clear();
         await db.customers.bulkPut(payload.customers);

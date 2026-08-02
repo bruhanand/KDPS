@@ -168,8 +168,14 @@ export interface DatasetPayload {
   seasons: TillSeason[];
   policy: TillPolicy;
   /** Everybody the business has billed, deltaed by the same cursor as the items.
-   *  No `deleted` sibling: a customer row is never removed in v1. */
-  customers: TillKnownCustomer[];
+   *  No `deleted` sibling: a customer row is never removed in v1.
+   *
+   *  Optional because a server that predates #245 answers without it, and the
+   *  till has to read that absence as "nothing to say" rather than "the phone
+   *  book is empty" - a rolling deploy is exactly those few minutes. Spelled
+   *  optional rather than guarded-but-required so the compiler keeps the guard
+   *  honest; `seasons` above carries the same contract in the older spelling. */
+  customers?: TillKnownCustomer[];
   deleted: {
     items: string[];
     offers: number[];
