@@ -562,3 +562,13 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
      has to be, or it loses to that rule on specificity regardless of order. */
   input.bill-scan { width: 220px; }
 }
+
+/* On a phone, keep the line grid's fixed columns readable and let the wrapper
+   provide the horizontal safety net. Without a floor, `width: 100%` compresses
+   all twelve columns into the viewport and text/controls visibly collide. */
+@media (max-width: 600px) {
+  table.data.bill-grid {
+    width: 900px;
+    min-width: 900px;
+  }
+}
