@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronLeft, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -121,10 +121,17 @@ function UnitSwitcher() {
   );
 }
 
-/** The person, pinned to the foot of the sidebar card: the sidebar owns who
- *  you are, the bar owns where you are (ruled 1 Aug 2026). Opens a panel with
- *  the theme switch and Sign out - the same two actions the top-bar menu
- *  offered, in a new place.
+/** The person, pinned to the bottom corner of the sidebar card: the sidebar
+ *  owns who you are, the bar owns where you are (ruled 1 Aug 2026). Opens a
+ *  panel with the theme switch and Sign out - the same two actions the top-bar
+ *  menu offered, in a new place.
+ *
+ *  It draws as a tile, not a row: its own filled surface, a soft border and a
+ *  chevron, sitting inside the card with a margin so it reads as a separate
+ *  object you can press. The bare hover-only row it replaced looked like
+ *  nothing at all until you found it with the mouse, and the hairline that used
+ *  to separate it from the menu is gone - space does that job now (prototyped
+ *  four ways 2 Aug 2026, `prototype/sidebar-foot`; this is variant A).
  *
  *  The panel is portaled to `document.body` and placed by measuring its
  *  trigger, the same pattern as the rail flyout and for the same reason: the
@@ -166,6 +173,9 @@ function ProfileSection({ rail }: { rail: boolean }) {
             <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
           </span>
         )}
+        {/* The tile has to say it opens something. In the rail there is no
+            room and the initials alone carry it. */}
+        {!rail && <ChevronRight size={16} className="profile-chev" />}
       </button>
       {open &&
         panelAt &&
