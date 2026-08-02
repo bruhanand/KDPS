@@ -284,7 +284,7 @@ function UpiProof({
       {confirmed && (
         <span className="bill-upi-confirmed" data-testid="bill-upi-confirmed">
           <CheckCircle2 size={13} />
-          Bank confirmed · {confirmed.reference}
+          Bank confirmed · {confirmed}
         </span>
       )}
     </div>

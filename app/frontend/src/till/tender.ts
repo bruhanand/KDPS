@@ -110,15 +110,11 @@ export interface TenderSplit {
   change_paise: number;
   /** Notes this counter cannot stand behind, and so needs a manager for. */
   unverified: string[];
-  /** The bank's own answer for the UPI row, resolved (#248) - `null` whenever
-   *  the cashier is the only one vouching for it, which is every bill until real
-   *  hardware lands. See `confirmedUpiOf` for what it takes to survive. */
-  upi_confirmed: UpiConfirmation | null;
-}
-
-/** A UPI row the bank confirmed, as the tender carries it. */
-export interface UpiConfirmation {
-  reference: string;
+  /** The acquirer's reference for the UPI row, when the bank confirmed it
+   *  through the charge card (#248) - and `null` whenever the cashier is the
+   *  only one vouching for it, which is every bill until real hardware lands.
+   *  Never blank when it is set; see `confirmedUpiOf`. */
+  upi_confirmed: string | null;
 }
 
 export function emptyPayment(): Payment {
@@ -188,12 +184,11 @@ export function splitOf(
  * bill refused at the wire is a receipt already in a customer's hand and a queue
  * that has stopped.
  */
-export function confirmedUpiOf(payment: Payment): UpiConfirmation | null {
+export function confirmedUpiOf(payment: Payment): string | null {
   const charge = payment.upi_charge;
   if (!charge || payment.upi_paise <= 0) return null;
   if (charge.amount_paise !== payment.upi_paise) return null;
-  const reference = charge.reference.trim();
-  return reference ? { reference } : null;
+  return charge.reference.trim() || null;
 }
 
 /**
@@ -400,7 +395,7 @@ export function toTenders(split: TenderSplit): BillTender[] {
       // The bank's word when the charge card got one, and nothing at all
       // otherwise - `stampManualUpi` below fills in the cashier's.
       ...(split.upi_confirmed
-        ? { upi_state: "confirmed" as const, upi_reference: split.upi_confirmed.reference }
+        ? { upi_state: "confirmed" as const, upi_reference: split.upi_confirmed }
         : {}),
     },
     ...split.notes.map(
@@ -427,7 +422,12 @@ export function toTenders(split: TenderSplit): BillTender[] {
  */
 export function stampManualUpi(tenders: BillTender[]): BillTender[] {
   return tenders.map((tender) =>
-    tender.mode === "upi" && !tender.upi_state ? { ...tender, upi_state: "manual" } : tender,
+    tender.mode === "upi" && !tender.upi_state
+      ? // The reference goes with the stamp, always: `upi_reference` without
+        // `confirmed` is its own refusal at the server, and this function exists
+        // precisely to keep bills it does not control off that cliff.
+        { ...tender, upi_state: "manual", upi_reference: undefined }
+      : tender,
   );
 }
 

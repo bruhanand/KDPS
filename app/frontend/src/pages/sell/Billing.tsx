@@ -725,7 +725,11 @@ function Counter({
         upi_charge: charged,
       },
     }));
-    setCharging(false);
+    // The card deliberately stays open on a success. It is the one state that
+    // carries a fact the cashier may need to read out - the acquirer's
+    // reference - and a card that closed itself would flash it past them; it is
+    // also the only state that would otherwise never be on screen at all, which
+    // would leave the hardware slice as the first thing ever to render it.
     setNote(`The bank confirmed the UPI payment. Reference ${charged.reference}.`);
   }, []);
 

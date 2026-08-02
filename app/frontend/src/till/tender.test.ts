@@ -133,6 +133,23 @@ describe("the UPI stamp (#241)", () => {
 
     expect(rows).toEqual([{ mode: "upi", amount_paise: 50000, upi_state: "manual" }]);
   });
+
+  it("stampManualUpi drops a reference left behind without a stamp", () => {
+    // `upi_reference` on anything but a `confirmed` row is its own VALIDATION at
+    // the server, and this function's whole job is keeping a queued bill it does
+    // not control off that cliff - a refusal there halts the store's queue.
+    const rows = stampManualUpi([
+      { mode: "upi", amount_paise: 50000, upi_reference: "417223918811" },
+    ]);
+
+    expect(rows[0].upi_state).toBe("manual");
+    expect(rows[0].upi_reference).toBeFalsy();
+    expect(JSON.parse(JSON.stringify(rows[0]))).toEqual({
+      mode: "upi",
+      amount_paise: 50000,
+      upi_state: "manual",
+    });
+  });
 });
 
 describe("a charge the bank confirmed (#248)", () => {
@@ -141,7 +158,7 @@ describe("a charge the bank confirmed (#248)", () => {
   it("rides onto the UPI row as confirmed, with the acquirer's reference", () => {
     const resolved = split(payment({ upi_paise: BILL, cash_paise: 0, upi_charge: CHARGED }));
 
-    expect(resolved.upi_confirmed).toEqual({ reference: CHARGED.reference });
+    expect(resolved.upi_confirmed).toBe(CHARGED.reference);
     expect(toTenders(resolved)).toEqual([
       { mode: "upi", amount_paise: BILL, upi_state: "confirmed", upi_reference: CHARGED.reference },
     ]);

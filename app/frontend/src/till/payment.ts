@@ -35,6 +35,16 @@ export interface ChargeStanding {
    *  the server refuses a `confirmed` tender without one, and refuses one on
    *  anything else (api-contract §2). */
   reference?: string;
+  /** What the bank says it actually took, in paise. Set alongside `success`,
+   *  and required for one to become a stamp (`chargeStamp`).
+   *
+   *  Not the same figure as the one the charge was started with, and that is
+   *  the point: a real acquirer can capture part of a charge, or answer about a
+   *  QR the customer re-presented, and a till that assumed the two were equal
+   *  would stamp `confirmed` on a sum the bank never approved. An adapter that
+   *  cannot say what was taken says nothing here, and the row falls back to
+   *  `manual` - the cashier's word, which is the honest one. */
+  amount_paise?: number;
   /** A sentence for the counter. Empty while there is nothing to say. */
   reason: string;
   /** What the acquirer wants encoded in the QR - a `upi://pay?…` payload. Empty
@@ -103,8 +113,6 @@ const GENERATING: ChargeStanding = { state: "generating", reason: "", qr: "" };
 const AWAITING: ChargeStanding = { state: "awaiting", reason: "", qr: "" };
 
 export interface MockOptions {
-  generatingMs?: number;
-  answerMs?: number;
   /** The answers to give, in order, cycling. Typed to exclude `success`. */
   answers?: readonly MockAnswer[];
 }
@@ -117,8 +125,6 @@ export interface MockOptions {
  * The app holds one; a test holds its own.
  */
 export function createMockPaymentAdapter(options: MockOptions = {}): PaymentAdapter {
-  const generatingMs = options.generatingMs ?? GENERATING_MS;
-  const answerMs = options.answerMs ?? ANSWER_MS;
   const answers = options.answers?.length ? options.answers : MOCK_ANSWERS;
 
   /** Where the charge in flight stands, or `null` when there is none. It
@@ -176,13 +182,13 @@ export function createMockPaymentAdapter(options: MockOptions = {}): PaymentAdap
       // waiting for.
       if (mine.abandoned) return;
 
-      await pause(generatingMs);
+      await pause(GENERATING_MS);
       if (mine.abandoned) return;
       standing = AWAITING;
       yield standing;
       if (mine.abandoned) return;
 
-      await pause(answerMs);
+      await pause(ANSWER_MS);
       if (mine.abandoned) return;
       const answer = answers[given % answers.length];
       given += 1;
@@ -230,15 +236,120 @@ export interface UpiCharged {
  * What a charge's outcome does to the bill - the one place an adapter's answer
  * becomes a stamp.
  *
- * Everything short of a success with a real reference is `null`, which leaves
- * the cashier doing exactly what they do today: typing an amount into the UPI
- * box, stamped `manual`. A success with a blank reference is refused here rather
- * than at the server, where it would be a `VALIDATION` on a bill already printed
- * and already in a customer's hand.
+ * Everything short of a success the bank fully accounted for is `null`, which
+ * leaves the cashier doing exactly what they do today: typing an amount into the
+ * UPI box, stamped `manual`. Three things have to be true, and every one of them
+ * fails closed:
+ *
+ * - the bank said `success`;
+ * - it gave a reference - a `confirmed` tender without one is a `VALIDATION` at
+ *   the server, on a bill already printed and already in a customer's hand;
+ * - and it says it took **this** figure. `amountPaise` is what the counter asked
+ *   for and `standing.amount_paise` is what the bank answered about; comparing
+ *   the till to itself would prove nothing, and an acquirer that captured part
+ *   of a charge would otherwise be recorded as having taken all of it.
  */
 export function chargeStamp(standing: ChargeStanding, amountPaise: number): UpiCharged | null {
-  if (standing.state !== "success") return null;
+  if (standing.state !== "success" || amountPaise <= 0) return null;
+  if (standing.amount_paise !== amountPaise) return null;
   const reference = (standing.reference ?? "").trim();
-  if (!reference || amountPaise <= 0) return null;
-  return { reference, amount_paise: amountPaise };
+  return reference ? { reference, amount_paise: amountPaise } : null;
+}
+
+/**
+ * The terminal itself gave up - it threw rather than answering (#248).
+ *
+ * `unknown`, never `failed`, and this is the same ruling as an unreachable bank
+ * rather than a softer version of it: a machine that threw may have got the
+ * charge away before it did, and the counter has no way to tell. The only safe
+ * answer is the one that asks a person to look.
+ */
+export function brokeDown(error: unknown): ChargeStanding {
+  const said = error instanceof Error && error.message ? ` (${error.message})` : "";
+  return {
+    state: "unknown",
+    reason:
+      "This counter's payment machine stopped answering, so nobody here knows whether the payment went through" +
+      `${said}. Check with the customer before taking the money again, and record it by hand if they have paid.`,
+    qr: "",
+  };
+}
+
+/** How the charge card reads in this state: which of the four faces, in what
+ *  words, with which ways on and which way out. */
+export interface ChargeCard {
+  /** `waiting` is the QR and the wait; the other three are answers. */
+  tone: "waiting" | "good" | "bad" | "doubt";
+  /** What the card says under the amount. */
+  says: string;
+  /** Ask the bank again is on offer. */
+  canCheck: boolean;
+  /** Start a fresh charge is on offer. */
+  canRetry: boolean;
+  /** What the way out is called - giving up on a charge still running, or
+   *  closing an answer that has already landed. */
+  leaves: "cancel" | "close";
+}
+
+/**
+ * The charge card, resolved (#248).
+ *
+ * A rule with tests rather than five branches inside a component, following
+ * `balanceStandingOf` next door in `tender.ts` - and for the same reason. Which
+ * face a state wears is not decoration: `unknown` painted like `failed`, or an
+ * `unknown` offered a "try again" instead of a "check again", is how a cashier
+ * ends up collecting money the bank may already have taken (grill Q5). So the
+ * three answers are told apart here, where it can be asserted, and the component
+ * only paints what it is handed.
+ *
+ * The two offers are deliberately not the same button under two names. `check`
+ * asks the bank where an existing charge stands and can only ever report; `retry`
+ * abandons it and starts another. An `unknown` gets the first and never the
+ * second - starting a second charge against a payment that may already have gone
+ * through is exactly the double-collection this whole state exists to prevent.
+ */
+export function chargeCardOf(standing: ChargeStanding): ChargeCard {
+  switch (standing.state) {
+    case "generating":
+      return {
+        tone: "waiting",
+        says: "Asking the bank for a code.",
+        canCheck: false,
+        canRetry: false,
+        leaves: "cancel",
+      };
+    case "awaiting":
+      return {
+        tone: "waiting",
+        says:
+          "Waiting for the bank to say the money arrived. This card waits as long as it takes - only the bank decides that a payment did not happen.",
+        canCheck: true,
+        canRetry: false,
+        leaves: "cancel",
+      };
+    case "success":
+      return {
+        tone: "good",
+        says: `The bank confirmed this payment. Reference ${(standing.reference ?? "").trim()}. It goes on the bill as confirmed.`,
+        canCheck: false,
+        canRetry: false,
+        leaves: "close",
+      };
+    case "failed":
+      return {
+        tone: "bad",
+        says: standing.reason,
+        canCheck: false,
+        canRetry: true,
+        leaves: "close",
+      };
+    case "unknown":
+      return {
+        tone: "doubt",
+        says: standing.reason,
+        canCheck: true,
+        canRetry: false,
+        leaves: "close",
+      };
+  }
 }

@@ -17,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ANSWER_MS,
+  brokeDown,
+  chargeCardOf,
   chargeStamp,
   createMockPaymentAdapter,
   GENERATING_MS,
@@ -178,10 +180,84 @@ describe("cancelling", () => {
   });
 });
 
+describe("what the card is showing", () => {
+  const card = (state: ChargeStanding["state"], over: Partial<ChargeStanding> = {}) =>
+    chargeCardOf({ state, reason: "the bank said so", qr: "", ...over });
+
+  it("waits, and calls the way out Cancel, while a charge is still running", () => {
+    for (const state of ["generating", "awaiting"] as const) {
+      expect(card(state).tone).toBe("waiting");
+      expect(card(state).leaves).toBe("cancel");
+      expect(card(state).canRetry).toBe(false);
+    }
+  });
+
+  it("offers Check status only once there is a charge for the bank to check", () => {
+    expect(card("generating").canCheck).toBe(false);
+    expect(card("awaiting").canCheck).toBe(true);
+  });
+
+  it("dresses an unknown apart from a failure - it is doubt, not a refusal", () => {
+    // Grill Q5: a charge nobody can reach may well have taken the customer's
+    // money. Painted like a refusal, it invites collecting it a second time.
+    expect(card("unknown").tone).toBe("doubt");
+    expect(card("failed").tone).toBe("bad");
+  });
+
+  it("offers an unknown another check and never another charge", () => {
+    // The distinction the whole state exists for: asking again is free, and
+    // starting a second charge against a payment that may already have gone
+    // through is the double collection.
+    expect(card("unknown")).toMatchObject({ canCheck: true, canRetry: false });
+    expect(card("failed")).toMatchObject({ canCheck: false, canRetry: true });
+  });
+
+  it("says what the adapter said on an answer, in the adapter's own words", () => {
+    expect(card("failed").says).toBe("the bank said so");
+    expect(card("unknown").says).toBe("the bank said so");
+  });
+
+  it("reads the reference back on a success, and offers nothing further", () => {
+    const good = card("success", { reference: "417223918811" });
+
+    expect(good.tone).toBe("good");
+    expect(good.says).toContain("417223918811");
+    expect(good).toMatchObject({ canCheck: false, canRetry: false, leaves: "close" });
+  });
+});
+
+describe("the terminal itself giving up", () => {
+  it("is an unknown, never a failure - the charge may have got away first", () => {
+    const standing = brokeDown(new Error("no reader attached"));
+
+    expect(standing.state).toBe("unknown");
+    expect(chargeCardOf(standing)).toMatchObject({ tone: "doubt", canCheck: true, canRetry: false });
+  });
+
+  it("says what the machine said, and what to do about it", () => {
+    expect(brokeDown(new Error("no reader attached")).reason).toContain("no reader attached");
+    // Something that is not an Error at all - a rejected string, a DOMException
+    // with no message - must still leave a sentence a cashier can act on.
+    expect(brokeDown("boom").reason).toMatch(/record it by hand/);
+  });
+
+  it("carries no reference, so it cannot become a stamp", () => {
+    expect(chargeStamp(brokeDown(new Error("x")), BILL)).toBeNull();
+  });
+});
+
 describe("what an outcome does to the bill", () => {
+  const good: ChargeStanding = {
+    state: "success",
+    reference: "417223918811",
+    amount_paise: BILL,
+    reason: "",
+    qr: "",
+  };
+
   it("stamps nothing on anything short of success", () => {
     for (const state of ["generating", "awaiting", "failed", "unknown"] as const) {
-      expect(chargeStamp({ state, reason: "", qr: "" }, BILL)).toBeNull();
+      expect(chargeStamp({ ...good, state }, BILL)).toBeNull();
     }
   });
 
@@ -189,12 +265,25 @@ describe("what an outcome does to the bill", () => {
     // `upi_state=confirmed` with a blank `upi_reference` is a `VALIDATION`
     // refusal (api-contract §2), and a refused bill is a receipt already in a
     // customer's hand.
-    expect(chargeStamp({ state: "success", reference: "  ", reason: "", qr: "" }, BILL)).toBeNull();
+    expect(chargeStamp({ ...good, reference: "  " }, BILL)).toBeNull();
+  });
+
+  it("stamps nothing when the bank does not say what it took", () => {
+    // An adapter that cannot account for the figure is not a confirmation of
+    // it. Falling back to the cashier's word is the safe direction, and the
+    // only one available.
+    expect(chargeStamp({ ...good, amount_paise: undefined }, BILL)).toBeNull();
+  });
+
+  it("stamps nothing when the bank took a different figure from the one asked for", () => {
+    // A partly captured charge, or a QR the customer re-presented. Recording it
+    // as `confirmed` for the full amount would be the till telling head office
+    // the bank approved money it never saw.
+    expect(chargeStamp({ ...good, amount_paise: BILL - 100 }, BILL)).toBeNull();
   });
 
   it("stamps the reference and the figure it was charged against", () => {
-    expect(chargeStamp({ state: "success", reference: "417223918811", reason: "", qr: "" }, BILL))
-      .toEqual({ reference: "417223918811", amount_paise: BILL });
+    expect(chargeStamp(good, BILL)).toEqual({ reference: "417223918811", amount_paise: BILL });
   });
 
   it("no answer the mock can give ever reaches the wire as confirmed", async () => {

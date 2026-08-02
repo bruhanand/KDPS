@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, QrCode, RefreshCw, WifiOff } from "lucide-react";
 
 import { Money } from "../../../lib/format";
-import { chargeStamp } from "../../../till/payment";
-import type { ChargeStanding, PaymentAdapter, UpiCharged } from "../../../till/payment";
+import { brokeDown, chargeCardOf, chargeStamp } from "../../../till/payment";
+import type { ChargeCard, ChargeStanding, PaymentAdapter, UpiCharged } from "../../../till/payment";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
 // screen with a dialog on it borrows from the same place.
 import "../../Booking.css";
@@ -19,13 +19,12 @@ import "../../Booking.css";
 // the seam; the hardware slice swaps the adapter underneath and touches no
 // screen.
 //
-// Two things about it are decisions rather than layout.
-//
-// **The counter never decides a timeout.** `unknown` is its own state with its
-// own words - "this counter cannot reach the bank" - and its own button, and it
-// stays unknown however long the cashier waits. A till that quietly called it
-// failed would send the cashier to collect money the customer may already have
-// paid (grill Q5).
+// **This component paints; it does not decide.** Which face a state wears, what
+// it says, and which of the two offers it makes are `chargeCardOf`'s, in
+// `till/payment.ts` where they have tests - the same split `balanceStandingOf`
+// and the payment card's balance line already use. Getting it wrong is not
+// cosmetic: an `unknown` dressed as a failure, or handed a "try again" instead
+// of a "check again", is how a cashier collects the same money twice.
 //
 // **Closing is always available and always safe.** Cancel, a failure, an
 // unknown, the backdrop, Escape - every way out lands back on the payment card
@@ -56,6 +55,28 @@ export function UpiCharge({
   /** Bumped by "Show the QR again", which is how a failed card starts over. */
   const [attempt, setAttempt] = useState(0);
   const [checking, setChecking] = useState(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  /** Still on screen. A ref rather than the effect's own `live` flag because
+   *  Check status is an `await` started by a click, and the cashier can close
+   *  the card while the bank is being asked - at which point a stamp landing on
+   *  a bill they have already moved to another tender would be money nobody
+   *  agreed to. */
+  const onScreen = useRef(true);
+
+  useEffect(() => {
+    onScreen.current = true;
+    return () => {
+      onScreen.current = false;
+    };
+  }, []);
+
+  // Focus the card itself on open. Not a nicety: Escape is one of the ways out
+  // this card promises, and a `keydown` handler on a node nothing has focused
+  // never fires (`ManagerPin` gets away with the same handler because it
+  // focuses its PIN box). Nothing in here is a text box to autofocus instead.
+  useEffect(() => {
+    dialog.current?.focus();
+  }, []);
 
   useEffect(() => {
     // `live` as well as `adapter.cancel()`: the cancel stops the mock's own
@@ -65,25 +86,30 @@ export function UpiCharge({
     let live = true;
     setStanding(OPENING);
     void (async () => {
-      for await (const next of adapter.charge(amountPaise)) {
-        if (!live) return;
-        setStanding(next);
-        const charged = chargeStamp(next, amountPaise);
-        if (charged) {
-          onConfirmed(charged);
-          return;
+      try {
+        for await (const next of adapter.charge(amountPaise)) {
+          if (!live) return;
+          setStanding(next);
+          const charged = chargeStamp(next, amountPaise);
+          if (charged) {
+            onConfirmed(charged);
+            return;
+          }
         }
+      } catch (error) {
+        // A terminal that threw. `unknown` rather than `failed`, and on purpose:
+        // this counter has no idea how far the charge got before its machine
+        // gave up, and calling that a failure is the one thing grill Q5 forbids.
+        if (live) setStanding(brokeDown(error));
       }
     })();
     return () => {
       live = false;
       void adapter.cancel();
     };
-    // `onConfirmed` is deliberately out of the deps: it closes over the
-    // screen's own `setCart`, so a new identity on every render would restart
-    // the charge on every render - a QR that regenerates while the customer is
-    // trying to scan it. The screen wraps it in `useCallback` for the same
-    // reason, so this is belt and braces rather than a leak.
+    // `onConfirmed` is in the deps and the screen wraps it in `useCallback` to
+    // keep it stable: a fresh identity every render would restart the charge
+    // every render - a QR regenerating under a customer trying to scan it.
   }, [adapter, amountPaise, attempt, onConfirmed]);
 
   /** Ask the bank again. Never a way to fail a charge - `checkStatus` reports
@@ -93,20 +119,28 @@ export function UpiCharge({
     setChecking(true);
     try {
       const now = await adapter.checkStatus();
-      if (!now) return;
+      // Both guarded by `onScreen`, and the stamp especially: the cashier can
+      // close this card while the bank is being asked, and a confirmation
+      // landing after that would write a payment onto a bill they have already
+      // taken another way.
+      if (!onScreen.current || !now) return;
       setStanding(now);
       const charged = chargeStamp(now, amountPaise);
       if (charged) onConfirmed(charged);
+    } catch (error) {
+      if (onScreen.current) setStanding(brokeDown(error));
     } finally {
-      setChecking(false);
+      if (onScreen.current) setChecking(false);
     }
   }
 
-  const waiting = standing.state === "generating" || standing.state === "awaiting";
+  const card = chargeCardOf(standing);
 
   return (
     <div className="modal-backdrop" data-testid="bill-upi-modal" onClick={onClose}>
       <div
+        ref={dialog}
+        tabIndex={-1}
         className="modal bill-upi"
         role="dialog"
         aria-label="UPI payment"
@@ -122,7 +156,7 @@ export function UpiCharge({
             UPI payment
           </h3>
           <button type="button" className="btn" data-testid="bill-upi-close" onClick={onClose}>
-            {waiting ? "Cancel" : "Close"}
+            {card.leaves === "cancel" ? "Cancel" : "Close"}
           </button>
         </div>
 
@@ -133,14 +167,14 @@ export function UpiCharge({
           <Money paise={amountPaise} />
         </p>
 
-        {waiting ? (
+        {card.tone === "waiting" ? (
           <Waiting standing={standing} />
         ) : (
-          <Answer standing={standing} />
+          <Answer card={card} />
         )}
 
         <div className="bill-upi-actions">
-          {(standing.state === "awaiting" || standing.state === "unknown") && (
+          {card.canCheck && (
             <button
               type="button"
               className="btn btn-cta"
@@ -152,7 +186,7 @@ export function UpiCharge({
               {checking ? "Checking…" : "Check status"}
             </button>
           )}
-          {standing.state === "failed" && (
+          {card.canRetry && (
             <button
               type="button"
               className="btn btn-cta"
@@ -195,35 +229,19 @@ function Waiting({ standing }: { standing: ChargeStanding }) {
         </span>
       </div>
       <p className="bill-upi-says" data-testid="bill-upi-says">
-        {generating
-          ? "Asking the bank for a code."
-          : "Waiting for the bank to say the money arrived. This card waits as long as it takes - only the bank decides that a payment did not happen."}
+        {chargeCardOf(standing).says}
       </p>
     </>
   );
 }
 
-/** Success, failed, unknown: what the bank said, and what to do about it. */
-function Answer({ standing }: { standing: ChargeStanding }) {
-  if (standing.state === "success") {
-    return (
-      <p className="bill-upi-answer is-good" data-testid="bill-upi-answer">
-        <CheckCircle2 size={18} />
-        <span>
-          The bank confirmed this payment. Reference {standing.reference}. It goes on the bill as
-          confirmed.
-        </span>
-      </p>
-    );
-  }
-  const unknown = standing.state === "unknown";
+/** Success, failed, unknown: what the bank said, in the face it earns. */
+function Answer({ card }: { card: ChargeCard }) {
+  const Icon = card.tone === "good" ? CheckCircle2 : card.tone === "doubt" ? WifiOff : AlertTriangle;
   return (
-    <p
-      className={unknown ? "bill-upi-answer is-doubt" : "bill-upi-answer is-bad"}
-      data-testid="bill-upi-answer"
-    >
-      {unknown ? <WifiOff size={18} /> : <AlertTriangle size={18} />}
-      <span>{standing.reason}</span>
+    <p className={`bill-upi-answer is-${card.tone}`} data-testid="bill-upi-answer">
+      <Icon size={18} />
+      <span>{card.says}</span>
     </p>
   );
 }
