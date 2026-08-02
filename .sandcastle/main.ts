@@ -856,7 +856,10 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       if (existsSync(worktreePath)) {
         git("worktree", "remove", "--force", worktreePath);
       }
-      git("branch", "-d", r.issue.branch);
+      // -D, not -d: a branch that was pushed (draft PR) has an upstream git
+      // considers unmerged even when main holds every commit. This runs only
+      // after the merge gate certified the branch is in main, so force is safe.
+      git("branch", "-D", r.issue.branch);
     } catch (error) {
       mainLog(runDir, `  (branch cleanup for ${r.issue.branch} failed: ${error})`);
     }
