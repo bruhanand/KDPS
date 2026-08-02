@@ -418,6 +418,18 @@ function Counter({ storeName }: { storeName?: string }) {
   useEffect(() => {
     if (!engine || !restored) return;
     if (pendingDraft && !billStarted) return;
+    // An empty counter clears the row rather than writing an empty one.
+    //
+    // Both halves matter. Writing: this effect lands *after* the `clearDraft`
+    // its caller fired in the same tick, so a bare `put` here would put the
+    // row straight back and quietly defeat every commit, hold and New bill
+    // (round-2 finding). Clearing: a cashier who deletes the last line by hand
+    // takes no such path at all, and leaving the older row would offer to
+    // restore the very lines they just took off.
+    if (!billStarted && paper === null) {
+      void clearDraft(engine.db);
+      return;
+    }
     void persistDraft(engine.db, cart, customer, paper, paper === null ? null : paperAt);
   }, [engine, restored, pendingDraft, billStarted, cart, customer, paper, paperAt]);
 
@@ -656,14 +668,34 @@ function Counter({ storeName }: { storeName?: string }) {
     scan.focus();
   }
 
-  function newBill() {
+  /**
+   * Put an empty counter on screen: the state half of every "this bill is
+   * over" moment - New bill, a hold parked, a bill committed.
+   *
+   * One named site because it is five statements that must not drift apart,
+   * and they already had (round-2 finding). `resumeHold` is the near miss that
+   * makes the point: it lands a *different* cart rather than an empty one, so
+   * it could not call this - and being spelled by hand it was missing both
+   * `skipRestore` and the emptied undo stack, which is a crashed draft landing
+   * on a released hold and a previous customer's lines one Undo away.
+   *
+   * The draft row is each caller's own business: `newBill` can fire and forget
+   * it, while `holdBill` and the commit path must await it inside their own
+   * error handling.
+   */
+  function freshCounter() {
     skipRestore.current = true;
+    onScreenRef.current = { cart: emptyCart(), customer: NO_CUSTOMER };
     setCart(emptyCart());
     setCustomer(NO_CUSTOMER);
     setUndoStack(emptyUndo());
     setPendingDraft(null);
-    startingANewBill();
     clearScan();
+  }
+
+  function newBill() {
+    freshCounter();
+    startingANewBill();
     if (engine) void clearDraft(engine.db);
     scan.focus();
   }
@@ -712,12 +744,7 @@ function Counter({ storeName }: { storeName?: string }) {
           pieces: bill.pieces,
         }),
       });
-      skipRestore.current = true;
-      setCart(emptyCart());
-      setCustomer(NO_CUSTOMER);
-      setUndoStack(emptyUndo());
-      setPendingDraft(null);
-      clearScan();
+      freshCounter();
       await clearDraft(engine.db);
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
@@ -823,12 +850,7 @@ function Counter({ storeName }: { storeName?: string }) {
         describe: describeFrom(bill.lines),
       });
       setLastBill({ bill: queued, receipt });
-      skipRestore.current = true;
-      setCart(emptyCart());
-      setCustomer(NO_CUSTOMER);
-      setUndoStack(emptyUndo());
-      setPendingDraft(null);
-      clearScan();
+      freshCounter();
       await clearDraft(engine.db);
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
