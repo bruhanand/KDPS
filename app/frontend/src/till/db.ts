@@ -22,6 +22,7 @@
 import Dexie from "dexie";
 import type { Table } from "dexie";
 
+import type { DraftPayload } from "./draft";
 import type { HeldPayload } from "./held";
 import type {
   QueuedBill,
@@ -127,6 +128,11 @@ export class TillDb extends Dexie {
   meta!: Table<MetaRow, string>;
   queue!: Table<QueuedBill, number>;
   held!: Table<HeldBill, string>;
+  /** The in-progress bill, autosaved (#244). One row, at the fixed key
+   *  `DRAFT_KEY` - an outbound key (`""` in the schema below), so the object on
+   *  disk is exactly the payload and nothing has to strip a key field back off
+   *  it on read. */
+  draft!: Table<DraftPayload, string>;
 
   constructor(storeCode: string) {
     super(databaseName(storeCode));
@@ -157,6 +163,12 @@ export class TillDb extends Dexie {
     // money in it, and Dexie upgrades that one in place instead of asking the
     // browser to throw it away and start again.
     this.version(2).stores({ seasons: "code" });
+    // The autosaved draft (#244) - additive again, for the same reason version
+    // 2 was: a counter mid-shift has unsynced money in its database and Dexie
+    // must upgrade that one in place. This version adds `draft` only; the
+    // `customers` table design.md plans alongside it lands with #245 on the
+    // next free version, not folded in here.
+    this.version(3).stores({ draft: "" });
   }
 }
 

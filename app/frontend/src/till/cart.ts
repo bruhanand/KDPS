@@ -57,8 +57,10 @@ import type {
 /** One row of the line grid, as the cashier has it so far. */
 export interface CartLine {
   /** Stable across re-prices and re-sorts, so React and the season swap have
-   *  something to hold that is not the barcode (the same piece can be scanned
-   *  twice onto two lines). */
+   *  something to hold that is not the barcode - two lines can still share one,
+   *  an off-the-tag line and the cohort it turns out to be, or two seasons of
+   *  the same design, since a rescan of the same cohort bumps `qty` rather than
+   *  opening a second line (#244, grill Q1). */
   key: string;
   barcode: string;
   season: string;
@@ -268,8 +270,46 @@ export function addManualPiece(barcode: string, key = newKey()): CartLine {
 
 let keys = 0;
 
-function newKey(): string {
+/** The one source of cart-line keys - a restore rekey (`draft.ts`) mints from
+ *  this too, rather than a generator of its own, so a line restored from a
+ *  crash and the next fresh scan can never be issued the same key. */
+export function newKey(): string {
   return `l${(keys += 1)}`;
+}
+
+/**
+ * A scanned piece, onto the bill (#244, grill Q1).
+ *
+ * Scanning the same tag twice bumps the line already carrying it rather than
+ * opening a duplicate - "always, no toggle" was the ruling, so there is no
+ * setting to turn this off. The match is the cohort, `(barcode, season)`, and
+ * an off-the-tag line never matches: it has no cohort behind it, so the second
+ * scan of a barcode `addManualPiece` billed is a different piece, not the same
+ * one again.
+ *
+ * The matched line keeps its salesman, discount and rate exactly as they stood
+ * - a rescan is not an edit, and re-stamping today's default salesman onto a
+ * line somebody already credited would undo their pick. A piece needing a
+ * different salesman on its second unit is edited on the line, same as any
+ * other line-level change.
+ */
+export function scanPiece(
+  cart: Cart,
+  piece: TillItem,
+  found: { stock: number; alternatives: TillItem[] },
+  salesman: number | null,
+): Cart {
+  const match = cart.lines.find(
+    (line) =>
+      line.barcode === piece.barcode && line.season === piece.season && !line.sold_before_inward,
+  );
+  if (match) {
+    return {
+      ...cart,
+      lines: cart.lines.map((line) => (line === match ? { ...line, qty: line.qty + 1 } : line)),
+    };
+  }
+  return { ...cart, lines: [...cart.lines, { ...addPiece(piece, found), salesman }] };
 }
 
 /**

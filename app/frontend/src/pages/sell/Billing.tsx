@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
@@ -8,6 +8,7 @@ import {
   PauseCircle,
   Plus,
   Printer,
+  RotateCcw,
   Search,
   Undo2,
   X,
@@ -20,14 +21,16 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import {
   addManualPiece,
-  addPiece,
   emptyCart,
   priceCart,
+  scanPiece,
   toDraft,
   whyItCannotClose,
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
+import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "../../till/draft";
+import type { DraftPayload } from "../../till/draft";
 import { takeParkedExchange } from "../../till/exchange";
 import type { Exchange } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
@@ -40,6 +43,8 @@ import { receiptHtml } from "../../till/receipt";
 import type { Payment } from "../../till/tender";
 import type { TillSnapshot } from "../../till/engine";
 import type { QueuedBill, TillCustomer, TillItem } from "../../till/types";
+import { emptyUndo, popUndo, pushUndo } from "../../till/undo";
+import type { UndoStack } from "../../till/undo";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
@@ -168,6 +173,45 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Open when a manager is being asked for their PIN, carrying exactly what
    *  they are being shown - which is also what their approval will cover. */
   const [asking, setAsking] = useState<Ask[] | null>(null);
+  // --- cart safety: autosave and undo (#244) --------------------------------
+  /** One snapshot per cart action, oldest first - see `till/undo.ts`. */
+  const [undoStack, setUndoStack] = useState<UndoStack>(emptyUndo);
+  /** The draft read on mount has landed - whether or not it had anything to
+   *  restore. Autosave waits for this: writing the still-pristine cart the
+   *  instant this screen mounts would beat the read to the punch and clobber
+   *  the very draft it is about to look for. */
+  const [restored, setRestored] = useState(false);
+  /** Flipped once this screen has deliberately started a fresh bill - New
+   *  bill, a commit, or a hold. A restore that lands after that is a screen
+   *  the cashier has already moved on from, and must not resurrect it
+   *  (binding rule 6, "don't restore over a fresh bill"). */
+  const skipRestore = useRef(false);
+  /** Which run of typing the undo stack is currently coalescing into. Bumped
+   *  by anything that is not more typing in the same box, so a run cannot span
+   *  an action that happened in the middle of it - see `editLine`. */
+  const runSeq = useRef(0);
+  /** Whatever is really on screen the instant the draft read could land -
+   *  kept in sync at the only places that can populate it before that
+   *  happens: a scan (`takePiece`/`takeUnknown`), the exchange hand-off
+   *  above, and the customer strip. A `useEffect` mirroring `cart`/`customer`
+   *  into a ref would run on React's own effect schedule, which is not
+   *  guaranteed to have flushed before a sibling promise's `.then` lands -
+   *  the same "no guaranteed order" the mount-race comment below already
+   *  names - so this is written at the real mutation call sites instead,
+   *  synchronously, where there is no such gap. Nothing reads it once
+   *  `restored` is true. */
+  const onScreenRef = useRef<{ cart: Cart; customer: TillCustomer }>({
+    cart: emptyCart(),
+    customer: NO_CUSTOMER,
+  });
+  /** A draft this screen would not auto-restore - a previous business day, or
+   *  a paper number the counter no longer recognises - parked here for the
+   *  cashier to resume or drop, rather than applied or lost silently (the 2
+   *  Aug 2026 draft-age and paper-conflict rulings). */
+  const [pendingDraft, setPendingDraft] = useState<{
+    draft: DraftPayload;
+    reason: "stale" | "paper-conflict";
+  } | null>(null);
   /** Wrong PINs at this counter, and the pause they earn (`useWrongPins`). Only
    *  a speed bump: the hash is on this device by design (grill Q1), so what it
    *  buys is somebody guessing having to stand at the counter visibly doing
@@ -200,6 +244,10 @@ function Counter({ storeName }: { storeName?: string }) {
     let taken = true;
     void takeParkedExchange(engine.db).then((parked) => {
       if (taken && parked) {
+        onScreenRef.current = {
+          ...onScreenRef.current,
+          cart: { ...onScreenRef.current.cart, exchange: parked },
+        };
         setCart((current) => ({ ...current, exchange: parked }));
         setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
       }
@@ -236,6 +284,165 @@ function Counter({ storeName }: { storeName?: string }) {
   const paper = useMemo(() => outstandingPaperSeq(params, till), [params, till]);
   const [paperAt, setPaperAt] = useState(() => localNow());
 
+  /**
+   * Land a decided draft on screen whole - cart, customer, and its paper claim
+   * if `outstandingPaperSeq` still accepts it right now (#244, binding rule
+   * 0c). Used both by the mount-time auto-restore below and by the cashier's
+   * own "Resume" on a flagged draft (`pendingDraft`).
+   *
+   * Paper mode restores by putting `paper=N` back in the address bar, never by
+   * holding a state flag (`Billing.tsx`'s own paper mode is always re-derived
+   * from the URL) - and only when it is still outstanding.
+   *
+   * A paper claim that can no longer be honoured refuses the **whole** restore
+   * and returns false, rather than landing the cart and customer with a note
+   * about the missing half (round-2 finding). The 2 Aug 2026 ruling is that
+   * the snapshot restores as one or not at all, and this is the case where
+   * the halves differ in kind: a bill saved as a re-entry of printed bill N,
+   * landed without its paper claim, is no longer a re-entry at all - Save &
+   * Print would draw it a fresh number and print a second receipt for a bill
+   * the customer is already holding. There is nothing safe to keep, so the
+   * cashier is told and the draft is left standing for them to discard.
+   */
+  const applyDraft = useCallback(
+    (payload: DraftPayload, snapshotTill: TillSnapshot | null): boolean => {
+      const claimsPaper = payload.paper !== null;
+      if (
+        claimsPaper &&
+        outstandingPaperSeq(paperParams(payload.paper as number), snapshotTill) !== payload.paper
+      ) {
+        setNote(
+          `That bill was a re-entry of printed bill ${payload.paper}, and the counter no longer ` +
+            "regards that number as outstanding - so none of it has been restored. It cannot be " +
+            "keyed in again under that number. Discard it, or check the number before starting over.",
+        );
+        return false;
+      }
+      runSeq.current += 1;
+      onScreenRef.current = { cart: payload.cart, customer: payload.customer };
+      setCart(payload.cart);
+      setCustomer(payload.customer);
+      setUndoStack(emptyUndo());
+      setPendingDraft(null);
+      if (!claimsPaper) return true;
+      setPaperAt(payload.paperAt ?? localNow());
+      if (params.get("paper") !== String(payload.paper)) {
+        const next = new URLSearchParams(params);
+        next.set("paper", String(payload.paper));
+        setParams(next, { replace: true });
+      }
+      return true;
+    },
+    [params, setParams],
+  );
+
+  /**
+   * Reopening Billing after a crash, a closed tab or a power cut (#244).
+   *
+   * Read exactly once, guarded the way `useTillWorld` guards its own reload: a
+   * read that loses the StrictMode/remount race is dropped rather than
+   * applied. `restoredDraft` is the one decision over the whole snapshot - cart
+   * lines, exchange legs and customer fields together (the 2 Aug 2026 ruling):
+   * whichever the screen already has by the time the read lands (a piece
+   * scanned before it came back, or the exchange hand-off above, in no
+   * guaranteed order against this one) wins over the saved draft *whole*, so a
+   * restore can never mix a real exchange with a crashed bill's customer.
+   * `skipRestore` is the fourth guard: a New bill, a commit or a hold started
+   * before this read landed means the cashier has already moved past what it
+   * would restore.
+   *
+   * `engine.getSnapshot()` reads the counter's live state directly rather than
+   * the `till` this component re-renders with - `till` only updates once React
+   * gets round to it, which is not guaranteed to have happened yet at the exact
+   * moment this read lands, and a paper check against a still-loading snapshot
+   * would wrongly refuse a bill that is in fact still outstanding.
+   *
+   * `rekeyDraft` runs here, once, on the read itself - never inside a
+   * `setCart` updater - so every restored line and leg gets a brand-new
+   * internal key before anything on screen can touch it (the 2 Aug 2026
+   * ruling): a saved key colliding with the next scan's would let one PIN
+   * authorisation silently cover a line nobody approved.
+   */
+  useEffect(() => {
+    if (!engine) return;
+    let alive = true;
+    void readDraft(engine.db)
+      .then((draft) => {
+        if (!alive || !draft || skipRestore.current) return;
+        const fresh = rekeyDraft(draft);
+        const snapshotTill = engine.getSnapshot();
+        const decision = restoredDraft(
+          onScreenRef.current,
+          fresh,
+          tillToday(),
+          paperConsistent(fresh.paper, params, snapshotTill),
+        );
+        if (decision.kind === "apply") {
+          applyDraft(decision.draft, snapshotTill);
+        } else if (decision.kind !== "drop") {
+          setPendingDraft({ draft: decision.draft, reason: decision.kind });
+        }
+      })
+      .finally(() => {
+        if (alive) setRestored(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [engine]);
+
+  /** Is there a bill on this screen at all? Customer fields count: a name and
+   *  a GSTIN typed before the first scan are as much a part of the snapshot as
+   *  a line is (the 2 Aug 2026 atomic ruling), and a crash between the two
+   *  would otherwise lose them. */
+  const billStarted =
+    cart.lines.length > 0 ||
+    Boolean(cart.exchange) ||
+    Boolean(customer.name || customer.mobile || customer.gstin);
+
+  /**
+   * Write-through: every cart or customer-field change lands here (#244).
+   *
+   * Held off until the mount read above has landed (see `restored`), and while
+   * a flagged draft is still waiting on the cashier *and the counter is still
+   * empty*: writing the empty screen through in that window would overwrite
+   * the very row the notice is offering to resume before they get to answer
+   * it.
+   *
+   * It deliberately does *not* stay held once they start billing (round-2
+   * finding). The gate used to be `pendingDraft` alone, which made every
+   * mutator clear the notice to get autosave back - so one scan silently
+   * dropped a question the 2 Aug 2026 ruling says only Resume or Discard may
+   * answer. Suspending on emptiness instead lets the notice stand while the
+   * new bill is protected, and costs nothing: `pendingDraft` holds the payload
+   * in memory, so Resume no longer depends on the stored row surviving.
+   *
+   * `persistDraft` never throws (flag, never block): a failed write is a
+   * console line, and the bill carries on regardless.
+   */
+  useEffect(() => {
+    if (!engine || !restored) return;
+    if (pendingDraft && !billStarted) return;
+    // An empty counter clears the row rather than writing an empty one.
+    //
+    // Both halves matter. Writing: this effect lands *after* the `clearDraft`
+    // its caller fired in the same tick, so a bare `put` here would put the
+    // row straight back and quietly defeat every commit, hold and New bill
+    // (round-2 finding). Clearing: a cashier who deletes the last line by hand
+    // takes no such path at all, and leaving the older row would offer to
+    // restore the very lines they just took off.
+    // Paper mode is no exception: a re-entry with nothing keyed into it yet is
+    // still an empty counter, and its number is in the address bar rather than
+    // the row. Exempting it left `newBill` writing a blank paper-claiming row
+    // straight back over its own `clearDraft` - the same ping-pong, confined
+    // to the one mode where a stray restore is most expensive.
+    if (!billStarted) {
+      void clearDraft(engine.db);
+      return;
+    }
+    void persistDraft(engine.db, cart, customer, paper, paper === null ? null : paperAt);
+  }, [engine, restored, pendingDraft, billStarted, cart, customer, paper, paperAt]);
+
   const leavePaperMode = useCallback(() => {
     if (!params.has("paper")) return;
     const next = new URLSearchParams(params);
@@ -266,6 +473,10 @@ function Counter({ storeName }: { storeName?: string }) {
   // piece the customer paid for and the queue never heard of. Parking one is the
   // same read and the same hazard, one table down.
   const locked = saving || holding;
+
+  // Quiet, and only once there is a bill on screen worth saving - an empty
+  // counter has nothing autosave is protecting yet.
+  const draftSaved = restored && billStarted;
 
   const suggestions = useMemo(
     () =>
@@ -303,20 +514,35 @@ function Counter({ storeName }: { storeName?: string }) {
     setPrintProblem("");
   }, []);
 
+  /** Remember the cart as it stood before a mutator lands - one step for the
+   *  Undo button (#244). */
+  const pushCartUndo = useCallback((snapshot: Cart, run?: string) => {
+    setUndoStack((stack) => pushUndo(stack, snapshot, run));
+  }, []);
+
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
-      setCart((current) => ({
-        ...current,
-        lines: [
-          ...current.lines,
-          { ...addPiece(piece, { stock, alternatives }), salesman: defaultSalesman },
-        ],
-      }));
+      pushCartUndo(cart);
+      // `scanPiece`, not a bare append: scanning a tag already on the bill
+      // bumps that line's quantity instead of laying a duplicate beside it
+      // (#244).
+      //
+      // Computed once, off the same closure `cart` the undo snapshot above
+      // reads (accurate here - deviations.md already established no two of
+      // these five mutators ever chain inside one handler) - and reused for
+      // both the mirror below and the actual `setCart`, deliberately not
+      // recomputed inside a functional updater. A second `scanPiece` call
+      // would mint a second, different key for a genuinely new line
+      // (`addPiece`'s default), which is the exact collision class #244
+      // closes - just against the very next scan instead of a crash restore.
+      const next = scanPiece(cart, piece, { stock, alternatives }, defaultSalesman);
+      onScreenRef.current = { ...onScreenRef.current, cart: next };
+      setCart(next);
       startingANewBill();
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [clearScan, defaultSalesman, startingANewBill],
+    [cart, clearScan, defaultSalesman, pushCartUndo, startingANewBill],
   );
 
   /**
@@ -329,15 +555,21 @@ function Counter({ storeName }: { storeName?: string }) {
    */
   const takeUnknown = useCallback(
     (code: string) => {
-      setCart((current) => ({
-        ...current,
-        lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
-      }));
+      pushCartUndo(cart);
+      // `addManualPiece` mints a key by default - computed once and reused
+      // below for the same reason `takePiece` does: a second call would mint
+      // a second, different key for what is meant to be the same line.
+      const manualLine = { ...addManualPiece(code), salesman: defaultSalesman };
+      onScreenRef.current = {
+        ...onScreenRef.current,
+        cart: { ...cart, lines: [...cart.lines, manualLine] },
+      };
+      setCart((current) => ({ ...current, lines: [...current.lines, manualLine] }));
       startingANewBill();
       clearScan();
       scan.focus();
     },
-    [clearScan, defaultSalesman, scan, startingANewBill],
+    [cart, clearScan, defaultSalesman, pushCartUndo, scan, startingANewBill],
   );
 
   const applyScan = useCallback(
@@ -359,6 +591,16 @@ function Counter({ storeName }: { storeName?: string }) {
   );
 
   function editLine(key: string, patch: Partial<CartLine>) {
+    // One line's one field is one undo step, however many keystrokes it took:
+    // the grid's cells fire this on every character (round-2 finding).
+    //
+    // `runSeq` is what ends a run. Coalescing looks only at the top of the
+    // stack, so without it a qty edit, then something that pushes nothing
+    // (a payment or customer field, an Undo), then a *second* qty edit on the
+    // same line would fold into the first and lose the figure in between.
+    // Anything that is not more typing in this same box bumps the counter, and
+    // the next edit starts a step of its own.
+    pushCartUndo(cart, `${key}:${Object.keys(patch).sort().join(",")}#${runSeq.current}`);
     setCart((current) => ({
       ...current,
       lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
@@ -383,6 +625,7 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Take a piece back off the bill - the customer changed their mind about
    *  giving it back, or the wrong line was picked. */
   function removeLeg(key: string) {
+    pushCartUndo(cart);
     setCart((current) => {
       const legs = (current.exchange?.lines ?? []).filter((leg) => leg.key !== key);
       return {
@@ -397,19 +640,97 @@ function Counter({ storeName }: { storeName?: string }) {
   }
 
   function removeLine(key: string) {
+    pushCartUndo(cart);
     setCart((current) => ({ ...current, lines: current.lines.filter((l) => l.key !== key) }));
     scan.focus();
   }
 
+  /** Step the bill back one action (#244). Nothing here touches stock or
+   *  money - the whole safety of it is that this bill is not real until Save
+   *  & Print. */
+  function undo() {
+    const popped = popUndo(undoStack);
+    if (!popped) return;
+    runSeq.current += 1;
+    setUndoStack(popped.stack);
+    setCart(popped.cart);
+    scan.focus();
+  }
+
   function editPayment(patch: Partial<Payment>) {
+    runSeq.current += 1;
     setCart((current) => ({ ...current, payment: { ...current.payment, ...patch } }));
   }
 
-  function newBill() {
+  /** The customer strip, typed into directly - the third source (with a scan
+   *  and the exchange hand-off) that can race the mount-time draft read. */
+  function editCustomer(next: TillCustomer) {
+    runSeq.current += 1;
+    onScreenRef.current = { ...onScreenRef.current, customer: next };
+    setCustomer(next);
+  }
+
+  /** The cashier's explicit answer to a flagged draft (#244) - a previous
+   *  business day, or a paper number the counter no longer holds. Resuming
+   *  reprices at today's rules the moment it lands (`priceCart` always reprices
+   *  from `today`, binding rule 9); nothing here is a hold, so no repricing
+   *  machinery of its own is needed. */
+  function resumePendingDraft() {
+    if (!pendingDraft || !engine) return;
+    // Never over a bill already in progress. The notice now stands until it is
+    // answered rather than vanishing on the first scan (round-2 finding), so
+    // for the first time Resume can be pressed with a real cart on screen -
+    // and `applyDraft` replaces cart and customer wholesale and empties the
+    // undo stack, which would take a bill away from in front of a customer
+    // with no way back. Finishing or clearing what is on the counter is the
+    // cashier's own decision, so this asks rather than choosing for them.
+    if (billStarted) {
+      setNote(
+        "Finish or clear the bill on the counter first - resuming the saved one would replace it.",
+      );
+      return;
+    }
+    applyDraft(pendingDraft.draft, engine.getSnapshot());
+    scan.focus();
+  }
+
+  /** Let a flagged draft go without resuming it. */
+  function discardPendingDraft() {
+    setPendingDraft(null);
+    if (engine) void clearDraft(engine.db);
+    scan.focus();
+  }
+
+  /**
+   * Put an empty counter on screen: the state half of every "this bill is
+   * over" moment - New bill, a hold parked, a bill committed.
+   *
+   * One named site because it is five statements that must not drift apart,
+   * and they already had (round-2 finding). `resumeHold` is the near miss that
+   * makes the point: it lands a *different* cart rather than an empty one, so
+   * it could not call this - and being spelled by hand it was missing both
+   * `skipRestore` and the emptied undo stack, which is a crashed draft landing
+   * on a released hold and a previous customer's lines one Undo away.
+   *
+   * The draft row is each caller's own business: `newBill` can fire and forget
+   * it, while `holdBill` and the commit path must await it inside their own
+   * error handling.
+   */
+  function freshCounter() {
+    skipRestore.current = true;
+    runSeq.current += 1;
+    onScreenRef.current = { cart: emptyCart(), customer: NO_CUSTOMER };
     setCart(emptyCart());
     setCustomer(NO_CUSTOMER);
-    startingANewBill();
+    setUndoStack(emptyUndo());
+    setPendingDraft(null);
     clearScan();
+  }
+
+  function newBill() {
+    freshCounter();
+    startingANewBill();
+    if (engine) void clearDraft(engine.db);
     scan.focus();
   }
 
@@ -457,9 +778,8 @@ function Counter({ storeName }: { storeName?: string }) {
           pieces: bill.pieces,
         }),
       });
-      setCart(emptyCart());
-      setCustomer(NO_CUSTOMER);
-      clearScan();
+      freshCounter();
+      await clearDraft(engine.db);
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
     } catch (error) {
@@ -473,9 +793,27 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Pick a parked bill back up, at today's prices. */
   async function resumeHold(hold: HeldBill) {
     if (!engine || holdsBlocked) return;
-    const restored = restoreHold(hold, world);
-    setCart(restored.cart);
-    setCustomer(restored.customer);
+    const picked = restoreHold(hold, world);
+    // A hold landing on the counter is a bill starting, so it takes the same
+    // three guards every other such moment takes (round-2 finding - this was
+    // the one path with none of them).
+    //
+    // `skipRestore` + the `onScreenRef` mirror, because this is a fourth
+    // source that can race the mount-time draft read: without them a hold
+    // resumed before that read lands is overwritten by the crashed draft,
+    // with the hold already released - the atomic-restore failure the 2 Aug
+    // 2026 ruling forbids, in the one shape where the evidence is gone too.
+    //
+    // `emptyUndo`, because the undo stack belongs to the bill that built it:
+    // popping it onto a resumed hold would put the previous customer's lines
+    // and prices on a bill that is about to be printed and posted.
+    skipRestore.current = true;
+    runSeq.current += 1;
+    onScreenRef.current = { cart: picked.cart, customer: picked.customer };
+    setCart(picked.cart);
+    setCustomer(picked.customer);
+    setUndoStack(emptyUndo());
+    setPendingDraft(null);
     setShowHolds(false);
     // A held bill can carry lines of its own, so it can put the cart into a
     // state `holdBill` will happily hold again without a scan ever running
@@ -483,7 +821,7 @@ function Counter({ storeName }: { storeName?: string }) {
     // a stale print problem must not survive (round-2 finding: Billing.tsx:1013).
     setPrintProblem("");
     setNote(
-      restored.staleLines
+      picked.staleLines
         ? "Bill picked up. Priced at today's rates - check the lines the counter no longer stocks."
         : "Bill picked up, priced at today's rates.",
     );
@@ -547,9 +885,8 @@ function Counter({ storeName }: { storeName?: string }) {
         describe: describeFrom(bill.lines),
       });
       setLastBill({ bill: queued, receipt });
-      setCart(emptyCart());
-      setCustomer(NO_CUSTOMER);
-      clearScan();
+      freshCounter();
+      await clearDraft(engine.db);
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
         await print(receipt);
@@ -622,7 +959,17 @@ function Counter({ storeName }: { storeName?: string }) {
           `auto` however many elements PageHeader itself renders. */}
       <div className="bill-top">
         <PageHeader
-          lead={`Next bill ${till?.nextNumber ?? ""}`}
+          lead={
+            <>
+              {`Next bill ${till?.nextNumber ?? ""}`}
+              {draftSaved && (
+                <span className="bill-draft-saved muted-cell" data-testid="bill-draft-saved">
+                  {" "}
+                  · Draft · saved
+                </span>
+              )}
+            </>
+          }
           actions={
             <div className="bill-head">
               <SyncLight />
@@ -654,6 +1001,21 @@ function Counter({ storeName }: { storeName?: string }) {
                   onClick={() => setShowHolds((open) => !open)}
                 >
                   {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
+                </button>
+                {/* Undo lives in the lifecycle row rather than on the grid it
+                    steps back (#244): under #243's fixed frame `.bill-lines`
+                    is the band that scrolls, so a header inside it would
+                    scroll away exactly as the bill got long enough to want
+                    undoing. */}
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-undo"
+                  disabled={counterBlocked || !undoStack.length || locked}
+                  onClick={undo}
+                >
+                  <RotateCcw size={15} />
+                  Undo
                 </button>
                 <button
                   type="button"
@@ -707,6 +1069,47 @@ function Counter({ storeName }: { storeName?: string }) {
             >
               <X size={15} /> Not this one
             </button>
+          </div>
+        )}
+
+        {/* A draft this screen would not auto-restore (#244, the 2 Aug 2026
+            draft-age and paper-conflict rulings): a previous business day, or
+            a paper number the counter no longer holds. Flagged, never applied
+            or dropped on the cashier's behalf - and, like `paper` above,
+            rendered from its own always-on band rather than through the
+            one-line alert (#243), because it is a question with two buttons
+            on it that must stay reachable however many other banners are
+            true at the same time. */}
+        {pendingDraft && (
+          <div className="bill-alert bill-pending-draft" data-testid="bill-pending-draft">
+            <AlertTriangle size={15} />
+            <span>
+              {pendingDraft.reason === "stale"
+                ? "A bill was left in progress on a previous business day."
+                : pendingDraft.draft.paper !== null
+                  ? `A bill was left in progress mid paper re-entry (bill ${pendingDraft.draft.paper}), ` +
+                    "which the counter no longer matches to what is open now."
+                  : "A bill was left in progress while the counter was mid a paper re-entry."}{" "}
+              Resume it, or start fresh.
+            </span>
+            <span className="bill-pending-draft-actions">
+              <button
+                type="button"
+                className="btn"
+                data-testid="bill-pending-draft-resume"
+                onClick={resumePendingDraft}
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="bill-pending-draft-discard"
+                onClick={discardPendingDraft}
+              >
+                Discard
+              </button>
+            </span>
           </div>
         )}
 
@@ -831,7 +1234,10 @@ function Counter({ storeName }: { storeName?: string }) {
                 value={customer}
                 storeStateCode={storeState}
                 locked={locked}
-                onChange={setCustomer}
+                // `editCustomer`, not `setCustomer`: the strip's fields are
+                // part of the same autosaved snapshot the cart is (#244), so
+                // every edit has to reach `onScreenRef` too.
+                onChange={editCustomer}
               />
             </aside>
           </>
@@ -1048,6 +1454,37 @@ export function pickBillAlert(flags: BillAlertFlags): BillAlertKind | null {
   if (flags.gift) return "gift";
   if (flags.holdsDue) return "holds-due";
   return null;
+}
+
+/** `outstandingPaperSeq`'s own params shape, built for a number that did not
+ *  come off the address bar - a draft's `paper`, being checked on its own
+ *  terms rather than the URL's. */
+function paperParams(paper: number): URLSearchParams {
+  return new URLSearchParams({ paper: String(paper) });
+}
+
+/**
+ * Is a draft's paper claim safe to restore, given what the counter and the
+ * address bar currently say (#244, binding rule 0c)?
+ *
+ * An ordinary draft (`paper: null`) is fine unless the address bar is itself
+ * mid a *different* paper re-entry - landing a crashed, unrelated cart onto a
+ * re-entry the cashier explicitly navigated to is the same "mixed halves"
+ * failure the cart/customer predicate already refuses. A draft that does
+ * claim paper mode must not contradict a different number already in the
+ * address bar, and must still be one `outstandingPaperSeq` accepts right now -
+ * a number that has since synced, or been keyed in by somebody else, is no
+ * longer this draft's to restore.
+ */
+export function paperConsistent(
+  draftPaper: number | null,
+  params: URLSearchParams,
+  till: TillSnapshot | null,
+): boolean {
+  const urlPaper = outstandingPaperSeq(params, till);
+  if (draftPaper === null) return urlPaper === null;
+  if (urlPaper !== null && urlPaper !== draftPaper) return false;
+  return outstandingPaperSeq(paperParams(draftPaper), till) === draftPaper;
 }
 
 /** Now, in the shape `<input type="datetime-local">` wants - which is local

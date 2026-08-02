@@ -177,7 +177,9 @@ export function describeOriginal(line: OriginalLine): string {
   return words || line.manual_desc.trim() || line.barcode;
 }
 
-function newLegKey(): string {
+/** The one source of exchange-leg keys - see `cart.ts`'s `newKey` for why a
+ *  restore rekey mints from this rather than a generator of its own. */
+export function newLegKey(): string {
   return `x${(legKeys += 1)}`;
 }
 
