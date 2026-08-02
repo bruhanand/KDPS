@@ -1,6 +1,6 @@
 # pos-store-front - API contract (Phase 2)
 
-> **Superseded in part on 2 Aug 2026.** `docs/features/pos-counter-redesign/api-contract.md` wins for counter returns and tenders: exchanges are equal-or-up; `credit_note` is no longer an accepted tender; the standalone `POST /api/sell/returns` surface retires. The detailed CreditNote/SRT passages below describe the shipped historical contract, not current counter policy; their tables remain append-only history.
+> **Superseded in part on 2 Aug 2026.** `docs/features/pos-counter-redesign/api-contract.md` wins for counter returns, tenders, and discount authority: exchanges are equal-or-up; `credit_note` is no longer an accepted tender; the standalone `POST /api/sell/returns` surface retires; the HO-configured manual-discount cap is absolute, with no till override (Q5/Q5b). The detailed CreditNote/SRT and discount-override passages below describe the shipped historical contract, not current counter policy; their tables remain append-only history.
 
 Companion to `db-design.md`.
 Conventions used throughout (matching the existing backend):
@@ -244,8 +244,8 @@ What shipped is below, and #181 should be built against this text.
   The till can apply the second step and not the first, because the dataset's `stock` rows are counted per barcode and carry no season - so a till without the master would fall back to sorting names, where "FW25 before SS26" is true only by the accident of the alphabet.
   That the two differ on the first step does not matter in practice: the season the till picks is the season it writes on the line, and the accept pipeline honours an exact `(barcode, season)` outright, so the till's choice is the one that reaches the books.
   Sending season-aware stock so the till could match step one exactly is a change to the `stock` section, and it belongs with whatever slice first needs it rather than with this screen.
-  `policy` is `{"manual_discount_cap_percent": "7.50"}` from `SellPolicy`, a two-decimal string for the reason the tax rates are.
-  Without it the counter cannot hold the cap it is meant to hold, and a cashier's over-cap discount would be discovered by an `OVERRIDE_REQUIRED` days later, on a bill already printed, paid for and in a customer's hand.
+  `policy` carries the two-decimal `manual_discount_cap_percent` plus the counter-redesign `manual_discount_on_offer_lines` dial from `SellPolicy`.
+  The till enforces both offline and the server backstops them with `DISCOUNT_OVER_CAP` / `DISCOUNT_ON_OFFER_LINE`; Q5b leaves no manager-override door.
 
 - **`updated_at` was not a new column and is not backfilled.**
   db-design lists "`updated_at` (NEW column, auto_now + index) ... Backfill: set to migration time" for `Sku`/`Cohort`/`GstSlab`.
@@ -255,6 +255,8 @@ What shipped is below, and #181 should be built against this text.
 
 The one writer of a Sale (bill or bill-with-exchange). Idempotent; the till's queue replays it safely.
 Auth: `require_section("sell", CAP_OPERATE)`; bill's store must equal the caller's scoped store.
+
+> **Current request policy (counter redesign Q3b/Q5/Q5b):** send no credit-note tender or discount override; `net_paise` must be non-negative; over-cap and disallowed stacked discounts are refused. The 31 July example and steps retained below document the historical wire contract only; the superseding contract defines the live validator.
 
 Request body (one bill):
 

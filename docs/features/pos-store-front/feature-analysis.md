@@ -1,6 +1,6 @@
 # Feature analysis — pos-store-front
 
-> **Superseded in part on 2 Aug 2026.** The POS counter redesign's Q3/Q3b/Q4 rulings are current: keyboard accelerators return; returns are exchange-only and equal-or-up; counter credit notes and standalone plain returns retire. Mentions below of credit-note tenders, plain returns, or an open refund question are historical inputs to the 30 July slice, not current policy.
+> **Superseded in part on 2 Aug 2026.** The POS counter redesign's Q3/Q3b/Q4/Q5/Q5b rulings are current: keyboard accelerators return; returns are exchange-only and equal-or-up; counter credit notes and standalone plain returns retire; the HO-configured manual-discount cap is absolute, with no till override. Mentions below of credit-note tenders, plain returns, discount overrides, or an open refund question are historical inputs to the 30 July slice, not current policy.
 
 Phase 0 artifact of the dev process (`docs/agents/dev-process.md`).
 Confirmed by Anand on 30 July 2026.
@@ -60,7 +60,7 @@ Out of this analysis: the undesigned D10 remainder (Return & Exchange tab, Custo
 
 - Documents: **Sale** (new), Exchange/Return (new, linked to Sale), StockRequest (extended).
 - Ledgers: stock (decrement at sale), cash (tender split), vendor (SOR/consignment liability at sale).
-- Rules touched: 1, 2, 3 (snapshot at billing), 5 (ambiguity never blocks; refuse-unpriced tension with A10), 6, 9, 10 (salesman, manager override, gated voids), 11, 12 (offers, approval routes, access, screen layout as data).
+- Rules touched: 1, 2, 3 (snapshot at billing), 5 (ambiguity never blocks; refuse-unpriced tension with A10), 6, 9, 10 (salesman, gated voids; the 30 July discount override was later retired by counter redesign Q5b), 11, 12 (offers, approval routes, access, screen layout as data).
 
 ## Money slice: YES
 
