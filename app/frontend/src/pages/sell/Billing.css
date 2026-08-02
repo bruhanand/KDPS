@@ -46,6 +46,11 @@
 .bill-bar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 .bill-bar-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bill-scan-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.bill-page[data-mode="return"] {
+  --navy: var(--blue);
+  --navy-fill: var(--blue);
+  --navy-fill-hover: var(--blue);
+}
 .bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--blue); }
 .bill-page[data-mode="return"] input.bill-scan { border-color: var(--blue); }
 /* Element-qualified, and that is not decoration: a bare `.bill-scan` ties with

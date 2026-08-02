@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { counterKeyAction } from "./useCounterKeys";
+import { activeCounterKeyAction, counterKeyAction } from "./useCounterKeys";
 
 describe("the counter keyboard map", () => {
   it("assigns the counter's function keys and escape", () => {
@@ -15,5 +15,13 @@ describe("the counter keyboard map", () => {
     expect(counterKeyAction("Enter")).toBeNull();
     expect(counterKeyAction("f2")).toBeNull();
     expect(counterKeyAction("x")).toBeNull();
+  });
+
+  it("leaves the counter untouched while a decision surface is open", () => {
+    expect(activeCounterKeyAction("F2", true)).toBeNull();
+    expect(activeCounterKeyAction("F3", true)).toBeNull();
+    expect(activeCounterKeyAction("F4", true)).toBeNull();
+    expect(activeCounterKeyAction("F9", true)).toBeNull();
+    expect(activeCounterKeyAction("Escape", true)).toBeNull();
   });
 });

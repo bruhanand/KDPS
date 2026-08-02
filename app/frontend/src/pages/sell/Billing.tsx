@@ -1051,7 +1051,7 @@ function Counter({
   }, [closeScanFloat]);
 
   useCounterKeys({
-    disabled: Boolean(asking || charging || counterBlocked || saving || holding),
+    disabled: Boolean(asking || charging || showHolds || counterBlocked || saving || holding),
     onHold: () => void holdBill(),
     onLookup: () => navigate("/sell/customers"),
     onNewBill: newBill,

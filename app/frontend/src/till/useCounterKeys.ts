@@ -21,6 +21,11 @@ export function counterKeyAction(key: string): CounterKeyAction | null {
   }
 }
 
+/** A modal or decision surface owns the keyboard until it is answered. */
+export function activeCounterKeyAction(key: string, disabled: boolean): CounterKeyAction | null {
+  return disabled ? null : counterKeyAction(key);
+}
+
 /** Claim the counter's accelerators unless a modal is asking the cashier a
  * question. A modal owns its own Escape handling, so the bill must stay still. */
 export function useCounterKeys({
@@ -40,8 +45,8 @@ export function useCounterKeys({
 }): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const action = counterKeyAction(event.key);
-      if (!action || disabled) return;
+      const action = activeCounterKeyAction(event.key, disabled);
+      if (!action) return;
 
       event.preventDefault();
       if (event.repeat) return;
