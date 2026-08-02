@@ -100,7 +100,7 @@ describe("a split across all four modes", () => {
 });
 
 describe("the UPI stamp (#241)", () => {
-  it("toTenders stamps manual on the UPI row - the only thing the till can legitimately say until #248", () => {
+  it("toTenders stamps manual on a UPI row no charge ever answered for", () => {
     const rows = toTenders(split(payment({ upi_paise: BILL, cash_paise: 0 })));
 
     expect(rows).toEqual([{ mode: "upi", amount_paise: BILL, upi_state: "manual" }]);
@@ -132,6 +132,65 @@ describe("the UPI stamp (#241)", () => {
     const rows = stampManualUpi([{ mode: "upi", amount_paise: 50000 }]);
 
     expect(rows).toEqual([{ mode: "upi", amount_paise: 50000, upi_state: "manual" }]);
+  });
+});
+
+describe("a charge the bank confirmed (#248)", () => {
+  const CHARGED = { reference: "417223918811", amount_paise: BILL };
+
+  it("rides onto the UPI row as confirmed, with the acquirer's reference", () => {
+    const resolved = split(payment({ upi_paise: BILL, cash_paise: 0, upi_charge: CHARGED }));
+
+    expect(resolved.upi_confirmed).toEqual({ reference: CHARGED.reference });
+    expect(toTenders(resolved)).toEqual([
+      { mode: "upi", amount_paise: BILL, upi_state: "confirmed", upi_reference: CHARGED.reference },
+    ]);
+  });
+
+  it("falls back to manual the moment the figure stops being the one charged", () => {
+    // The cashier charged ₹1,499 and then typed ₹2,000 into the UPI box. The
+    // bank confirmed the first figure and knows nothing about the second, so
+    // vouching for it is the till's own word - which is what `manual` says.
+    const resolved = split(payment({ upi_paise: BILL + 50100, cash_paise: 0, upi_charge: CHARGED }));
+
+    expect(resolved.upi_confirmed).toBeNull();
+    expect(toTenders(resolved)).toEqual([
+      { mode: "upi", amount_paise: BILL + 50100, upi_state: "manual" },
+    ]);
+  });
+
+  it("falls away with the UPI row itself", () => {
+    // The whole bill moved to card. There is no UPI tender left to stamp, and a
+    // stray reference must not follow the next figure typed into the box.
+    const resolved = split(payment({ upi_paise: 0, card_paise: BILL, upi_charge: CHARGED }));
+
+    expect(resolved.upi_confirmed).toBeNull();
+    expect(toTenders(resolved).some((row) => row.mode === "upi")).toBe(false);
+  });
+
+  it("is refused when the reference is blank - the server would refuse the bill", () => {
+    const resolved = split(
+      payment({ upi_paise: BILL, cash_paise: 0, upi_charge: { reference: " ", amount_paise: BILL } }),
+    );
+
+    expect(resolved.upi_confirmed).toBeNull();
+    expect(toTenders(resolved)).toEqual([
+      { mode: "upi", amount_paise: BILL, upi_state: "manual" },
+    ]);
+  });
+
+  it("survives a bill kept on hold from before the charge card shipped", () => {
+    // `restoreHold` and the draft both hand back a `Payment` written by an
+    // older build, with no `upi_charge` key at all.
+    const legacy = { ...payment({ upi_paise: BILL, cash_paise: 0 }) } as Partial<Payment>;
+    delete legacy.upi_charge;
+
+    const resolved = split(legacy as Payment);
+
+    expect(resolved.upi_confirmed).toBeNull();
+    expect(toTenders(resolved)).toEqual([
+      { mode: "upi", amount_paise: BILL, upi_state: "manual" },
+    ]);
   });
 });
 

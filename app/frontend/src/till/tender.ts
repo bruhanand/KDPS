@@ -23,6 +23,7 @@
 // a manager's PIN and goes up flagged, which is exactly what the server does with
 // it (`_plan_tenders`).
 
+import type { UpiCharged } from "./payment";
 import type { BillTender, TillCreditNote } from "./types";
 
 export type TenderMode = "cash" | "card" | "upi" | "credit_note";
@@ -60,6 +61,10 @@ export interface Payment {
   /** Cash the customer physically handed over. Presentation only: what posts to
    *  CASH is what the bill took, and the difference is change out of the drawer. */
   cash_received_paise: number;
+  /** What the bank answered, if the QR charge card got an answer at all (#248).
+   *  `null`/absent - which is every bill on the mock adapter - means the cashier
+   *  is vouching for the UPI row themselves, and it goes up stamped `manual`. */
+  upi_charge?: UpiCharged | null;
 }
 
 /** What a note is worth here, and why it might not be honoured. */
@@ -105,10 +110,26 @@ export interface TenderSplit {
   change_paise: number;
   /** Notes this counter cannot stand behind, and so needs a manager for. */
   unverified: string[];
+  /** The bank's own answer for the UPI row, resolved (#248) - `null` whenever
+   *  the cashier is the only one vouching for it, which is every bill until real
+   *  hardware lands. See `confirmedUpiOf` for what it takes to survive. */
+  upi_confirmed: UpiConfirmation | null;
+}
+
+/** A UPI row the bank confirmed, as the tender carries it. */
+export interface UpiConfirmation {
+  reference: string;
 }
 
 export function emptyPayment(): Payment {
-  return { cash_paise: null, card_paise: 0, upi_paise: 0, notes: [], cash_received_paise: 0 };
+  return {
+    cash_paise: null,
+    card_paise: 0,
+    upi_paise: 0,
+    notes: [],
+    cash_received_paise: 0,
+    upi_charge: null,
+  };
 }
 
 let noteKeys = 0;
@@ -147,7 +168,32 @@ export function splitOf(
     balance_paise: netPaise - total,
     change_paise: Math.max(0, payment.cash_received_paise - cash),
     unverified: notes.filter((s) => s.doubt).map((s) => s.note.number),
+    upi_confirmed: confirmedUpiOf(payment),
   };
+}
+
+/**
+ * Whether the UPI row on this payment is still one the bank confirmed (#248).
+ *
+ * A stamp is only good for the figure it was given about. The cashier charges
+ * ₹1,499 through the QR, the bank confirms *that*, and then the customer changes
+ * their mind and half of it goes on card - the reference now answers about a sum
+ * nobody is being asked to pay, and a bill carrying it would tell head office a
+ * bank confirmed a figure it has never seen. So the stamp is pinned to its
+ * amount and falls away the moment the two disagree, which drops the row back to
+ * `manual`: the cashier vouching for it, which is the truth.
+ *
+ * A blank reference is refused here for the same reason it is refused by the
+ * server (`upi_state=confirmed` with no `upi_reference` is a `VALIDATION`): a
+ * bill refused at the wire is a receipt already in a customer's hand and a queue
+ * that has stopped.
+ */
+export function confirmedUpiOf(payment: Payment): UpiConfirmation | null {
+  const charge = payment.upi_charge;
+  if (!charge || payment.upi_paise <= 0) return null;
+  if (charge.amount_paise !== payment.upi_paise) return null;
+  const reference = charge.reference.trim();
+  return reference ? { reference } : null;
 }
 
 /**
@@ -348,7 +394,15 @@ export function toTenders(split: TenderSplit): BillTender[] {
   const rows: BillTender[] = [
     { mode: "cash", amount_paise: split.cash_paise },
     { mode: "card", amount_paise: split.card_paise },
-    { mode: "upi", amount_paise: split.upi_paise },
+    {
+      mode: "upi",
+      amount_paise: split.upi_paise,
+      // The bank's word when the charge card got one, and nothing at all
+      // otherwise - `stampManualUpi` below fills in the cashier's.
+      ...(split.upi_confirmed
+        ? { upi_state: "confirmed" as const, upi_reference: split.upi_confirmed.reference }
+        : {}),
+    },
     ...split.notes.map(
       (standing): BillTender => ({
         mode: "credit_note",
@@ -362,8 +416,8 @@ export function toTenders(split: TenderSplit): BillTender[] {
 
 /**
  * Stamp `manual` on every UPI row missing a stamp, and leave everything else
- * alone - a row already stamped (once `confirmed` exists, #248) and every
- * non-UPI row.
+ * alone - a row `toTenders` already stamped `confirmed` off a charge the bank
+ * answered (#248), and every non-UPI row.
  *
  * Two callers, both at the wire boundary (#241): `toTenders` stamps a bill as
  * it is built, and `transport.billBody` runs this over a bill already sitting
