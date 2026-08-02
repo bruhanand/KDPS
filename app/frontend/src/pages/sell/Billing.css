@@ -52,17 +52,39 @@
   --navy-fill-hover: var(--blue);
 }
 .bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--blue); }
-.bill-page[data-mode="return"] input.bill-scan { border-color: var(--blue); }
-/* Element-qualified, and that is not decoration: a bare `.bill-scan` ties with
-   the app's generic `.input` on specificity - both are one class - so the
-   winner is whichever bundle chunk the bundler happens to emit last, and
-   `.input`'s `width: 100%` was winning. The scan box rendered 827px wide at
-   1366px, which pushed the lifecycle buttons onto rows of their own and made
-   the top band 352px tall - a third of a counter's screen spent on a box that
-   holds thirteen digits, and a third the rail then had to scroll for. Same
-   trap as `table.data th` and `input.bill-cell` below, same answer. (#243's
-   width, #249's measurement.) */
-input.bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
+.bill-page[data-mode="return"] .scan-hero-input-wrap { border-color: var(--blue); }
+
+/* The input stays the wedge scanner's same controlled input; only its visual
+   shell changes. Keeping it full-height makes the 60px target easy to hit
+   without widening the header band. */
+.scan-hero { padding: 14px 0 12px; }
+.scan-hero-row { display: flex; gap: 10px; align-items: stretch; }
+.scan-hero-input-wrap {
+  min-width: 0; flex: 1; height: 60px; display: flex; align-items: center; gap: 13px;
+  padding: 0 17px; border: 2px solid var(--navy-fill); border-radius: 12px;
+  color: var(--navy-fill); background: var(--inner); box-shadow: 0 0 0 3px var(--hairline);
+}
+.scan-hero-input {
+  min-width: 0; flex: 1; height: 100%; border: 0; outline: 0; background: transparent;
+  color: var(--ink); font-size: 18px; font-weight: 500;
+}
+.scan-hero-input::placeholder { color: var(--muted); }
+.scan-hero-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
+.scan-hero-state-ring { width: 7px; height: 7px; border-radius: 50%; background: var(--navy-fill); box-shadow: 0 0 0 3px var(--hairline); }
+.scan-hero-lookup { width: 106px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.scan-hero-lookup small { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.scan-hero.is-error .scan-hero-input-wrap { border-color: var(--red); color: var(--red); box-shadow: 0 0 0 3px var(--red-bg); animation: bill-scan-shake .22s ease-in-out; }
+.scan-hero.is-error .scan-hero-state-ring { background: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+.scan-hero-error { margin-top: 9px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--red-bd); border-radius: 10px; color: var(--red); background: var(--red-bg); }
+.scan-hero-error > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.scan-hero-error strong { font-size: 13px; }
+.scan-hero-error small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.scan-hero-error-icon { width: 20px; height: 20px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--red); color: var(--paper); }
+.scan-hero-error .btn { flex: 0 0 auto; }
+.scan-hero-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
+.scan-hero-demo > span { color: var(--caption); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.scan-hero-demo button { border: 1px solid var(--hairline); border-radius: 7px; background: var(--surface); color: var(--muted); padding: 4px 8px; font: 11px var(--mono); cursor: pointer; }
+@keyframes bill-scan-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
 /* The autosave indicator (#244) - quiet on purpose, beside the bill number
    rather than a banner of its own: a bill that autosaves continuously has
@@ -272,6 +294,48 @@ select.bill-season { min-width: 0; }
   white-space: normal; overflow-wrap: break-word;
   color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
 }
+
+/* The re-cut grid is a card, not a generic data table: item identity has room
+   to breathe, while quantities and money retain their fixed scan-line rhythm. */
+.bill-grid-card { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; }
+.bill-grid-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.bill-grid-card .bill-grid { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; border-spacing: 0; font-size: 12px; }
+.bill-grid-card .bill-grid th { position: sticky; top: 0; z-index: 2; padding: 9px 6px; background: var(--inner); color: var(--caption); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; text-align: left; }
+.bill-grid-card .bill-grid td { padding: 10px 6px; vertical-align: middle; border-top: 1px solid var(--hairline); }
+.bill-grid-card .bill-grid .num { text-align: right; white-space: nowrap; }
+.bill-line-number { color: var(--caption); font-family: var(--mono); text-align: center; }
+.bill-grid-card .bill-grid td:nth-child(2) { min-width: 0; }
+.bill-grid-card .bill-grid td:nth-child(3) { color: var(--muted); }
+.bill-grid-card input.bill-cell, .bill-grid-card select.bill-cell { height: 28px; padding: 3px 5px; font-size: 12px; }
+.bill-item-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.bill-grid-card .bill-grid td:nth-child(2) > :first-child { display: block; overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.bill-item-meta > span { overflow: hidden; text-overflow: ellipsis; }
+.bill-item-meta > span:first-child { flex: 1 1 28px; }
+.bill-item-meta .bill-barcode { flex: 0 0 auto; overflow: visible; }
+.bill-item-meta .bill-offer, .bill-item-meta .bill-tag { flex: 0 0 auto; overflow: visible; }
+.bill-item-meta .bill-offer, .bill-tag { margin: 0; padding: 1px 5px; border-radius: 5px; font-size: 9px; line-height: 1.35; text-transform: uppercase; }
+.bill-tag { color: var(--muted); background: var(--inner); border: 1px solid var(--hairline); font-weight: 700; }
+.bill-size-fold { display: none; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.bill-qty-stepper { display: inline-flex; align-items: center; justify-content: flex-end; }
+.bill-qty-stepper button { width: 22px; height: 28px; padding: 0; border: 1px solid var(--hairline); background: var(--inner); color: var(--ink); font: 15px/1 inherit; cursor: pointer; }
+.bill-qty-stepper button:first-child { border-radius: 6px 0 0 6px; }
+.bill-qty-stepper button:last-child { border-radius: 0 6px 6px 0; }
+.bill-qty-stepper input.bill-cell { width: 32px; border-radius: 0; border-left: 0; border-right: 0; text-align: center; }
+.bill-discount-carrying input { border-color: var(--amber-bd); background: var(--amber-bg); color: var(--amber); font-weight: 700; }
+.bill-net-tax { display: flex; justify-content: flex-end; align-items: center; gap: 3px; margin-top: 2px; color: var(--caption); font-size: 9.5px; }
+.bill-net-tax .bill-gst-badge { padding: 0 4px; font-size: 9px; }
+select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--amber-bg); color: var(--amber); }
+.bill-grid-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--hairline); background: var(--inner); }
+.bill-grid-totals { min-width: 0; flex: 1; }
+.bill-grid-footer .bill-totals { gap: 16px; flex-wrap: nowrap; overflow-x: auto; }
+.bill-grid-footer .bill-figure { flex: 0 0 auto; font-size: 12.5px; }
+.bill-grid-footer .bill-figure-label { font-size: 9.5px; }
+.bill-grid-footer .bill-figure-strong { font-size: 15px; }
+.bill-grid-undo { flex: 0 0 auto; }
+.bill-empty { height: 100%; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px; border: 0; border-radius: 0; color: var(--muted); }
+.bill-empty strong { color: var(--ink); font-size: 16px; }
+.bill-empty > span:last-child { max-width: 330px; text-align: center; line-height: 1.5; }
+.bill-empty-barcode { color: var(--caption); font-family: var(--mono); font-size: 26px; letter-spacing: 2px; }
 
 /* The rail (#243): "both always visible" (design.md) holds whenever the
    payment card plus the customer card fit the available height. When they do
@@ -560,15 +624,27 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
   .bill-pay { margin-top: 16px; }
   /* Element-qualified for the same reason the desktop rule above is, and it
      has to be, or it loses to that rule on specificity regardless of order. */
-  input.bill-scan { width: 220px; }
+  .scan-hero { padding-top: 10px; }
+}
+
+/* 1366px is the counter's reference width. Folding the separate size column
+   gains 52px exactly where identity needs it; the table remains 100% wide and
+   therefore never creates a horizontal scroll box. */
+@media (max-width: 1439px) and (min-width: 1280px) {
+  .bill-grid-card .bill-size-column { display: none; width: 0 !important; }
+  .bill-size-fold { display: block; }
 }
 
 /* On a phone, keep the line grid's fixed columns readable and let the wrapper
    provide the horizontal safety net. Without a floor, `width: 100%` compresses
    all twelve columns into the viewport and text/controls visibly collide. */
 @media (max-width: 600px) {
-  table.data.bill-grid {
+  .bill-grid-card .bill-grid {
     width: 900px;
     min-width: 900px;
   }
+  .bill-grid-scroll { overflow-x: auto; }
+  .scan-hero-row { align-items: stretch; }
+  .scan-hero-state { display: none; }
+  .scan-hero-error { flex-wrap: wrap; }
 }
