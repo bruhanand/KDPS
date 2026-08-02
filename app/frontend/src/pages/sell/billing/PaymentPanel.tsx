@@ -1,13 +1,16 @@
-import { CheckCircle2, KeyRound, Plus, QrCode, X } from "lucide-react";
+import type { ReactNode } from "react";
+import { Banknote, CheckCircle2, CreditCard, KeyRound, Plus, QrCode, Smartphone, X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
 import type { priceCart } from "../../../till/cart";
 import {
   balanceStandingOf,
+  canFillTenderRest,
   cashChips,
   newNote,
   notePrefillFor,
   prefillFor,
+  restTenderPatch,
 } from "../../../till/tender";
 import type { NoteStanding, Payment, TenderSplit } from "../../../till/tender";
 import { RupeeInput } from "./RupeeInput";
@@ -61,16 +64,20 @@ export function PaymentPanel({
   // could still open.
   if (bill.credit_note_paise > 0) {
     return (
-      <section className="card section-card bill-panel" data-testid="bill-owes-customer">
-        <p className="eyebrow">Owed to the customer</p>
-        <p className="bill-due" data-testid="bill-credit-note">
-          <Money paise={bill.credit_note_paise} />
-        </p>
-        <p className="muted-cell">
-          The pieces coming back are worth more than the ones going out. Save &amp; Print issues a
-          credit note for the difference, spendable at this shop - no cash comes out of the
-          drawer. Its number prints on the bill.
-        </p>
+      <section className="bill-payment-panel bill-payment-owed" data-testid="bill-owes-customer">
+        <div className="bill-payment-heading">
+          <p className="eyebrow">Owed to the customer</p>
+          <p className="bill-due" data-testid="bill-credit-note">
+            <Money paise={bill.credit_note_paise} />
+          </p>
+        </div>
+        <div className="bill-rail-tile bill-payment-tile">
+          <p className="bill-owed-note">
+            The pieces coming back are worth more than the ones going out. Save &amp; Print issues a
+            credit note for the difference, spendable at this shop - no cash comes out of the
+            drawer. Its number prints on the bill.
+          </p>
+        </div>
       </section>
     );
   }
@@ -85,17 +92,20 @@ export function PaymentPanel({
   const showReceived = split.cash_paise > 0 || payment.cash_received_paise > 0;
 
   return (
-    <section className="card section-card bill-panel">
-      <p className="eyebrow">To pay</p>
-      <p className="bill-due" data-testid="bill-due">
-        <Money paise={bill.net_paise} />
-      </p>
+    <section className="bill-payment-panel">
+      <div className="bill-payment-heading">
+        <p className="eyebrow">To pay</p>
+        <p className="bill-due" data-testid="bill-due">
+          <Money paise={bill.net_paise} />
+        </p>
+      </div>
 
-      <div className="bill-tenders">
+      <div className="bill-rail-tile bill-payment-tile">
         <div className="bill-cash-block">
           <TenderRow
             testId="bill-cash"
             label="Cash"
+            icon={<Banknote size={16} />}
             paise={split.cash_paise}
             // Empty in the sense the prefill cares about: the row shows the
             // balance it is about to absorb, but nobody has typed in it yet.
@@ -123,22 +133,21 @@ export function PaymentPanel({
             />
           )}
         </div>
-        <TenderRow
-          testId="bill-card"
-          label="Card"
-          paise={payment.card_paise}
-          prefillPaise={offerIf(payment.card_paise === 0, owed)}
-          locked={locked}
-          onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
-        />
         <div className="bill-upi-block">
           <TenderRow
             testId="bill-upi"
             label="UPI"
+            icon={<Smartphone size={16} />}
             paise={payment.upi_paise}
             prefillPaise={offerIf(payment.upi_paise === 0, owed)}
             locked={locked}
             onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
+            action={
+              <RestButton
+                disabled={locked || !canFillTenderRest(split, "upi")}
+                onClick={() => onChange(restTenderPatch(split, "upi"))}
+              />
+            }
           />
           <UpiProof
             confirmed={split.upi_confirmed}
@@ -151,26 +160,42 @@ export function PaymentPanel({
             onShowQr={onShowQr}
           />
         </div>
+        <TenderRow
+          testId="bill-card"
+          label="Card"
+          icon={<CreditCard size={16} />}
+          paise={payment.card_paise}
+          prefillPaise={offerIf(payment.card_paise === 0, owed)}
+          locked={locked}
+          onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
+          action={
+            <RestButton
+              disabled={locked || !canFillTenderRest(split, "card")}
+              onClick={() => onChange(restTenderPatch(split, "card"))}
+            />
+          }
+        />
+        <BalanceLine split={split} />
       </div>
 
-      <Notes
-        notes={split.notes}
-        locked={locked}
-        prefillFor={(standing) =>
-          offerIf(standing.note.amount_paise === 0, notePrefillFor(split, standing))
-        }
-        onChange={(index, patch) =>
-          onChange({
-            notes: payment.notes.map((note, i) => (i === index ? { ...note, ...patch } : note)),
-          })
-        }
-        onAdd={() => onChange({ notes: [...payment.notes, newNote()] })}
-        onRemove={(index) =>
-          onChange({ notes: payment.notes.filter((_, i) => i !== index) })
-        }
-      />
-
-      <BalanceLine split={split} />
+      <div className="bill-notes-tile">
+        <Notes
+          notes={split.notes}
+          locked={locked}
+          prefillFor={(standing) =>
+            offerIf(standing.note.amount_paise === 0, notePrefillFor(split, standing))
+          }
+          onChange={(index, patch) =>
+            onChange({
+              notes: payment.notes.map((note, i) => (i === index ? { ...note, ...patch } : note)),
+            })
+          }
+          onAdd={() => onChange({ notes: [...payment.notes, newNote()] })}
+          onRemove={(index) =>
+            onChange({ notes: payment.notes.filter((_, i) => i !== index) })
+          }
+        />
+      </div>
 
       <Authorised bill={bill} locked={locked} onAsk={onAsk} />
     </section>
@@ -302,6 +327,8 @@ function UpiProof({
 function TenderRow({
   testId,
   label,
+  icon,
+  action,
   paise,
   derived,
   quiet,
@@ -311,6 +338,8 @@ function TenderRow({
 }: {
   testId: string;
   label: string;
+  icon?: ReactNode;
+  action?: ReactNode;
   paise: number;
   derived?: boolean;
   quiet?: boolean;
@@ -321,6 +350,7 @@ function TenderRow({
   return (
     <div className={quiet ? "bill-tender is-quiet" : "bill-tender"}>
       <label htmlFor={testId}>
+        {icon && <span className="bill-tender-icon">{icon}</span>}
         {label}
         {derived && (
           <span className="muted-cell" data-testid={`${testId}-derived`}>
@@ -328,6 +358,7 @@ function TenderRow({
           </span>
         )}
       </label>
+      <span className="bill-tender-action">{action}</span>
       <RupeeInput
         testId={testId}
         label={label}
@@ -338,6 +369,14 @@ function TenderRow({
         onChange={onChange}
       />
     </div>
+  );
+}
+
+function RestButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="btn bill-tender-rest" disabled={disabled} onClick={onClick}>
+      rest
+    </button>
   );
 }
 

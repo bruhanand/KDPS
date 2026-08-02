@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   balanceStandingOf,
+  canFillTenderRest,
   cashChips,
   emptyPayment,
   newNote,
   notePrefillFor,
   notesSpentBy,
   prefillFor,
+  restTenderPatch,
   splitOf,
   stampManualUpi,
   toTenders,
@@ -68,6 +70,34 @@ describe("cash is the balance until somebody says otherwise", () => {
 
     expect(resolved.cash_paise).toBe(0);
     expect(resolved.balance_paise).toBe(0);
+  });
+});
+
+describe("the explicit tender rest controls", () => {
+  it("puts precisely the remaining paise on the selected tender", () => {
+    const resolved = split(payment({ cash_paise: 0, card_paise: 100000 }));
+
+    expect(restTenderPatch(resolved, "upi")).toEqual({ upi_paise: 49900 });
+    expect(restTenderPatch(resolved, "card")).toEqual({ card_paise: BILL });
+  });
+
+  it("offers zero after explicit tenders already cover the bill", () => {
+    const resolved = split(payment({ cash_paise: 0, card_paise: BILL }));
+
+    expect(restTenderPatch(resolved, "upi")).toEqual({ upi_paise: 0 });
+  });
+
+  it("does not reopen a bank-confirmed UPI row for a second charge", () => {
+    const resolved = split(
+      payment({
+        cash_paise: 0,
+        upi_paise: 50000,
+        upi_charge: { reference: "417223918811", amount_paise: 50000 },
+      }),
+    );
+
+    expect(canFillTenderRest(resolved, "upi")).toBe(false);
+    expect(canFillTenderRest(resolved, "card")).toBe(true);
   });
 });
 

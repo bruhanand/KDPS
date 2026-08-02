@@ -5,7 +5,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Gift,
-  Printer,
   Undo2,
   X,
 } from "lucide-react";
@@ -61,6 +60,7 @@ import { ScanHero } from "./billing/ScanHero";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
+import { RailFoot } from "./billing/RailFoot";
 import { TaxFigure } from "./billing/TaxFigure";
 import { UpiCharge } from "./billing/UpiCharge";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
@@ -1302,31 +1302,41 @@ function Counter({
             </section>
 
             <aside className="bill-pay">
-              <PaymentPanel
-                bill={bill}
-                payment={cart.payment}
-                locked={locked}
-                onChange={editPayment}
-                // Everything the bill asks for, not only the part still unapproved:
-                // a manager looking at a second exception should see the first one
-                // they agreed to as well, and the fresh authorisation replaces the
-                // old one whole.
-                onAsk={() => setAsking(bill.asks)}
-                onShowQr={() => setCharging(true)}
-              />
-              <CustomerStrip
-                value={customer}
-                storeStateCode={storeState}
-                // The counter's own phone book, for the typeahead (#249). Read
-                // through `engine.db` rather than a second `TillDb`, the same
-                // rule the draft follows - two Dexie connections to one
-                // database block each other through a version change.
-                db={engine?.db ?? null}
-                locked={locked}
-                // `editCustomer`, not `setCustomer`: the strip's fields are
-                // part of the same autosaved snapshot the cart is (#244), so
-                // every edit has to reach `onScreenRef` too.
-                onChange={editCustomer}
+              <div className="bill-rail-body">
+                <PaymentPanel
+                  bill={bill}
+                  payment={cart.payment}
+                  locked={locked}
+                  onChange={editPayment}
+                  // Everything the bill asks for, not only the part still unapproved:
+                  // a manager looking at a second exception should see the first one
+                  // they agreed to as well, and the fresh authorisation replaces the
+                  // old one whole.
+                  onAsk={() => setAsking(bill.asks)}
+                  onShowQr={() => setCharging(true)}
+                />
+                <CustomerStrip
+                  value={customer}
+                  storeStateCode={storeState}
+                  // The counter's own phone book, for the typeahead (#249). Read
+                  // through `engine.db` rather than a second `TillDb`, the same
+                  // rule the draft follows - two Dexie connections to one
+                  // database block each other through a version change.
+                  db={engine?.db ?? null}
+                  locked={locked}
+                  // `editCustomer`, not `setCustomer`: the strip's fields are
+                  // part of the same autosaved snapshot the cart is (#244), so
+                  // every edit has to reach `onScreenRef` too.
+                  onChange={editCustomer}
+                />
+              </div>
+              <RailFoot
+                blocked={blocked}
+                saving={saving}
+                paper={paper}
+                lastBillNumber={lastBill?.bill.doc_number ?? null}
+                onReprint={() => lastBill && void print(lastBill.receipt)}
+                onSave={() => void save()}
               />
             </aside>
           </>
@@ -1410,39 +1420,6 @@ function Counter({
         />
       )}
 
-      {/* Footer: pinned, visible from the first scan to the last. Reprint,
-          then Save & Print - the one visually primary button on the screen. */}
-      <div className="bill-foot">
-        <div className="bill-actions">
-          {blocked && (
-            <span className="bill-blocked" data-testid="bill-blocked">
-              {blocked}
-            </span>
-          )}
-          <button
-            type="button"
-            className="btn"
-            data-testid="bill-reprint"
-            title="Reprint (no keyboard shortcut)"
-            disabled={!lastBill || saving}
-            onClick={() => lastBill && void print(lastBill.receipt)}
-          >
-            <Printer size={15} />
-            Reprint
-            {lastBill && <span className="mono">{lastBill.bill.doc_number}</span>}
-          </button>
-          <button
-            type="button"
-            className="btn btn-cta btn-lg"
-            data-testid="bill-save"
-            title="Save & Print (F9)"
-            disabled={Boolean(blocked) || saving}
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : paper === null ? "Save & Print" : `Save bill ${paper}`}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

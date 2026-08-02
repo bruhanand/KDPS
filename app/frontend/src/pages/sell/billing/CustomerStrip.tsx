@@ -158,113 +158,125 @@ export function CustomerStrip({
   }
 
   return (
-    <section className="card section-card bill-panel bill-customer-card">
-      <p className="eyebrow">Customer</p>
-      {/* Side by side rather than stacked: the rail has to hold this card and
-          the payment card at 1366×768 without a scrollbar of its own
-          (grill-decisions amendment 12's exit condition), and a mobile number
-          and a first name are both short enough to read in half of 340px. */}
-      <div className="bill-customer-fields">
-        <div className="field">
-          <label htmlFor="bill-mobile">Mobile</label>
-          <input
-            id="bill-mobile"
-            className="input"
-            data-testid="bill-mobile"
-            ref={float.triggerRef}
-            autoComplete="off"
-            inputMode="tel"
-            disabled={locked}
-            value={value.mobile}
-            onChange={(e) => editMobile(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="bill-customer-name">Name</label>
-          <input
-            id="bill-customer-name"
-            className="input"
-            data-testid="bill-customer-name"
-            ref={nameRef}
-            autoComplete="off"
-            disabled={locked}
-            value={value.name}
-            onChange={(e) => onChange({ ...value, name: e.target.value })}
-          />
-        </div>
+    <section className="bill-customer-card">
+      <div className="bill-customer-heading">
+        <p className="eyebrow">Customer</p>
+        <span>Optional</span>
       </div>
-
-      {!showGstin && (
-        <button
-          type="button"
-          className="btn bill-business-toggle"
-          data-testid="bill-business-open"
-          aria-expanded={false}
-          disabled={locked}
-          onClick={() => setAskedForGstin(true)}
-        >
-          <FileText size={14} />
-          Business bill?
-        </button>
-      )}
-      {showGstin && (
-        <>
+      <div className="bill-rail-tile bill-customer-tile">
+        {/* Side by side rather than stacked: the rail has to hold this card and
+            the payment card at 1366×768 without a scrollbar of its own
+            (grill-decisions amendment 12's exit condition), and a mobile number
+            and a first name are both short enough to read in half of 340px. */}
+        <div className="bill-customer-fields">
           <div className="field">
-            <label htmlFor="bill-gstin">GSTIN (for a business bill)</label>
+            <label htmlFor="bill-mobile">Mobile</label>
             <input
-              id="bill-gstin"
-              className="input mono"
-              data-testid="bill-gstin"
+              id="bill-mobile"
+              className="input"
+              data-testid="bill-mobile"
+              ref={float.triggerRef}
               autoComplete="off"
-              maxLength={15}
-              spellCheck={false}
-              disabled={locked || !canBillB2b}
-              value={value.gstin}
-              // Upper-cased as it is typed, so what the cashier reads back is what
-              // prints and what the server stores - a GSTIN differing from itself by
-              // case would flag every second business bill.
-              onChange={(e) => onChange({ ...value, gstin: e.target.value.toUpperCase() })}
+              inputMode="tel"
+              placeholder="Mobile"
+              disabled={locked}
+              value={value.mobile}
+              onChange={(e) => editMobile(e.target.value)}
             />
           </div>
-          {/* Closing the disclosure on a bill that carries a registration
-              *clears* it rather than hiding it. "Not a business bill" is a
-              statement about the bill, and a GSTIN still riding along
-              invisibly would print a tax invoice the cashier thinks they
-              cancelled. */}
+          <div className="field">
+            <label htmlFor="bill-customer-name">Name</label>
+            <input
+              id="bill-customer-name"
+              className="input"
+              data-testid="bill-customer-name"
+              ref={nameRef}
+              autoComplete="off"
+              placeholder="Name"
+              disabled={locked}
+              value={value.name}
+              onChange={(e) => onChange({ ...value, name: e.target.value })}
+            />
+          </div>
+        </div>
+        {from && (
+          <p className="bill-known-customer" data-testid="bill-known-customer">
+            <span /> Returning customer · details from the KDPS phone book
+          </p>
+        )}
+
+        {!showGstin && (
           <button
             type="button"
             className="btn bill-business-toggle"
-            data-testid="bill-business-close"
-            aria-expanded
+            data-testid="bill-business-open"
+            aria-expanded={false}
             disabled={locked}
-            onClick={() => {
-              setAskedForGstin(false);
-              if (value.gstin) onChange({ ...value, gstin: "" });
-            }}
+            onClick={() => setAskedForGstin(true)}
           >
-            Not a business bill
+            <FileText size={14} />
+            Business bill?
           </button>
-          {!canBillB2b && (
-            <p className="bill-alert" data-testid="bill-gstin-unavailable">
-              <AlertTriangle size={15} /> This counter has not synced its own registration yet, so
-              it cannot say whether a buyer is in this state. Sync from Till &amp; Sync to bill a
-              business; a retail bill is unaffected.
-            </p>
-          )}
-          {kind !== "none" && (
-            <p className="ok-note" data-testid="bill-tax-kind">
-              <FileText size={15} /> Tax invoice · {TAX_KIND_WORDS[kind]}
-              {kind === "igst" ? " (buyer is out of state)" : ""}
-            </p>
-          )}
-          {malformed && (
-            <p className="bill-alert" data-testid="bill-gstin-warning">
-              <AlertTriangle size={15} /> {malformed} The bill will still close - check the card.
-            </p>
-          )}
-        </>
-      )}
-      <p className="muted-cell bill-customer-note">The bill works without any of these.</p>
+        )}
+        {showGstin && (
+          <>
+            <div className="field">
+              <label htmlFor="bill-gstin">GSTIN (for a business bill)</label>
+              <input
+                id="bill-gstin"
+                className="input mono"
+                data-testid="bill-gstin"
+                autoComplete="off"
+                maxLength={15}
+                spellCheck={false}
+                disabled={locked || !canBillB2b}
+                value={value.gstin}
+                // Upper-cased as it is typed, so what the cashier reads back is what
+                // prints and what the server stores - a GSTIN differing from itself by
+                // case would flag every second business bill.
+                onChange={(e) => onChange({ ...value, gstin: e.target.value.toUpperCase() })}
+              />
+            </div>
+            {/* Closing the disclosure on a bill that carries a registration
+                *clears* it rather than hiding it. "Not a business bill" is a
+                statement about the bill, and a GSTIN still riding along
+                invisibly would print a tax invoice the cashier thinks they
+                cancelled. */}
+            <button
+              type="button"
+              className="btn bill-business-toggle"
+              data-testid="bill-business-close"
+              aria-expanded
+              disabled={locked}
+              onClick={() => {
+                setAskedForGstin(false);
+                if (value.gstin) onChange({ ...value, gstin: "" });
+              }}
+            >
+              Not a business bill
+            </button>
+            {!canBillB2b && (
+              <p className="bill-alert" data-testid="bill-gstin-unavailable">
+                <AlertTriangle size={15} /> This counter has not synced its own registration yet, so
+                it cannot say whether a buyer is in this state. Sync from Till &amp; Sync to bill a
+                business; a retail bill is unaffected.
+              </p>
+            )}
+            {kind !== "none" && (
+              <p className="ok-note" data-testid="bill-tax-kind">
+                <FileText size={15} /> Tax invoice · {TAX_KIND_WORDS[kind]}
+                {kind === "igst" ? " (buyer is out of state)" : ""}
+              </p>
+            )}
+            {malformed && (
+              <p className="bill-alert" data-testid="bill-gstin-warning">
+                <AlertTriangle size={15} /> {malformed} The bill will still close - check the card.
+              </p>
+            )}
+          </>
+        )}
+        <p className="muted-cell bill-customer-note">The bill works without any of these.</p>
+      </div>
 
       {/* Portaled and placed, like every other prompt on this screen (Q11:
           nothing pushes the layout) - and here the portal is doing a second
