@@ -776,6 +776,38 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // parent, leaving merged main with two leaves that `migrate` refuses. One
   // deterministic run here catches all of that, and is also the check on the
   // in-sandbox ci agent's self-reported PASS.
+  // Apply the wave's migrations to the host DB first: check_db_drift asks
+  // "is the database what the migrations say?", so any merged branch that
+  // adds a migration fails the gate until `migrate` runs — launch 1 and
+  // launch 5 both died exactly here (alerts.0003 / sell.0014). A migration
+  // that itself fails to apply is a genuine gate failure and lands in the
+  // same catch as everything else.
+  mainLog(runDir, "\nApplying merged migrations to the host DB:");
+  try {
+    execFileSync("uv", ["run", "python", "manage.py", "migrate", "--no-input"], {
+      cwd: join(REPO_ROOT, "app", "backend"),
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    mainLog(runDir, "  ✓ host DB migrated");
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    const tail = ((e.stdout ?? "") + (e.stderr ?? ""))
+      .split("\n")
+      .slice(-40)
+      .join("\n");
+    mainLog(runDir, `  ✗ migrate FAILED on merged main. Last lines:\n${tail}`);
+    git("reset", "--hard", preWaveSha);
+    mainLog(
+      runDir,
+      `\nmain reset to ${preWaveSha}. This wave's branches are kept ` +
+        "unmerged for a human, and the run stops here — later waves would " +
+        "build on a main this gate cannot certify.",
+    );
+    process.exitCode = 1;
+    break;
+  }
+
   mainLog(runDir, "\nRunning `npm run ci:fast` on merged main (host):");
   try {
     execFileSync("npm", ["run", "ci:fast"], {
