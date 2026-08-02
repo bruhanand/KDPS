@@ -8,19 +8,26 @@ a wrong PASS here does not land broken code, it just wastes a wave.
 
 # RUN THE FAST CI GATE
 
-From the repo root, **in the foreground with an explicit long timeout**
-(the suite can take well over ten minutes in this sandbox; the default
-timeout backgrounds it and you then never see the verdict — issue #241's
-gate "failed" exactly this way with a green suite):
+**Never run `npm run ci:fast` as a single command.** Your Bash tool has a
+hard 10-minute cap per command; the whole suite takes longer, gets
+backgrounded, and you never see a verdict — issue #241's gate "failed"
+twice this way with a green suite. Ending your turn to "wait for a
+notification" ends the agent: there is no later. Every command you run must
+finish inside the cap, in the foreground.
 
-```
-npm run ci:fast
-```
+Instead, mirror the gate's stages as separate commands (read the `ci:fast`,
+`ci:backend:fast` and `ci:frontend` scripts in the root and
+`app/frontend/package.json` to confirm), roughly:
 
-Pass a 40-minute timeout (2400000 ms) on that Bash call. If it is ever
-backgrounded anyway, poll its output file until the run actually ends —
-never stop your turn while the suite is still running, and never emit a
-verdict you did not read from finished output.
+1. `cd app/backend && uv run mypy core config`
+2. `cd app/backend && uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check_db_drift && uv run lint-imports`
+3. Backend `uv run pytest`, split by top-level app directory into chunks so
+   no single call risks the cap (e.g. 3-4 chunks; `ls app/backend` for the
+   app list). Every test directory must run exactly once across the chunks —
+   a skipped directory makes a PASS a lie.
+4. The frontend gate, stage by stage the same way (typecheck, then tests).
+
+PASS only if every stage ran and passed.
 
 This runs `mypy core config`, the migration/DB-drift checks
 (`makemigrations --check --dry-run`, `check_db_drift`), `lint-imports`, and
