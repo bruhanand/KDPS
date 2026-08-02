@@ -8,12 +8,31 @@
 // number and prints a second receipt for a bill that is already in a customer's
 // hand, leaving the hole exactly where it was.
 
+// @ts-expect-error Vitest runs in Node, while the production frontend deliberately excludes Node types.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import type { TillSnapshot } from "../../till/engine";
 
 import { outstandingPaperSeq, paperConsistent, pickBillAlert } from "./Billing";
 import type { BillAlertFlags } from "./Billing";
+
+const billingSource = readFileSync(new URL("./Billing.tsx", import.meta.url), "utf8");
+const billingCss = readFileSync(new URL("./Billing.css", import.meta.url), "utf8");
+const billingRules = billingCss.replace(/\/\*[\s\S]*?\*\//g, "");
+
+describe("the counter frame", () => {
+  it("owns the full content width instead of inheriting the generic page cap", () => {
+    expect(billingSource).toContain('<div className="bill-page" data-mode={mode}>');
+    expect(billingSource).not.toContain('className="page-pad bill-page"');
+    expect(billingRules).toMatch(/\.bill-page\s*{[^}]*max-width:\s*none;/s);
+  });
+
+  it("reserves the rail width and pins the rail flush to the content edge", () => {
+    expect(billingRules).toMatch(/\.bill-page\s*{[^}]*padding:\s*0 368px 16px 16px;/s);
+    expect(billingRules).toMatch(/\.bill-pay\s*{[^}]*right:\s*0;[^}]*bottom:\s*0;/s);
+  });
+});
 
 /** Only the four fields this rule reads; the snapshot has two dozen. */
 function counter(over: Partial<TillSnapshot> = {}): TillSnapshot {

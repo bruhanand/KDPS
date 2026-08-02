@@ -23,7 +23,9 @@
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   position: relative;
-  padding: 0 352px 16px 0;
+  width: 100%;
+  max-width: none;
+  padding: 0 368px 16px 16px;
 }
 
 /* The counter's own bill bar replaces the generic page chrome. */
@@ -357,7 +359,7 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    stays until that is ruled on, and it stays as `auto`, which means a counter
    whose bands do leave room never sees a scrollbar at all. */
 .bill-pay {
-  position: absolute; z-index: 3; top: 0; right: -16px; bottom: 16px; width: 352px;
+  position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; width: 352px;
   display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--hairline);
   background: var(--surface);
 }

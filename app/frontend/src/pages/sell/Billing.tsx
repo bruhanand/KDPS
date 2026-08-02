@@ -1078,7 +1078,7 @@ function Counter({
   );
 
   return (
-    <div className="page-pad bill-page" data-mode={mode}>
+    <div className="bill-page" data-mode={mode}>
       {/* The counter owns its identity now: no generic page header, breadcrumb,
           or section tabs are allowed into this room. */}
       <div className="bill-top">
