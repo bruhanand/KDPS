@@ -12,8 +12,10 @@
 // blocked banner is for something else entirely, and this file never raises
 // one.
 
+import { newKey } from "./cart";
 import type { Cart } from "./cart";
 import type { TillDb } from "./db";
+import { newLegKey } from "./exchange";
 import type { TillCustomer } from "./types";
 
 /** The one row this table ever holds - an outbound key, so nothing on the
@@ -98,4 +100,55 @@ export function restoredCart(onScreen: Cart, draft: DraftPayload): Cart {
  *  wins over what was parked. */
 export function restoredCustomer(onScreen: TillCustomer, draft: DraftPayload): TillCustomer {
   return onScreen.name || onScreen.mobile || onScreen.gstin ? onScreen : draft.customer;
+}
+
+// --- crash-restore line identity (ruled, 2 Aug 2026) ------------------------
+//
+// `newKey`/`newLegKey` restart their counters at l1/x1 on every page load, so a
+// draft's saved keys can collide with the very next scan's - and a shared key
+// means an edit or a removal hits both lines, and worse, a PIN authorisation
+// keyed by `line.key` (`pin.ts`'s `covers`) silently covers a line nobody
+// approved. So every line and leg a draft restores gets a brand-new key, minted
+// from the same two generators a fresh scan uses rather than a third one of
+// this file's own - the collision this issue exists to close.
+
+/** Every restored line and leg, rekeyed, with every reference to an old key
+ *  inside the same draft remapped in the same pass - a PIN authorisation's
+ *  `ref` most of all, since that is what binds one manager's approval to
+ *  exactly one line (binding rule 0a).
+ *
+ *  Called once in the mount effect, before `setCart` - never inside a state
+ *  updater, which React 18 StrictMode double-invokes in dev, and minting keys
+ *  there would run the generators twice and split the mapping between the
+ *  lines and the refs that point at them. */
+export function rekeyDraft(draft: DraftPayload): DraftPayload {
+  const map = new Map<string, string>();
+  const lines = draft.cart.lines.map((line) => {
+    const key = newKey();
+    map.set(line.key, key);
+    return { ...line, key };
+  });
+  const exchange = draft.cart.exchange
+    ? {
+        ...draft.cart.exchange,
+        lines: draft.cart.exchange.lines.map((leg) => {
+          const key = newLegKey();
+          map.set(leg.key, key);
+          return { ...leg, key };
+        }),
+      }
+    : null;
+  const authorisation = draft.cart.authorisation
+    ? {
+        ...draft.cart.authorisation,
+        // `Ask.ref` is either a line key or a credit-note number (`pin.ts`) -
+        // a lookup with a fallback, never an unconditional rewrite, so a note
+        // number is left exactly as it stood.
+        asks: draft.cart.authorisation.asks.map((ask) => ({
+          ...ask,
+          ref: map.get(ask.ref) ?? ask.ref,
+        })),
+      }
+    : null;
+  return { ...draft, cart: { ...draft.cart, lines, exchange, authorisation } };
 }

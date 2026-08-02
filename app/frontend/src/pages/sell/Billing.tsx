@@ -29,7 +29,14 @@ import {
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
-import { clearDraft, persistDraft, readDraft, restoredCart, restoredCustomer } from "../../till/draft";
+import {
+  clearDraft,
+  persistDraft,
+  readDraft,
+  rekeyDraft,
+  restoredCart,
+  restoredCustomer,
+} from "../../till/draft";
 import { takeParkedExchange } from "../../till/exchange";
 import type { Exchange } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
@@ -238,6 +245,12 @@ function Counter({ storeName }: { storeName?: string }) {
    * `skipRestore` is the third guard: a New bill, a commit or a hold started
    * before this read landed means the cashier has already moved past what it
    * would restore.
+   *
+   * `rekeyDraft` runs here, once, on the read itself - never inside a
+   * `setCart` updater - so every restored line and leg gets a brand-new
+   * internal key before anything on screen can touch it (the 2 Aug 2026
+   * ruling): a saved key colliding with the next scan's would let one PIN
+   * authorisation silently cover a line nobody approved.
    */
   useEffect(() => {
     if (!engine) return;
@@ -246,8 +259,9 @@ function Counter({ storeName }: { storeName?: string }) {
       .then((draft) => {
         if (!alive) return;
         if (draft && !skipRestore.current) {
-          setCart((current) => restoredCart(current, draft));
-          setCustomer((current) => restoredCustomer(current, draft));
+          const fresh = rekeyDraft(draft);
+          setCart((current) => restoredCart(current, fresh));
+          setCustomer((current) => restoredCustomer(current, fresh));
         }
       })
       .finally(() => {

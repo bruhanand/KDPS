@@ -270,7 +270,10 @@ export function addManualPiece(barcode: string, key = newKey()): CartLine {
 
 let keys = 0;
 
-function newKey(): string {
+/** The one source of cart-line keys - a restore rekey (`draft.ts`) mints from
+ *  this too, rather than a generator of its own, so a line restored from a
+ *  crash and the next fresh scan can never be issued the same key. */
+export function newKey(): string {
   return `l${(keys += 1)}`;
 }
 

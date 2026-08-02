@@ -11,11 +11,22 @@ import "fake-indexeddb/auto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addPiece, emptyCart } from "./cart";
+import { addPiece, emptyCart, newKey } from "./cart";
 import type { Cart } from "./cart";
 import type { TillDb } from "./db";
-import { clearDraft, persistDraft, readDraft, restoredCart, restoredCustomer } from "./draft";
+import {
+  clearDraft,
+  persistDraft,
+  readDraft,
+  rekeyDraft,
+  restoredCart,
+  restoredCustomer,
+} from "./draft";
 import type { DraftPayload } from "./draft";
+import { newLegKey } from "./exchange";
+import type { ExchangeLeg } from "./exchange";
+import { covers, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
+import type { Ask, Authorisation } from "./pin";
 import { freshTill, item } from "./testSupport";
 import { emptyPayment } from "./tender";
 import type { TillCustomer } from "./types";
@@ -28,6 +39,26 @@ function cartOf(): Cart {
     payment: { ...emptyPayment(), cash_received_paise: 149900 },
     authorisation: null,
     exchange: null,
+  };
+}
+
+function legOf(key: string): ExchangeLeg {
+  return {
+    key,
+    original_line: 1,
+    barcode: "8901000000011",
+    season: "FW25",
+    brand: "MUFTI",
+    item: "Shirt",
+    design: "SHIRT-01",
+    size: "M",
+    qty: 1,
+    refund_paise: 149900,
+    gst_rate: "5.00",
+    gst_paise: 7138,
+    reason: "",
+    condition: "good",
+    description: "MUFTI · Shirt · SHIRT-01 · M",
   };
 }
 
@@ -134,5 +165,111 @@ describe("landing the read back on screen (the mount race)", () => {
     const typing: TillCustomer = { name: "Sharma Traders", mobile: "", gstin: "" };
 
     expect(restoredCustomer(typing, draft)).toBe(typing);
+  });
+});
+
+describe("rekeying a draft at restore (the crash-restore line-identity ruling, 2 Aug 2026)", () => {
+  function draftOf(overrides: Partial<Cart> = {}): DraftPayload {
+    return {
+      cart: { ...cartOf(), ...overrides },
+      customer: NO_CUSTOMER,
+      paper: null,
+      savedAt: "2026-08-01T09:00:00.000Z",
+    };
+  }
+
+  it("restored keys differ from the saved ones", () => {
+    const draft = draftOf();
+    const savedKey = draft.cart.lines[0].key;
+
+    const fresh = rekeyDraft(draft);
+
+    expect(fresh.cart.lines[0].key).not.toBe(savedKey);
+  });
+
+  it("a key minted after a restore collides with no restored line or leg", () => {
+    const draft = draftOf({
+      exchange: {
+        original: { fy: "26-27", till_seq: 40, doc_number: "26-27/DEO/SAL/40" },
+        lines: [legOf("x9")],
+      },
+    });
+
+    const fresh = rekeyDraft(draft);
+    const nextLine = newKey();
+    const nextLeg = newLegKey();
+
+    expect(fresh.cart.lines.map((line) => line.key)).not.toContain(nextLine);
+    expect((fresh.cart.exchange?.lines ?? []).map((leg) => leg.key)).not.toContain(nextLeg);
+  });
+
+  it("an over-cap authorisation still covers its own line after the rekey", () => {
+    const line = { ...addPiece(item("8901000000011"), { stock: 3, alternatives: [] }), salesman: 3 };
+    const authorisation: Authorisation = {
+      user_id: 7,
+      name: "Store Manager",
+      at: "2026-08-01T09:00:00.000Z",
+      asks: [{ kind: OVER_CAP_DISCOUNT, ref: line.key, paise: 500, label: "Line 1" }],
+    };
+    const draft = draftOf({ lines: [line], authorisation });
+
+    const fresh = rekeyDraft(draft);
+    const ask: Ask = {
+      kind: OVER_CAP_DISCOUNT,
+      ref: fresh.cart.lines[0].key,
+      paise: 500,
+      label: "Line 1",
+    };
+
+    expect(covers(fresh.cart.authorisation, [ask])).toBe(true);
+  });
+
+  it("an over-cap authorisation does not cover another restored line after the rekey", () => {
+    const first = { ...addPiece(item("8901000000011"), { stock: 3, alternatives: [] }), salesman: 3 };
+    const second = { ...addPiece(item("8901000000028"), { stock: 3, alternatives: [] }), salesman: 3 };
+    const authorisation: Authorisation = {
+      user_id: 7,
+      name: "Store Manager",
+      at: "2026-08-01T09:00:00.000Z",
+      asks: [{ kind: OVER_CAP_DISCOUNT, ref: first.key, paise: 500, label: "Line 1" }],
+    };
+    const draft = draftOf({ lines: [first, second], authorisation });
+
+    const fresh = rekeyDraft(draft);
+    const askOnSecondLine: Ask = {
+      kind: OVER_CAP_DISCOUNT,
+      ref: fresh.cart.lines[1].key,
+      paise: 500,
+      label: "Line 2",
+    };
+
+    expect(covers(fresh.cart.authorisation, [askOnSecondLine])).toBe(false);
+  });
+
+  it("leaves a credit-note ref alone - it is a note number, never a line key", () => {
+    const authorisation: Authorisation = {
+      user_id: 7,
+      name: "Store Manager",
+      at: "2026-08-01T09:00:00.000Z",
+      asks: [{ kind: UNVERIFIED_NOTE, ref: "CN-100", paise: 20000, label: "CN-100" }],
+    };
+    const draft = draftOf({ authorisation });
+
+    const fresh = rekeyDraft(draft);
+
+    expect(fresh.cart.authorisation?.asks[0].ref).toBe("CN-100");
+  });
+
+  it("rekeys exchange-leg keys too", () => {
+    const draft = draftOf({
+      exchange: {
+        original: { fy: "26-27", till_seq: 40, doc_number: "26-27/DEO/SAL/40" },
+        lines: [legOf("x9")],
+      },
+    });
+
+    const fresh = rekeyDraft(draft);
+
+    expect(fresh.cart.exchange?.lines[0].key).not.toBe("x9");
   });
 });
