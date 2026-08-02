@@ -88,10 +88,19 @@ Unchanged (the accepted bill; retry with the same idempotency key returns the sa
    (new) each UPI tender row persists upi_state + upi_reference
 5. (existing) apply tenders, flags, credit notes, deferred costing - unchanged
 6. (new, after the sale is committed) customer upsert - never blocks:
-   a. mobile = digits of payload customer.mobile; skip the whole step when blank
+   a. mobile = digits of payload customer.mobile, collapsed to the bare
+      10-digit Indian form (a leading `91` on a 12-digit value and a leading
+      `0` on an 11-digit value are stripped, so `+91 98765-43210`,
+      `09876543210` and `9876543210` are one customer; other lengths pass
+      through unchanged); skip the whole step when blank. The same collapsed
+      mobile is what step 9 snapshots onto the bill, so the bill and the
+      master row carry one spelling and the analytics join by mobile lands
    b. get-or-create masters.Customer by mobile
    c. payload name non-blank and different -> overwrite (latest wins)
-   d. payload gstin non-blank -> overwrite
+   d. payload gstin non-blank and different -> overwrite, upper-cased
+   d2. only the columns 6c/6d actually changed are written - a bill that just
+      renames must not carry its own blank gstin over one another till
+      committed a moment earlier
    e. any failure in 6a-6d is logged and swallowed - the bill is already
       printed and in the customer's hand; a master-data hiccup must not
       refuse it (Rule 5). No errorCode exists for this step by design.

@@ -13,7 +13,7 @@ Lives in `masters` because it is master data that will outlive the counter (loya
 | Column | Type | Constraints | Why |
 |---|---|---|---|
 | `id` | bigint | PK | House surrogate key |
-| `mobile` | varchar(15) | NOT NULL, **UNIQUE** | The natural key; stored as digits only, normalised at the accept boundary. One row per mobile - a changed number is a new customer row (v1 ruling) |
+| `mobile` | varchar(15) | NOT NULL, **UNIQUE** | The natural key; stored as digits only, canonicalised at the accept boundary to the bare 10-digit Indian form (leading `91` on 12 digits / leading `0` on 11 digits stripped, so `+91 98765-43210`, `09876543210` and `9876543210` are one row; other lengths pass through). One row per mobile - a changed number is a new customer row (v1 ruling) |
 | `name` | varchar(120) | NOT NULL, default `''` | Latest non-blank name wins (grill Q6) |
 | `gstin` | varchar(15) | NOT NULL, default `''` | Filled when a business bill supplies it; normalised uppercase |
 | `created_at` | timestamptz | NOT NULL (auto) | `TimeStampedModel` base |
@@ -28,6 +28,8 @@ Notes:
 
 - **No FK from `Sale`.**
   Bills keep snapshotting `customer_name`/`customer_mobile` as text (Rule 3); a later name correction on the master never rewrites a bill, and linkage for analytics is by mobile at query time (`sell_sale.customer_mobile` is already indexed).
+  For that join to land, the bill's `customer_mobile` is canonicalised by the same rule as the master's key, at the same accept boundary - both sides of the join are written there, so both carry one spelling.
+  The *name* is still snapshotted exactly as billed; only the mobile, which is the join key, is canonicalised.
 - **Provenance** (Rule 10): the row is only ever written by the sale-accept step, so "who touched it" is derivable from the bills carrying that mobile at that time; no actor columns on the row itself in v1.
 - **No SCD-2**: no money derives from customer history.
 - Rows are never deleted in v1; no soft-delete column until a merge/cleanup flow exists.
@@ -38,7 +40,9 @@ One data migration after the table lands: seed from existing bills -
 
 ```
 one row per distinct non-blank customer_mobile in sell_sale,
-name = the customer_name of the newest bill carrying that mobile,
+name = the customer_name of the newest bill carrying that mobile whose name is
+  non-blank (a blank name never overwrites - same "latest non-blank wins" rule
+  as the live upsert, so the two paths cannot drift; AC1),
 gstin = the buyer_gstin of the newest B2B bill carrying it, else ''
 ```
 

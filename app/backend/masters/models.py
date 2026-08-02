@@ -328,3 +328,36 @@ class Cohort(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.barcode}@{self.season}"
+
+
+class Customer(TimeStampedModel):
+    """One row per mobile number - the counter's first customer master (#242).
+
+    Written only by the sale-accept step (Rule 4: one owner; no admin form, no
+    API write, no seed command in v1), so provenance is derivable from the
+    bills carrying that mobile rather than an actor column (Rule 10). A bill
+    still snapshots its own `customer_name`/`customer_mobile` as text (Rule 3)
+    - a later edit here never rewrites yesterday's bill.
+
+    Deliberately not store-scoped: a Deoghar regular must be recognised in
+    Ranchi too. No delete path - a changed number is a new row (v1 ruling),
+    not an edit to this one.
+    """
+
+    mobile = models.CharField(
+        max_length=15, unique=True, help_text="Digits only, normalised at the accept boundary."
+    )
+    name = models.CharField(max_length=120, blank=True, default="")
+    gstin = models.CharField(
+        max_length=15, blank=True, default="", help_text="Normalised uppercase."
+    )
+
+    class Meta:
+        ordering = ["mobile"]
+        indexes = [
+            # The till's dataset watermark (#245) - see `Sku.Meta`.
+            models.Index(fields=["updated_at"], name="masters_customer_synced_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name or self.mobile

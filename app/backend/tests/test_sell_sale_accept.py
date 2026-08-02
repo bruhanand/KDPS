@@ -43,7 +43,7 @@ from _sell import (
 
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLEntry, trial_balance
-from masters.models import Cohort, Store
+from masters.models import Cohort, Customer, Store
 from sell.models import (
     ContinuityFlag,
     CreditNote,
@@ -1231,3 +1231,145 @@ def test_the_database_refuses_a_upi_row_with_no_stamp(db):
 
     with pytest.raises(IntegrityError):
         SaleTender.objects.create(sale=sale, mode="upi", amount_paise=100, upi_state="")
+
+
+# --- the customer master (#242) ---------------------------------------------
+#
+# `on_commit` callbacks do not fire under the plain `db` fixture - the outer
+# transaction pytest-django wraps the test in never commits - so every test
+# below runs the POST inside `django_capture_on_commit_callbacks(execute=True)`.
+# Without it AC1 would pass vacuously: the callback would simply never run.
+
+
+def test_saving_a_bill_with_a_mobile_creates_the_customer_row(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    customer = Customer.objects.get(mobile="9876543210")
+    assert customer.name == "Mrs Sharma"
+
+
+def test_a_later_bill_with_a_new_name_and_gstin_refreshes_the_row(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    first = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    first["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, first)
+
+    second = bill_payload(counter["store"], counter["salesman"], till_seq=2)
+    second["customer"] = {
+        "name": "Mrs S Sharma",
+        "mobile": "9876543210",
+        "gstin": "10AABCU9603R1Z2",
+    }
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, second)
+
+    customer = Customer.objects.get(mobile="9876543210")
+    assert customer.name == "Mrs S Sharma"
+    assert customer.gstin == "10AABCU9603R1Z2"
+
+
+def test_a_blank_name_on_a_later_bill_never_wipes_the_stored_name(
+    counter, django_capture_on_commit_callbacks
+):
+    _shelf(counter["store"], 3)
+    first = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    first["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, first)
+
+    second = bill_payload(counter["store"], counter["salesman"], till_seq=2)
+    second["customer"] = {"name": "", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        _post(counter, second)
+
+    assert Customer.objects.get(mobile="9876543210").name == "Mrs Sharma"
+
+
+def test_the_bill_snapshots_the_mobile_in_the_same_spelling_as_the_master(
+    counter, django_capture_on_commit_callbacks
+):
+    """db-design links a bill to its customer by mobile at query time, over the
+    indexed `sell_sale.customer_mobile`. Canonicalising only the master's key
+    would leave that join with two spellings and no match."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "+91 98765-43210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    sale = Sale.objects.get(doc_number=response.json()["doc_number"])
+    assert sale.customer_mobile == "9876543210"
+    assert Customer.objects.get(mobile=sale.customer_mobile).name == "Mrs Sharma"
+
+
+def test_a_bill_with_no_mobile_creates_no_customer_row(counter, django_capture_on_commit_callbacks):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Walk-in", "mobile": "", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Customer.objects.count() == 0
+
+
+def test_an_induced_upsert_failure_does_not_fail_the_bill(
+    counter, django_capture_on_commit_callbacks, monkeypatch
+):
+    """AC3. The upsert has no error path by design - a raise inside it is logged
+    and swallowed, never surfaced to the till (Rule 5)."""
+    _shelf(counter["store"], 3)
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("sell.services.accept.upsert_customer", _boom)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert "errorCode" not in body
+    assert Sale.objects.count() == 1
+    assert Customer.objects.count() == 0
+
+
+def test_old_bills_are_byte_identical_after_the_customer_name_changes(
+    counter, django_capture_on_commit_callbacks
+):
+    """AC4 - Rule 3. A bill snapshots the name it was billed with; a later edit
+    to the master never rewrites it."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""}
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+    doc_number = response.json()["doc_number"]
+
+    customer = Customer.objects.get(mobile="9876543210")
+    customer.name = "Somebody Else Entirely"
+    customer.save(update_fields=["name"])
+
+    sale = Sale.objects.get(doc_number=doc_number)
+    assert sale.customer_name == "Mrs Sharma"
+    assert sale.customer_mobile == "9876543210"
+
+    reread = counter["client"].get(f"{SALES_URL}/{doc_number}")
+    assert reread.json()["customer_name"] == "Mrs Sharma"
+    assert reread.json()["customer_mobile"] == "9876543210"
