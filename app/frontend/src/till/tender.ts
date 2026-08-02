@@ -79,6 +79,15 @@ export interface TenderSplit {
   notes: NoteStanding[];
   /** Everything the customer has put up. */
   total_paise: number;
+  /** Everything somebody actually **typed** - `total_paise` less the cash the
+   *  panel is only about to take on its own (#246).
+   *
+   *  The distinction only matters to the prefill. `cash_paise: null` makes cash
+   *  absorb the whole bill silently, so `balance_paise` on an ordinary panel is
+   *  already nought and reading "what is still owed" off it would offer nothing
+   *  to the first box a cashier taps. What is still owed is the bill less what
+   *  has been *said*, and this is that. */
+  explicit_paise: number;
   /** Bill less tendered. Positive = unpaid, negative = over-tendered. */
   balance_paise: number;
   /** Cash back out of the drawer, against the cash *tender*, never the bill:
@@ -124,10 +133,80 @@ export function splitOf(
     upi_paise: payment.upi_paise,
     notes,
     total_paise: total,
+    explicit_paise: others + (payment.cash_paise ?? 0),
     balance_paise: netPaise - total,
     change_paise: Math.max(0, payment.cash_received_paise - cash),
     unverified: notes.filter((s) => s.doubt).map((s) => s.note.number),
   };
+}
+
+/**
+ * What an empty tender box takes when the cashier taps into it (#246, grill Q4).
+ *
+ * The panel is built on one rule - what is still owed is always on screen, and
+ * tapping a row fills it - so this is that figure: the bill less every row
+ * somebody has actually filled in. Typing over what it fills is what makes a
+ * split a split; there is no separate mode, and no other arithmetic.
+ *
+ * Deliberately **not** keyed by mode, unlike `prefillFor(split, mode)` as
+ * design.md sketched it. The prefill only ever fires on a box standing empty,
+ * an empty box has put up nothing, and so every mode is owed the same figure -
+ * a `mode` parameter would advertise a difference that does not exist. The one
+ * mode that genuinely differs has its own function below.
+ *
+ * Nothing here is money moving: the figure is *offered* into a box the cashier
+ * can still overtype, and `whyPaymentCannotClose` judges the result exactly as
+ * it did before. Cash keeps its `null`-means-the-rest semantics until a person
+ * touches it, so the day-close numbers cannot shift.
+ */
+export function prefillFor(split: TenderSplit, netPaise: number): number {
+  return Math.max(0, netPaise - split.explicit_paise);
+}
+
+/**
+ * What an empty credit-note box takes - the balance, capped at what the note
+ * has left.
+ *
+ * The cap is the whole reason this is not just `prefillFor`. Filling a note row
+ * with more than the note holds trips `standingOf`'s "has less left on it than
+ * that", which sends the cashier to find a manager for a doubt the panel itself
+ * invented. A note the counter has never been sent has no figure to cap by -
+ * it already needs a manager on its own account, so the balance stands.
+ */
+export function notePrefillFor(
+  split: TenderSplit,
+  netPaise: number,
+  standing: NoteStanding,
+): number {
+  const owed = prefillFor(split, netPaise);
+  return standing.cached ? Math.min(owed, standing.cached.remaining_paise) : owed;
+}
+
+/** ₹100 and ₹500, in paise - the two notes an Indian counter is handed. */
+const CHIP_STEPS = [10000, 50000];
+
+/**
+ * The quick-cash chips under the cash row: exact, then the next ₹100 and the
+ * next ₹500 (grill Q4).
+ *
+ * `duePaise` is the **cash tender**, not `TenderSplit.balance_paise`. On the
+ * ordinary all-cash sale the balance is nought - cash absorbs the bill - and
+ * chips read off it would never appear on the one sale they were asked for.
+ * What the customer is handing money against is what the cash row is taking.
+ *
+ * Exact keeps its paise: it exists to close the change line to nought, and a
+ * chip rounded to the rupee would leave a stray fifty paise behind. The round
+ * figures are deduped, so a bill that is already ₹5,000 offers one chip rather
+ * than the same one three times.
+ */
+export function cashChips(duePaise: number): number[] {
+  if (duePaise <= 0) return [];
+  const chips = [duePaise];
+  for (const step of CHIP_STEPS) {
+    const rounded = Math.ceil(duePaise / step) * step;
+    if (!chips.includes(rounded)) chips.push(rounded);
+  }
+  return chips;
 }
 
 /**

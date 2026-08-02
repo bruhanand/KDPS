@@ -3,9 +3,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cashChips,
   emptyPayment,
   newNote,
+  notePrefillFor,
   notesSpentBy,
+  prefillFor,
   splitOf,
   stampManualUpi,
   toTenders,
@@ -271,5 +274,138 @@ describe("what a note row must say before the bill closes", () => {
       amount_paise: 50000,
       credit_note: NOTE.number,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The prefill and the quick-cash chips (#246, grill Q4)
+// ---------------------------------------------------------------------------
+
+/** The ticket's own worked example: a ₹4,848 bill paid three ways. */
+const REVAMP_BILL = 484800;
+
+describe("what a tender box takes when the cashier taps into it", () => {
+  it("offers the whole bill on an untouched panel", () => {
+    expect(prefillFor(split(payment(), REVAMP_BILL), REVAMP_BILL)).toBe(REVAMP_BILL);
+  });
+
+  it("offers what the filled rows leave - ₹2,000 on card leaves ₹2,848 for UPI", () => {
+    const resolved = split(payment({ card_paise: 200000 }), REVAMP_BILL);
+
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(284800);
+  });
+
+  it("keeps offering the rest as the split grows - card and UPI leave ₹848 for cash", () => {
+    const resolved = split(payment({ card_paise: 200000, upi_paise: 200000 }), REVAMP_BILL);
+
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(84800);
+  });
+
+  it("ignores the cash the panel is only *about* to take, or every box would offer nought", () => {
+    // The ordinary panel has `cash_paise: null` - cash silently absorbing the
+    // whole bill - so the tender balance is already zero. Reading the prefill
+    // off that balance would offer nothing to the first box tapped, which is
+    // the one case the ticket names by hand.
+    const resolved = split(payment({ card_paise: 200000 }), REVAMP_BILL);
+
+    expect(resolved.balance_paise).toBe(0);
+    expect(resolved.explicit_paise).toBe(200000);
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(284800);
+  });
+
+  it("counts cash once the cashier has pinned it", () => {
+    const resolved = split(payment({ cash_paise: 84800, card_paise: 200000 }), REVAMP_BILL);
+
+    expect(resolved.explicit_paise).toBe(284800);
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(200000);
+  });
+
+  it("counts a credit note among the filled rows", () => {
+    const resolved = split(withNote(NOTE.number, 50000), REVAMP_BILL);
+
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(REVAMP_BILL - 50000);
+  });
+
+  it("never offers a negative - an over-tendered panel offers nothing", () => {
+    const resolved = split(payment({ card_paise: REVAMP_BILL + 100 }), REVAMP_BILL);
+
+    expect(prefillFor(resolved, REVAMP_BILL)).toBe(0);
+  });
+
+  it("offers nothing on a bill that owes the customer", () => {
+    expect(prefillFor(split(payment(), 0), 0)).toBe(0);
+  });
+});
+
+describe("what an empty credit-note box takes", () => {
+  it("takes the balance when the note is worth at least that much", () => {
+    const standing = split(withNote(NOTE.number, 0), 50000).notes[0];
+
+    expect(notePrefillFor(split(withNote(NOTE.number, 0), 50000), 50000, standing)).toBe(50000);
+  });
+
+  it("never offers more than the note has left - that would only manufacture a doubt", () => {
+    const resolved = split(withNote(NOTE.number, 0), REVAMP_BILL);
+
+    // The bill wants ₹4,848; the note holds ₹1,200.
+    expect(notePrefillFor(resolved, REVAMP_BILL, resolved.notes[0])).toBe(NOTE.remaining_paise);
+    expect(resolved.notes[0].doubt).toBe("");
+  });
+
+  it("falls back to the balance for a note this counter has never heard of", () => {
+    // Unknown already needs a manager, and the till has no figure to cap by.
+    const resolved = split(withNote("26-27/XXX/CRN/9", 0), REVAMP_BILL);
+
+    expect(notePrefillFor(resolved, REVAMP_BILL, resolved.notes[0])).toBe(REVAMP_BILL);
+  });
+});
+
+describe("the quick-cash chips under the cash row", () => {
+  it("offers exact, the next hundred and the next five hundred", () => {
+    // ₹4,848 → ₹4,848 · ₹4,900 · ₹5,000.
+    expect(cashChips(REVAMP_BILL)).toEqual([484800, 490000, 500000]);
+  });
+
+  it("offers the same three on the ₹848 the cash row is left with", () => {
+    expect(cashChips(84800)).toEqual([84800, 90000, 100000]);
+  });
+
+  it("dedupes when the figure is already round - a ₹5,000 bill offers one chip", () => {
+    expect(cashChips(500000)).toEqual([500000]);
+  });
+
+  it("dedupes the hundred against the five hundred", () => {
+    // ₹4,900 is already a hundred, so only the ₹5,000 chip is added.
+    expect(cashChips(490000)).toEqual([490000, 500000]);
+  });
+
+  it("keeps the paise on the exact chip - Exact must close to nought", () => {
+    // ₹1,499.37: the exact chip is the figure to the paisa, not a rounded one.
+    // Both round figures land on ₹1,500 here, so the row is two chips, not three.
+    expect(cashChips(149937)).toEqual([149937, 150000]);
+  });
+
+  it("shows nothing when the cash row takes nothing", () => {
+    expect(cashChips(0)).toEqual([]);
+    expect(cashChips(-100)).toEqual([]);
+  });
+});
+
+describe("the one balance line the ticket's worked example ends on", () => {
+  it("closes to nought and hands back ₹152 of change", () => {
+    // ₹4,848: ₹2,000 card, ₹2,000 UPI, ₹848 cash, a ₹1,000 note handed over.
+    const resolved = split(
+      payment({
+        card_paise: 200000,
+        upi_paise: 200000,
+        cash_paise: 84800,
+        cash_received_paise: 100000,
+      }),
+      REVAMP_BILL,
+    );
+
+    expect(resolved.balance_paise).toBe(0);
+    expect(resolved.change_paise).toBe(15200);
+    expect(whyPaymentCannotClose(resolved, false)).toBe("");
   });
 });
