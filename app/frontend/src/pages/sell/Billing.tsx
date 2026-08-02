@@ -290,6 +290,19 @@ function Counter({ storeName }: { storeName?: string }) {
     setUnknown("");
   }, []);
 
+  /** Both alert channels start over at each of the three "next bill starts"
+   *  moments - a piece scanned, an unknown taken onto the bill, or New bill
+   *  pressed - so neither an old confirmation nor a stale print failure can
+   *  outlive the bill it belonged to (see `pickBillAlert`'s note,
+   *  Billing.tsx:1013). One named site, so a fourth such moment does not
+   *  have to remember to copy the pair by hand (round-3 finding).
+   *  `resumeHold` needs its own message rather than a blank `note`, so it
+   *  keeps clearing `printProblem` on its own instead of calling this. */
+  const startingANewBill = useCallback(() => {
+    setNote("");
+    setPrintProblem("");
+  }, []);
+
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
       setCart((current) => ({
@@ -299,15 +312,11 @@ function Counter({ storeName }: { storeName?: string }) {
           { ...addPiece(piece, { stock, alternatives }), salesman: defaultSalesman },
         ],
       }));
-      setNote("");
-      // A print failure belongs to the bill that failed to print, never to
-      // whichever bill happens to be open when the cashier next scans - see
-      // the note on `pickBillAlert` (round-2 finding: Billing.tsx:1013).
-      setPrintProblem("");
+      startingANewBill();
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [clearScan, defaultSalesman],
+    [clearScan, defaultSalesman, startingANewBill],
   );
 
   /**
@@ -324,14 +333,11 @@ function Counter({ storeName }: { storeName?: string }) {
         ...current,
         lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
       }));
-      setNote("");
-      // See `takePiece` just above: a stale print failure must not outlive
-      // the bill it belongs to.
-      setPrintProblem("");
+      startingANewBill();
       clearScan();
       scan.focus();
     },
-    [clearScan, defaultSalesman, scan],
+    [clearScan, defaultSalesman, scan, startingANewBill],
   );
 
   const applyScan = useCallback(
@@ -402,8 +408,7 @@ function Counter({ storeName }: { storeName?: string }) {
   function newBill() {
     setCart(emptyCart());
     setCustomer(NO_CUSTOMER);
-    setNote("");
-    setPrintProblem("");
+    startingANewBill();
     clearScan();
     scan.focus();
   }
@@ -842,7 +847,11 @@ function Counter({ storeName }: { storeName?: string }) {
           <div
             ref={scanFloat.popoverRef}
             className="bill-float"
-            style={{ top: scanFloat.at.top, left: scanFloat.at.left }}
+            style={{
+              top: scanFloat.at.top,
+              left: scanFloat.at.left,
+              maxHeight: scanFloat.at.maxHeight,
+            }}
           >
             {unknown && (
               <NotInSystem

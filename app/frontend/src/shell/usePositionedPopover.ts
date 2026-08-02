@@ -41,8 +41,14 @@ import type { RefObject } from "react";
 export interface PositionedPopover<T extends HTMLElement = HTMLButtonElement> {
   /** Where to render it, in viewport coordinates. `null` until it has been
    *  placed - render nothing before that, or it flashes at the top-left
-   *  corner on the way to its real spot. */
-  at: { top: number; left: number } | null;
+   *  corner on the way to its real spot. `maxHeight` is only set on the
+   *  `"below"` side, where the popover grows downward by an amount CSS alone
+   *  cannot bound: a `100vh`-based rule has no way to know how far down the
+   *  page the trigger sits, so a popover starting well below the top of the
+   *  viewport would still be let to run past the bottom. Apply it as an
+   *  inline style on the popover; `"right"` callers keep clamping `top`
+   *  against their own measured height instead, unaffected. */
+  at: { top: number; left: number; maxHeight?: number } | null;
   /** Goes on the control the popover hangs off. */
   triggerRef: RefObject<T>;
   /** Goes on the portaled popover. It holds the node for the outside-click
@@ -67,7 +73,7 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
    *  near the right edge of the page. */
   side: "right" | "below" = "right",
 ): PositionedPopover<T> {
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const [at, setAt] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
   const triggerRef = useRef<T>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,11 +91,13 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
     const rect = trigger.getBoundingClientRect();
     let top: number;
     let left: number;
+    let maxHeight: number | undefined;
     if (side === "below") {
       const width = popoverRef.current?.offsetWidth ?? fallbackSize;
       const maxLeft = window.innerWidth - width - margin;
       top = rect.bottom + margin;
       left = Math.max(margin, Math.min(rect.left, maxLeft));
+      maxHeight = window.innerHeight - top - margin;
     } else {
       const height = popoverRef.current?.offsetHeight ?? fallbackSize;
       const maxTop = window.innerHeight - height - margin;
@@ -97,7 +105,12 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
       left = rect.right + margin;
     }
     setAt((current) =>
-      current && current.top === top && current.left === left ? current : { top, left },
+      current &&
+      current.top === top &&
+      current.left === left &&
+      current.maxHeight === maxHeight
+        ? current
+        : { top, left, maxHeight },
     );
   }, [fallbackSize, side]);
 
