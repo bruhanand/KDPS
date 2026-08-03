@@ -32,6 +32,13 @@ describe("the counter frame", () => {
     expect(billingRules).toMatch(/\.bill-page\s*{[^}]*padding:\s*0 368px 16px 16px;/s);
     expect(billingRules).toMatch(/\.bill-pay\s*{[^}]*right:\s*0;[^}]*bottom:\s*0;/s);
   });
+
+  it("wraps all three valid cash suggestions inside the clipped payment tile", () => {
+    // Exact + the next ₹100 + the next ₹500 can all be distinct. IBM Plex
+    // Mono makes that row wider than the rail for five-digit amounts, and the
+    // tile deliberately clips overflow, so nowrap silently cuts off chip 3.
+    expect(billingRules).toMatch(/\.bill-chips\s*{[^}]*flex-wrap:\s*wrap;/s);
+  });
 });
 
 /** Only the four fields this rule reads; the snapshot has two dozen. */

@@ -413,7 +413,7 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    cash-received row above, so the whole cash block hangs off the Cash label.
    They wrap rather than shrink: "₹4,848" is a figure a cashier reads at a
    glance and a chip that clipped it would be worse than no chip. */
-.bill-chips { display: flex; gap: 6px; padding: 0 12px 10px; }
+.bill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
 .bill-chip {
   display: inline-flex; flex: 1; align-items: baseline; justify-content: center; gap: 5px;
   padding: 5px 7px; font-size: 12px; font-weight: 600;
