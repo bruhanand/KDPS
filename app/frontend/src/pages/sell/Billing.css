@@ -50,12 +50,12 @@
 .bill-bar-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bill-scan-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
 .bill-page[data-mode="return"] {
-  --navy: var(--blue);
-  --navy-fill: var(--blue);
-  --navy-fill-hover: var(--blue);
+  --navy: var(--counter-return-blue, var(--blue));
+  --navy-fill: var(--counter-return-blue, var(--blue));
+  --navy-fill-hover: var(--counter-return-blue, var(--blue));
 }
-.bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--blue); }
-.bill-page[data-mode="return"] .scan-hero-input-wrap { border-color: var(--blue); }
+.bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--counter-return-blue, var(--blue)); }
+.bill-page[data-mode="return"] .scan-hero-input-wrap { border-color: var(--counter-return-blue, var(--blue)); }
 
 /* The input stays the wedge scanner's same controlled input; only its visual
    shell changes. Keeping it full-height makes the 60px target easy to hit
@@ -176,6 +176,67 @@
   overflow-y: auto;
 }
 .bill-float > * + * { margin-top: 10px; }
+
+/* Return mode (#273): bill discovery stays attached to the scanner, and the
+   bill itself lives in the one scrolling line band. */
+.return-customer-float { width: 680px; }
+.return-customer-search {
+  padding: 16px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow-lift);
+}
+.return-customer-head,
+.return-customer-form,
+.return-customer-row,
+.return-against-head,
+.return-exchange-switch,
+.return-exchange-switch label {
+  display: flex; align-items: center; gap: 10px;
+}
+.return-customer-head { justify-content: space-between; margin-bottom: 12px; }
+.return-customer-head > div { display: flex; flex-direction: column; gap: 2px; }
+.return-offline { color: var(--amber); font-size: 11px; font-weight: 700; }
+.return-customer-form .input { min-width: 0; flex: 1; }
+.return-customer-form .btn { display: inline-flex; align-items: center; gap: 6px; }
+.return-customer-results { max-height: 280px; overflow-y: auto; margin-top: 10px; }
+.return-customer-row {
+  width: 100%; justify-content: space-between; padding: 10px 8px;
+  border: 0; border-top: 1px solid var(--hairline); background: transparent;
+  color: var(--ink); text-align: left; cursor: pointer;
+}
+.return-customer-row:hover { background: var(--inner); }
+.return-customer-row > span { display: flex; flex-direction: column; gap: 2px; }
+.return-customer-row > span:last-child { align-items: flex-end; white-space: nowrap; }
+.return-customer-row small { color: var(--muted); }
+
+.return-against {
+  margin-bottom: 12px; overflow: hidden; border: 1px solid var(--hairline);
+  border-radius: 12px; background: var(--surface);
+}
+.return-against-head { padding: 12px 14px; background: var(--inner); }
+.return-against-head > div:first-child { display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.return-against-value { display: flex; flex-direction: column; align-items: flex-end; }
+.return-against-value > span { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.return-against-value strong { font: 600 17px/1.2 var(--mono); }
+.return-against-actions { display: flex; gap: 6px; }
+.return-against-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+.return-against > .warn-note { margin: 10px 14px; }
+.return-lines-wrap { overflow-x: auto; }
+.return-lines { width: 100%; border-collapse: collapse; font-size: 12px; }
+.return-lines th { padding: 8px 7px; background: var(--inner); color: var(--caption); font-size: 9px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+.return-lines td { padding: 8px 7px; border-top: 1px solid var(--hairline); }
+.return-lines .num { text-align: right; white-space: nowrap; }
+.return-lines td:first-child strong,
+.return-lines td:first-child small { display: block; }
+.return-lines td:first-child small { margin-top: 2px; color: var(--muted); }
+.return-lines tr.is-unmarked { opacity: .48; }
+.return-lines tr.is-marked { background: var(--blue-bg); }
+.return-lines input.bill-cell { width: 46px; text-align: right; }
+.return-lines select.bill-cell { min-width: 112px; }
+.return-lines td small { color: var(--muted); font-size: 9px; }
+.return-exchange-switch { justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--hairline); background: var(--inner); }
+.return-exchange-switch label { cursor: pointer; }
+.return-exchange-switch label > span { display: flex; flex-direction: column; }
+.return-exchange-switch small { color: var(--muted); }
 
 /* Bills on hold (#185). A panel above the grid rather than a drawer or a modal:
    picking one up replaces what is on the counter, so the cashier should be able
@@ -373,7 +434,7 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 .bill-payment-heading { padding: 0; }
 .bill-payment-heading .eyebrow { margin: 0; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
 .bill-due { font: 600 40px/1.1 var(--mono); letter-spacing: -.03em; color: var(--ink); margin: 4px 0 0; }
-.bill-page[data-mode="return"] .bill-due { color: var(--blue); }
+.bill-page[data-mode="return"] .bill-due { color: var(--counter-return-blue, var(--blue)); }
 .bill-rail-tile { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--inner); box-shadow: var(--shadow-rest); }
 .bill-payment-tile { margin-top: 10px; }
 /* The payment panel: three incoming modes. One column of label-then-amount rows,

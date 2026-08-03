@@ -7,15 +7,9 @@
 // back in with the wrong size. So the counter's own queue is asked first, and
 // only then head office.
 //
-// The two answers are not the same kind of thing, and the screen has to know
-// which it has:
-//
-//   · a **queued** bill has not reached head office, so a *plain return* against
-//     it is impossible - there is no document to give back against, and the
-//     server would answer `ORIGINAL_NOT_FOUND`. An exchange is fine: that is a
-//     new bill carrying a return leg, and the accept pipeline resolves the
-//     original itself when the two arrive in order.
-//   · a **synced** bill is a document, and either flow works.
+// The two answers differ in where they came from, but both can back the same new
+// Sale: the accept pipeline resolves an unsynced original once the queue drains
+// in order, while a synced bill can be checked immediately.
 //
 // Everything a returned line is worth is read off the bill rather than off the
 // price list: what comes back is what was paid (D2), which is a fact about that
@@ -32,8 +26,7 @@ export interface FoundBill {
   billed_at: string;
   customer_name: string;
   customer_mobile: string;
-  /** True when this bill is still in the counter's own queue - head office has
-   *  never seen it, so it can be exchanged against but not plainly returned. */
+  /** True when this bill is still in the counter's own queue. */
   local: boolean;
 }
 
@@ -67,6 +60,58 @@ export async function findQueuedBill(
   if (!bill) return null;
   const given = alreadyGivenBack(queue, fy, seq);
   const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** A queued bill by the exact document number encoded in its receipt barcode.
+ * Kept separate from the sequence lookup because configured voucher-series
+ * suffixes need not end in digits. */
+export async function findQueuedBillByDoc(
+  db: TillDb,
+  docNumber: string,
+): Promise<FoundBill | null> {
+  const wanted = docNumber.trim().toLocaleLowerCase();
+  if (!wanted) return null;
+  const queue = await db.queue.orderBy("id").toArray();
+  const bill = queue.find((row) => row.doc_number.toLocaleLowerCase() === wanted);
+  if (!bill) return null;
+  const given = alreadyGivenBack(queue, bill.fy, bill.till_seq);
+  const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** Unsynced bills whose snapshotted customer matches the third find-bill door.
+ * This is deliberately local even while online: the bill rung up five minutes
+ * ago may not exist at head office yet. */
+export async function searchQueuedBillsByCustomer(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+): Promise<FoundBill[]> {
+  const query = key === "mobile" ? digitsOf(term) : term.trim().toLocaleLowerCase();
+  if (!query) return [];
+  const queue = await db.queue.orderBy("id").reverse().toArray();
+  const items = await db.items.toArray();
+  return queue
+    .filter((bill) => {
+      const value =
+        key === "mobile"
+          ? digitsOf(bill.customer?.mobile ?? "")
+          : (bill.customer?.name ?? "").toLocaleLowerCase();
+      return value.includes(query);
+    })
+    .map((bill) => fromQueued(bill, alreadyGivenBack(queue, bill.fy, bill.till_seq), items));
+}
+
+function digitsOf(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function fromQueued(
+  bill: QueuedBill,
+  given: Map<number, { qty: number; paise: number }>,
+  items: TillItem[],
+): FoundBill {
   return {
     original: { fy: bill.fy, till_seq: bill.till_seq, doc_number: bill.doc_number },
     billed_at: bill.billed_at,

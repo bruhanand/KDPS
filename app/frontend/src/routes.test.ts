@@ -18,6 +18,12 @@ describe("the route table", () => {
     expect(roomAt("/")).toBeUndefined();
   });
 
+  it("redirects the retired Return & Exchange screen into the counter's return mode", () => {
+    expect(screenAt("/sell/returns")).toBeNull();
+    expect(resolveLegacyPath("/sell/returns")).toBe("/sell?mode=return");
+    expect(resolveLegacyPath("/sell/returns/anything")).toBeNull();
+  });
+
   it("opens the screen each canonical URL names", () => {
     const cases: [string, string][] = [
       ["/", "home"],

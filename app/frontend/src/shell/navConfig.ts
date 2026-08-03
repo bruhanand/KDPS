@@ -145,14 +145,6 @@ export const SECTIONS: NavSectionDef[] = [
       // carries it: this screen bills, and every endpoint behind it is gated at
       // `sell: operate`.
       { label: "Billing", to: "/sell", minCapability: "operate" },
-      // Taking a piece back (#184). `operate`, the same rung as billing and for
-      // the same reason: an exchange *is* a bill, and `POST /api/sell/returns`
-      // is gated at `sell: operate` too. The second pair of eyes on a plain
-      // return is not a rung at all - it is a named manager of this store,
-      // asked for on every single one.
-      // The counter owns this flow now. The route remains until its direct
-      // handoff retires in slice 8, but it is no longer a published tab.
-      { label: "Return & Exchange", to: "/sell/returns", action: true, minCapability: "operate" },
       // Finding an old bill and printing it again (#185). `view`, not `operate`:
       // `GET /api/sell/sales` is gated at `sell: view` and this screen cannot
       // write, so an owner or an accountant reaching a customer's bill is the
@@ -388,12 +380,13 @@ export const SECTIONS: NavSectionDef[] = [
 /** Every pre-#87 URL → its new home, longest prefix first. A path under an old
  *  prefix keeps its tail: `/documents/bookings/12` → `/booking/12`. */
 const LEGACY_PREFIXES: [from: string, to: string][] = [
+  ["/sell/returns", "/sell?mode=return"],
   ["/documents/pt-mapper", "/receive/pt"],
   ["/documents/bookings", "/booking"],
   ["/documents/inbound", "/receive"],
   ["/documents/transfers", "/transfer"],
   // The old "Returns" stub covered both halves; customer returns are Sell's.
-  ["/documents/returns", "/sell/returns"],
+  ["/documents/returns", "/sell?mode=return"],
   ["/documents/sales", "/sell"],
   ["/documents/payments", "/money/payments"],
   ["/inbound", "/receive"],
@@ -462,7 +455,12 @@ export function normalizePath(pathname: string): string {
 export function resolveLegacyPath(pathname: string): string | null {
   const normalized = normalizePath(pathname);
   for (const [from, to] of LEGACY_PREFIXES) {
-    if (underPrefix(normalized, from)) return to + normalized.slice(from.length);
+    if (!underPrefix(normalized, from)) continue;
+    // A destination carrying state in its query is an exact screen move, not a
+    // prefix move. Appending a child path after `?mode=return` would manufacture
+    // a malformed address such as `/sell?mode=return/anything`.
+    if (to.includes("?")) return normalized === from ? to : null;
+    return to + normalized.slice(from.length);
   }
   return null;
 }

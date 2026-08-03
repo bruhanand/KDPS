@@ -111,14 +111,6 @@ export const META = {
    *  the moment the server takes it, so neither the queue nor the tick list on a
    *  screen can be what stops the same receipt going in twice. */
   paperEntered: "paperEntered",
-  /** An exchange the Return & Exchange screen picked, waiting for the Billing
-   *  screen to pick it up - see `exchange.ts`.
-   *
-   *  Here rather than in React state because each Sell route mounts its own
-   *  `TillProvider`, so there is no shared tree between the two screens to hand
-   *  it through; and because a customer standing at the counter mid-exchange
-   *  should survive a reload. Taken exactly once. */
-  exchange: "exchange",
 } as const;
 
 export class TillDb extends Dexie {
