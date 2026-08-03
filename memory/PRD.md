@@ -959,3 +959,45 @@ blind counts). The next frontiers:
    unblocks #135) → **period lock / month-end close** (ADR-0006's unkept promise) → **three-way match**
    (invoice ↔ GRN ↔ booking, with a tolerance rule) → **open-order report** off the new booking close →
    maker-checker on vendor payments → hide the demo logins behind an env flag before any external demo.
+
+## Fix — Page layout not adaptive to wide viewports (3 Aug 2026) ✅
+User-reported bug: page content was capped at `max-width: 1320px` (`.page-pad`, shared by
+~28 pages), leaving large dead whitespace on wide monitors instead of filling/adapting to the
+viewport. First attempt (`.card-grid` switched to `auto-fit`) over-corrected — a lone card
+stretched into an ugly ~1600px banner; user rejected it ("I did not ask you to stretch it...
+use good UI principles, we are building an ERP"). Consulted `design_agent` for an ERP layout
+spec (`/app/design_guidelines.json`, locked Warm theme preserved) and corrected:
+- `index.css` `.page-pad`: `max-width:1320px` → `width:100%; box-sizing:border-box` (fluid,
+  no cap — matches ERP dashboard convention of using full width beside the sidebar).
+- `pages/Booking.css` `.card-grid`: `repeat(auto-fill, minmax(320px,1fr))` (dead empty tracks)
+  → `repeat(auto-fill, minmax(min(100%,320px), 1fr))` — the standard RAM responsive-grid
+  pattern: cards stay a natural ~320–470px, more columns appear as the viewport widens,
+  no single card ever stretches to fill a whole row. Used by `Bookings.tsx`, `Inbound.tsx`
+  (pending-bookings grid), `InboundQueueCard.tsx`.
+- POS Billing split-pane (`sell/Billing.css`, fluid scan area + fixed 352px bill rail) and
+  data tables (`table.data{width:100%}` inside `.table-wrap`) were already spec-compliant —
+  no change needed.
+**Verified:** testing_agent iteration_26 — page container 0px right-gutter at 1920/1280/1024px
+on Dashboard/Booking/Receive/Transfer/Stock; card widths measured 320–471px (never
+viewport-proportional/stretched); responsive reflow confirmed; no horizontal scroll; no
+regressions on tables/sidebar/topbar.
+
+## Environment bring-up (3 Aug 2026)
+Pod was reprovisioned (fresh container) — Postgres, `.env` files, and installed deps were gone.
+Re-ran `scripts/dev-bootstrap.sh` (installs Postgres 15, `uv sync` venv at `/opt/kdpsvenv`,
+migrate + seed_foundation + seed_ptmapper). Recreated `backend/.env` (`DATABASE_URL`) and
+`frontend/.env` (`REACT_APP_BACKEND_URL` = this pod's preview endpoint). Login verified (200).
+
+## Audit — operations scope (started, 3 Aug 2026, in progress)
+User asked to understand + complete "operations" (Booking → Inbound → Outbound → Sale/EOSS)
+per `docs/system.md` + `docs/real-workflow.md` + `docs/04-client-docs/*-Module-Client`. Findings
+so far (code-verified, not doc-assumed): Booking (`vendors` app), Inbound (`inbound`+`ptmapper`),
+Outbound (`outbound` app incl. VFlip, return-window 30/15/7 alerts in `alerts/checks.py`) and the
+Offers rulebook (`offers` app — brand/KDPS layers, triggers/rewards, AMM/do-not-discount flag,
+manual-discount-cap+manager-override on `sell`) are all substantially built. **EOSS Planning**
+(`/offers/eoss`), Price List, Discounts, and most of Money/Reports/HRMS are still `planned: true`
+stubs in `navConfig.ts` — confirmed gap. 18 open GitHub issues catalogued in
+`/app/github_issues_audit.md` (booking store-scope leak #234, money formatting #155/#198, RTC
+integrity on cancel #220, seed/RBAC issues #224/#236, POS scan/GSTIN bugs #257/#262, etc.) are
+candidates for the next fix pass. Full written audit doc + the sequential Booking→Inbound→
+Outbound→Sale fix pass (per user's stated priority) is the next session's main task.
