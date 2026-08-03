@@ -4,8 +4,6 @@ import { AlertTriangle, KeyRound } from "lucide-react";
 import { Money } from "../../lib/format";
 import {
   LATE_RETURN,
-  PLAIN_RETURN,
-  UNVERIFIED_NOTE,
   whoAuthorised,
 } from "../../till/pin";
 import type { Ask, Authorisation, AuthorisationKind } from "../../till/pin";
@@ -59,8 +57,6 @@ export function useWrongPins(): { wrong: number; wasWrong: () => void; clear: ()
 
 /** What each authorisation kind is called on the shop floor. */
 const KIND_WORDS: Record<AuthorisationKind, string> = {
-  [UNVERIFIED_NOTE]: "a credit note this counter cannot check",
-  [PLAIN_RETURN]: "taking a piece back for a credit note",
   [LATE_RETURN]: "taking it back after the return window closed",
 };
 

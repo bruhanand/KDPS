@@ -15,9 +15,9 @@ import { describe, expect, it } from "vitest";
 import {
   covers,
   kindsOf,
+  LATE_RETURN,
   verifyPin,
   whoAuthorised,
-  UNVERIFIED_NOTE,
 } from "./pin";
 import type { Ask } from "./pin";
 import type { TillManager } from "./types";
@@ -75,9 +75,9 @@ describe("a hash the counter cannot read", () => {
   });
 });
 
-/** A credit note this counter cannot check. */
+/** A bill being returned after the configured window. */
 function note(ref: string, paise: number): Ask {
-  return { kind: UNVERIFIED_NOTE, ref, paise, label: ref };
+  return { kind: LATE_RETURN, ref, paise, label: ref };
 }
 
 describe("who authorised it", () => {
@@ -172,7 +172,7 @@ describe("the kinds among a set of asks", () => {
   it("is always written in one order, whatever order they arrived in", () => {
     const asks = [note("CRN/9", 1), note("CRN/10", 1)];
 
-    expect(kindsOf(asks)).toEqual(["credit_note"]);
+    expect(kindsOf(asks)).toEqual(["late_return"]);
   });
 
   it("is empty for an ordinary bill", () => {

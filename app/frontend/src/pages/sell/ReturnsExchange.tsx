@@ -1,20 +1,19 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, KeyRound, Search, Undo2 } from "lucide-react";
+import { AlertTriangle, Search, Undo2 } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Money, formatDateTime, formatINR } from "../../lib/format";
+import { Money, formatDateTime } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import { describeOriginal, legFor, parkExchange, refundFor, returnableQty } from "../../till/exchange";
 import type { Exchange, ExchangeLeg, OriginalLine } from "../../till/exchange";
 import { billSeqFrom, findQueuedBill, fromServer } from "../../till/original";
 import type { FoundBill, SaleDetail } from "../../till/original";
-import { LATE_RETURN, PLAIN_RETURN } from "../../till/pin";
-import type { Ask, Authorisation } from "../../till/pin";
+import { LATE_RETURN } from "../../till/pin";
+import type { Ask } from "../../till/pin";
 import { useTillWorld } from "../../till/useTillWorld";
-import { newUuid } from "../../till/uuid";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./ReturnsExchange.css";
 
@@ -27,18 +26,9 @@ import "./ReturnsExchange.css";
 //
 // **Exchange.** The customer is taking something else instead, so the pieces
 // coming back ride on the *bill being rung up now*: one document, one net amount,
-// and the counter takes the difference or hands over a credit note if it goes the
-// other way. This screen picks the lines and parks them; Billing prices them
+// and the counter takes the non-negative difference. This screen picks the lines and parks them; Billing prices them
 // against whatever is scanned next. It works with the line down, because a bill
 // works with the line down.
-//
-// **Plain return.** Nothing is bought in its place, so there is no bill to hang
-// it on: it is a document of its own, it takes a manager's tap every single time,
-// and the customer walks out with a credit note rather than cash (grill Q7).
-// **It needs the network**, by design and not by accident - a return is rare and
-// risky, the SRT number is the server's to allocate, and the credit note has to
-// exist somewhere other than on this device before the customer is handed it. So
-// the button is disabled offline and says why.
 //
 // Two things a person reads here that are worth stating.
 //
@@ -78,7 +68,6 @@ function Counter() {
   const [typed, setTyped] = useState("");
   const [looking, setLooking] = useState(false);
   const [found, setFound] = useState<FoundBill | null>(null);
-  const [note, setNote] = useState("");
   const [failed, setFailed] = useState("");
   const [picked, setPicked] = useState<Record<number, Picked>>({});
   const [working, setWorking] = useState(false);
@@ -117,7 +106,6 @@ function Counter() {
     }
     setLooking(true);
     reset();
-    setNote("");
     try {
       const fy = till?.register?.fy || (await engine.db.queue.orderBy("id").last())?.fy || "";
       const local = fy ? await findQueuedBill(engine.db, fy, seq) : null;
@@ -196,70 +184,22 @@ function Counter() {
     }
   }
 
-  /** Take the pieces back for a credit note - the server-only flow. */
-  async function plainReturn(authorisation: Authorisation) {
-    if (!found || !legs.length || working) return;
-    setWorking(true);
-    setFailed("");
-    try {
-      const { data } = await api.post<{ credit_note: string; value_paise: number }>(
-        "/sell/returns",
-        {
-          idempotency_uuid: newUuid(),
-          store: world.store?.code ?? "",
-          original: { fy: found.original.fy, till_seq: found.original.till_seq },
-          lines: legs.map((leg) => ({
-            original_line: leg.original_line,
-            qty: leg.qty,
-            reason: leg.reason,
-            condition: leg.condition,
-          })),
-          override: { user_id: authorisation.user_id },
-          window_override: lateOk,
-        },
-      );
-      setNote(
-        `Taken back. Credit note ${data.credit_note} for ${formatINR(data.value_paise)} - ` +
-          "write the number on the customer's copy. No cash comes out of the drawer.",
-      );
-      reset();
-      setTyped("");
-      // The counter's copy of the open notes and the shelf both moved; the next
-      // sync brings them down. Asking for one now means the note is spendable at
-      // this till within seconds rather than within five minutes.
-      void engine?.syncNow();
-    } catch (error) {
-      setFailed(apiErrorMessage(error));
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  const asks: Ask[] = legs.length
-    ? [
-        {
-          kind: PLAIN_RETURN,
-          ref: found?.original.doc_number ?? "",
-          paise: total,
-          label: found?.original.doc_number ?? "This return",
-        },
-        ...(lateOk
-          ? [
-              {
-                kind: LATE_RETURN,
-                ref: found?.original.doc_number ?? "",
-                paise: total,
-                label: found?.original.doc_number ?? "This return",
-              } as Ask,
-            ]
-          : []),
-      ]
-    : [];
+  const asks: Ask[] =
+    legs.length && lateOk
+      ? [
+          {
+            kind: LATE_RETURN,
+            ref: found?.original.doc_number ?? "",
+            paise: total,
+            label: found?.original.doc_number ?? "This return",
+          },
+        ]
+      : [];
 
   return (
     <div className="page-pad">
       <PageHeader
-        lead="Find the bill a piece was bought on, and take it back onto a new bill or for a credit note."
+        lead="Find the bill a piece was bought on and take it back onto an equal-or-up exchange."
         actions={<SyncLight />}
       />
 
@@ -305,12 +245,6 @@ function Counter() {
           {failed}
         </p>
       )}
-      {note && (
-        <p className="ok-note" data-testid="rx-note">
-          {note}
-        </p>
-      )}
-
       {found && (
         <>
           <section className="card section-card" data-testid="rx-bill-found">
@@ -320,13 +254,6 @@ function Counter() {
               {found.customer_name ? ` · ${found.customer_name}` : ""}
               {found.customer_mobile ? ` · ${found.customer_mobile}` : ""}
             </p>
-            {found.local && (
-              <p className="warn-note" data-testid="rx-not-synced">
-                This bill has not reached head office yet. It can be exchanged against - that is
-                a new bill, and the two arrive together - but it cannot be taken back for a
-                credit note until it has synced.
-              </p>
-            )}
             <Lines lines={found.lines} picked={picked} onPick={pick} />
           </section>
 
@@ -358,39 +285,14 @@ function Counter() {
                 className="btn btn-cta"
                 data-testid="rx-exchange"
                 disabled={!legs.length || working}
-                onClick={() => void exchange()}
+                onClick={() => (asks.length ? setAsking(asks) : void exchange())}
               >
                 <Undo2 size={15} />
                 Exchange - put these on a new bill
               </button>
-              <button
-                type="button"
-                className="btn"
-                data-testid="rx-return"
-                disabled={!legs.length || working || !online || found.local}
-                title={
-                  found.local
-                    ? "This bill has not reached head office yet."
-                    : !online
-                      ? "A return needs the connection - the credit note is head office's to issue."
-                      : ""
-                }
-                onClick={() => setAsking(asks)}
-              >
-                <KeyRound size={15} />
-                Return for a credit note
-              </button>
             </div>
-            {!online && (
-              <p className="warn-note" data-testid="rx-offline">
-                The connection is down. An exchange still works - it is an ordinary bill - but a
-                return for a credit note needs head office, because the note is a document
-                somewhere other than this device.
-              </p>
-            )}
             <p className="muted-cell">
-              Cash never leaves the drawer on a return. The customer takes a credit note,
-              spendable at this shop.
+              Returns close only as an equal-or-up exchange. Money never leaves the drawer.
             </p>
           </section>
         </>
@@ -403,10 +305,10 @@ function Counter() {
           wrong={pins.wrong}
           onWrong={pins.wasWrong}
           onClose={() => setAsking(null)}
-          onAuthorised={(authorisation) => {
+          onAuthorised={() => {
             pins.clear();
             setAsking(null);
-            void plainReturn(authorisation);
+            void exchange();
           }}
         />
       )}
@@ -555,11 +457,10 @@ function messageOf(error: unknown): string {
 function NoCounter() {
   return (
     <div className="page-pad">
-      <PageHeader lead="Taking a piece back, onto a new bill or for a credit note." />
+      <PageHeader lead="Taking a piece back onto an equal-or-up exchange." />
       <p className="warn-note" data-testid="rx-no-counter">
-        This login is not a counter. A return is taken at the shop that sold the piece, and the
-        credit note it issues is spendable there - so a login that can see several shops has no
-        counter to take one at.
+        This login is not a counter. An exchange is taken at the shop that sold the piece, so a
+        login that can see several shops has no counter to take one at.
       </p>
     </div>
   );

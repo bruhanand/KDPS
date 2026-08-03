@@ -26,7 +26,6 @@ import type { DraftPayload } from "./draft";
 import type { HeldPayload } from "./held";
 import type {
   QueuedBill,
-  TillCreditNote,
   TillGstSlab,
   TillItem,
   TillKnownCustomer,
@@ -126,7 +125,6 @@ export class TillDb extends Dexie {
   items!: Table<TillItem, [string, string]>;
   stock!: Table<TillStock, string>;
   offers!: Table<TillOffer, number>;
-  creditNotes!: Table<TillCreditNote, string>;
   salesmen!: Table<TillSalesman, number>;
   seasons!: Table<TillSeason, string>;
   managers!: Table<TillManager, number>;
@@ -187,6 +185,9 @@ export class TillDb extends Dexie {
     // instead of upgrading it. Only the new table is named - a `stores` call
     // lists what *changes*, so every table above is carried forward untouched.
     this.version(4).stores({ customers: "mobile" });
+    // Credit notes no longer enter or leave at the counter. A new version is
+    // required to remove the shipped cache without disturbing queued bills.
+    this.version(5).stores({ creditNotes: null });
   }
 }
 

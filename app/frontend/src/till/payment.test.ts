@@ -326,7 +326,7 @@ describe("what an outcome does to the bill", () => {
           upi_paise: BILL,
           upi_charge: chargeStamp(standing, BILL),
         };
-        const upi = toTenders(splitOf(payment, BILL, [], "2026-08-02")).find(
+        const upi = toTenders(splitOf(payment, BILL)).find(
           (row) => row.mode === "upi",
         );
         expect(upi?.upi_state).toBe("manual");

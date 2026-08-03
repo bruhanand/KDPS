@@ -71,9 +71,6 @@ describe("the dataset landing", () => {
         stock: [{ barcode: "8901000000011", qty: 3 }],
         salesmen: [{ id: 1, code: "ALIE", name: "Ali E.", is_active: true }],
         managers: [{ user_id: 7, name: "R. Kumar", till_pin_hash: "pbkdf2$x" }],
-        credit_notes: [
-          { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" },
-        ],
       }),
     );
 
@@ -81,7 +78,6 @@ describe("the dataset landing", () => {
     expect((await db.stock.get("8901000000011"))?.qty).toBe(3);
     expect(await db.salesmen.count()).toBe(1);
     expect(await db.managers.count()).toBe(1);
-    expect(await db.creditNotes.count()).toBe(1);
     expect(await readMeta(db, META.cursor, "")).toBe("2026-07-30T10:00:00.000Z");
   });
 
@@ -264,34 +260,12 @@ describe("the dataset landing", () => {
       db,
       dataset({
         full: false,
-        deleted: { items: ["8901000000011"], offers: [], credit_notes: [] },
+        deleted: { items: ["8901000000011"], offers: [] },
       }),
     );
 
     expect(await db.items.count()).toBe(0);
     expect(await db.stock.count()).toBe(0);
-  });
-
-  it("stops honouring a credit note the server closed", async () => {
-    const { db } = till();
-    await applyDataset(
-      db,
-      dataset({
-        credit_notes: [
-          { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" },
-        ],
-      }),
-    );
-
-    await applyDataset(
-      db,
-      dataset({
-        full: false,
-        deleted: { items: [], offers: [], credit_notes: ["26-27/DEO/CRN/4"] },
-      }),
-    );
-
-    expect(await db.creditNotes.count()).toBe(0);
   });
 
   it("replaces the manager list rather than patching it", async () => {
@@ -386,52 +360,6 @@ describe("the dataset landing", () => {
     );
 
     expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
-  });
-
-  it("does not hand back a credit note an unsynced bill already spent (#182)", async () => {
-    // The shelf's problem, in money. The server's `remaining_paise` counts only
-    // the redemptions it has received, so a bootstrap would restate a note the
-    // counter spent to nought this morning as worth ₹1,200 again - and it would
-    // pay for a second bill that head office refuses, by which time it has been
-    // printed twice.
-    const NOTE = { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" };
-    const { db, storeCode } = till();
-    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
-    await commitBill(
-      db,
-      storeCode,
-      draft({
-        tenders: [
-          { mode: "credit_note", amount_paise: 120000, credit_note: NOTE.number },
-          { mode: "cash", amount_paise: 29900 },
-        ],
-      }),
-    );
-
-    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
-
-    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(0);
-  });
-
-  it("takes the note where the server says once the bill has gone up", async () => {
-    const NOTE = { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" };
-    const { db, storeCode } = till();
-    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
-    await commitBill(
-      db,
-      storeCode,
-      draft({
-        tenders: [
-          { mode: "credit_note", amount_paise: 50000, credit_note: NOTE.number },
-          { mode: "cash", amount_paise: 99900 },
-        ],
-      }),
-    );
-    await drainQueue(db, fakeServer());
-
-    await applyDataset(db, dataset({ credit_notes: [{ ...NOTE, remaining_paise: 70000 }] }));
-
-    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(70000);
   });
 
   it("asks from the cursor it was given, and takes a bootstrap when told to", async () => {

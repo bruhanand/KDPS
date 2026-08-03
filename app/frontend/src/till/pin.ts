@@ -1,8 +1,7 @@
 // The manager's PIN, checked with the line down (#182, D10 §4, grill Q1).
 //
-// A cashier keys in a discount past the cap, or offers a credit note this
-// counter has never heard of. Both need a manager's OK, and the counter is
-// offline - so the OK is verified here, on the device, against the hash that
+// A late exchange needs a manager's OK, and the counter can be offline - so the
+// OK is verified here, on the device, against the hash that
 // came down in the dataset (`managers[].till_pin_hash`).
 //
 // Three things about that are not obvious.
@@ -33,38 +32,17 @@ import type { TillManager } from "./types";
 const ALGORITHM = "pbkdf2_sha256";
 
 /**
- * What a manager may be asked to authorise at the counter.
- *
- * Three kinds, in two groups, and the split matters.
- *
- * The **first travels to the server** as the contract's `override.kind` on a
- * bill, and is what the daily check groups by - so that closed
- * vocabulary for the same reason `BillTender.mode` is: a second string would be
- * an exception nobody counts. `kindsOf` builds the wire word from that one kind.
- *
- * The **second two never reach a wire at all** (#184). A plain return records its
- * manager as a bare `user_id` and its late-ness as a boolean of its own, so the
- * returns endpoint has no `kind` field to spell them into. They exist because the
- * PIN modal is the same modal, and it has to be able to say what it is asking
- * about.
+ * What a manager may be asked to authorise at the counter. The only remaining
+ * exception is taking a return after the configured window.
  */
-/** A credit note this counter cannot check - unknown, spent, or out of date.
- *  The wire word is the contract's, and it is the plain noun. */
-export const UNVERIFIED_NOTE = "credit_note" as const;
-/** Taking a piece back for a credit note - every one of them takes a manager
- *  (grill Q7), which is what makes this a kind rather than a value band. */
-export const PLAIN_RETURN = "plain_return" as const;
 /** Taking one back after the return window has closed - the manager's *second*,
  *  separate answer, and the one the store's morning queue is told about. */
 export const LATE_RETURN = "late_return" as const;
 
-export type AuthorisationKind =
-  | typeof UNVERIFIED_NOTE
-  | typeof PLAIN_RETURN
-  | typeof LATE_RETURN;
+export type AuthorisationKind = typeof LATE_RETURN;
 
 /** The kinds a *bill* can carry, which is what `override.kind` is spelled from. */
-export const WIRE_KINDS = [UNVERIFIED_NOTE] as const;
+export const WIRE_KINDS = [LATE_RETURN] as const;
 
 /**
  * One thing on a bill that a manager has to agree to.
@@ -77,11 +55,9 @@ export const WIRE_KINDS = [UNVERIFIED_NOTE] as const;
  */
 export interface Ask {
   kind: AuthorisationKind;
-  /** Which line or note this is about - a cart line's key, or a note number.
-   *  Stable across re-prices, which the line number is not. */
+  /** The original bill this late-return decision is about. */
   ref: string;
-  /** How exceptional it is, in paise: the discount asked for, or what is being
-   *  taken off a note nobody here can check. */
+  /** The value being taken back, in paise. */
   paise: number;
   /** How it reads to the manager - "Line 3", or the note's own number. No money
    *  in it: the screen formats that, in Indian format, where it is rendered. */

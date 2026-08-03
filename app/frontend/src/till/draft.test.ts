@@ -18,7 +18,7 @@ import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "
 import type { DraftPayload } from "./draft";
 import { newLegKey } from "./exchange";
 import type { ExchangeLeg } from "./exchange";
-import { UNVERIFIED_NOTE } from "./pin";
+import { LATE_RETURN } from "./pin";
 import type { Authorisation } from "./pin";
 import { tillToday } from "./pricing";
 import { freshTill, item } from "./testSupport";
@@ -270,18 +270,18 @@ describe("rekeying a draft at restore (the crash-restore line-identity ruling, 2
     expect((fresh.cart.exchange?.lines ?? []).map((leg) => leg.key)).not.toContain(nextLeg);
   });
 
-  it("leaves a credit-note ref alone - it is a note number, never a line key", () => {
+  it("leaves a late-return bill reference alone - it is never a line key", () => {
     const authorisation: Authorisation = {
       user_id: 7,
       name: "Store Manager",
       at: "2026-08-01T09:00:00.000Z",
-      asks: [{ kind: UNVERIFIED_NOTE, ref: "CN-100", paise: 20000, label: "CN-100" }],
+      asks: [{ kind: LATE_RETURN, ref: "SAL-100", paise: 20000, label: "SAL-100" }],
     };
     const draft = draftOf({ authorisation });
 
     const fresh = rekeyDraft(draft);
 
-    expect(fresh.cart.authorisation?.asks[0].ref).toBe("CN-100");
+    expect(fresh.cart.authorisation?.asks[0].ref).toBe("SAL-100");
   });
 
   it("rekeys exchange-leg keys too", () => {

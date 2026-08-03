@@ -1,7 +1,7 @@
 // The two directions the counter talks in (#180, D10 step 3).
 //
 // **Down** is reference data - what may be sold, at what ticket price, at what
-// tax, by whom, against which credit notes. Losing a row here means selling at
+// tax and by whom. Losing a row here means selling at
 // yesterday's price, which the daily check catches.
 //
 // **Up** is money. Every row in the queue is a bill that is already printed and
@@ -24,8 +24,7 @@ import type { TillDb } from "./db";
 import { mirrorRow } from "./held";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
-import { drawDownNotes, fastForwardTo } from "./numbering";
-import { notesSpentBy } from "./tender";
+import { fastForwardTo } from "./numbering";
 import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
 
 /** What the counter assumes before a server has told it otherwise: no keyed-in
@@ -68,8 +67,8 @@ export function backoffMs(attempts: number): number {
  *     manager list is the one that matters: it is a set of override credentials,
  *     and a rung withdrawn at head office has to be withdrawn at the counter on
  *     the next response, so it is replaced rather than patched.
- *   · **Closed rather than removed** - credit notes and offers die by date as well
- *     as by edit, so `deleted` carries them and the till stops honouring them.
+ *   · **Closed rather than removed** - offers die by date as well as by edit,
+ *     so `deleted` carries them and the till stops applying them.
  */
 export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise<void> {
   await db.transaction(
@@ -78,7 +77,6 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       db.items,
       db.stock,
       db.offers,
-      db.creditNotes,
       db.salesmen,
       db.managers,
       db.gstSlabs,
@@ -93,13 +91,11 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
           db.items.clear(),
           db.stock.clear(),
           db.offers.clear(),
-          db.creditNotes.clear(),
         ]);
       }
       await db.items.bulkPut(payload.items);
       await db.stock.bulkPut(payload.stock);
       await db.offers.bulkPut(payload.offers);
-      await db.creditNotes.bulkPut(payload.credit_notes);
 
       // Whole-list sections. Cleared first so a row that vanished server-side
       // vanishes here: none of these has a `deleted` channel to say so.
@@ -137,10 +133,8 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
         await db.stock.delete(barcode);
       }
       await db.offers.bulkDelete(payload.deleted.offers);
-      await db.creditNotes.bulkDelete(payload.deleted.credit_notes);
 
       await replayQueuedStock(db, payload);
-      await replayQueuedNotes(db, payload);
 
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
@@ -197,36 +191,6 @@ async function replayQueuedStock(db: TillDb, payload: DatasetPayload): Promise<v
     // this.
     if (row) await db.stock.put({ barcode, qty: row.qty + delta });
   }
-}
-
-/**
- * Take the queue's credit-note spending back off the balances the dataset just
- * re-stated - the shelf's problem again, in money (#182).
- *
- * The server's `remaining_paise` counts only the redemptions it has *received*,
- * so every note row it sends is worth more than it really is by whatever this
- * till has spent and not yet synced. Writing it straight over the local copy
- * hands a customer their credit note back: a ₹1,200 note spent to nought this
- * morning reads ₹1,200 again after the next sync, and pays for a second bill
- * that head office will refuse - by which time it has been printed twice.
- *
- * Only notes this payload actually re-stated are adjusted, exactly as with
- * stock: a delta that did not mention a note left the local row alone, and that
- * row already carries the draw-down.
- */
-async function replayQueuedNotes(db: TillDb, payload: DatasetPayload): Promise<void> {
-  const pending = await db.queue.toArray();
-  if (!pending.length) return;
-  const restated = new Set(payload.credit_notes.map((row) => row.number));
-
-  const spent = new Map<string, number>();
-  for (const bill of pending) {
-    for (const [number, amount] of notesSpentBy(bill.tenders)) {
-      if (!restated.has(number)) continue;
-      spent.set(number, (spent.get(number) ?? 0) + amount);
-    }
-  }
-  await drawDownNotes(db, spent);
 }
 
 /** Pull whatever has changed since the last cursor (everything, the first time). */

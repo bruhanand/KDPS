@@ -194,14 +194,11 @@ export function receiptHtml(
     : "";
 
   // How it was paid, mode by mode. A split bill's customer copy has to say which
-  // card was charged what, because that is the line they will query - and a
-  // credit note names itself so the paper shows what was spent off which note.
+  // card was charged what, because that is the line they will query.
   const tendered = bill.tenders
     .map(
       (tender) =>
-        `<div class="row"><span>${TENDER_WORDS[tender.mode] ?? esc(tender.mode)}${
-          tender.credit_note ? ` <span class="dim">${esc(tender.credit_note)}</span>` : ""
-        }</span><span>${money(tender.amount_paise)}</span></div>`,
+        `<div class="row"><span>${TENDER_WORDS[tender.mode] ?? esc(tender.mode)}</span><span>${money(tender.amount_paise)}</span></div>`,
     )
     .join("");
   const received =

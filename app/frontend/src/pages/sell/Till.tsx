@@ -159,7 +159,6 @@ export default function TillPage() {
           <Row label="Pieces (barcode × season)" value={String(till.counts.items)} />
           <Row label="Stock rows" value={String(till.counts.stock)} />
           <Row label="Offers" value={String(till.counts.offers)} />
-          <Row label="Credit notes" value={String(till.counts.creditNotes)} />
           <Row label="Salesmen" value={String(till.counts.salesmen)} />
           <Row label="Managers who can authorise" value={String(till.counts.managers)} />
           <Row label="Tax slabs" value={String(till.counts.gstSlabs)} />
