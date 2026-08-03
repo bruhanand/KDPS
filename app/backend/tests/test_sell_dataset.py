@@ -49,7 +49,6 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from accounts.models import ScopeType, User
-from core.documents import DocStatus
 from masters.models import Cohort, Customer, GstSlab, Season, Sku
 from sell.models import CreditNote, SellPolicy
 from stockledger.models import StockOnHand
@@ -65,7 +64,6 @@ SECTIONS = [
     "stock",
     "gst_slabs",
     "offers",
-    "credit_notes",
     "salesmen",
     "managers",
     "seasons",
@@ -416,13 +414,7 @@ def test_a_withdrawn_item_arrives_as_a_deletion(till):
     assert fresh["items"] == []
 
 
-def test_an_open_credit_note_rides_down_and_a_spent_one_is_deleted(till):
-    """The note's balance is derived from redemption rows, so the delta is too.
-
-    A submitted document cannot be UPDATEd - the FSM trigger refuses it - so
-    spending a note moves no column on it. What moves is a redemption row, and the
-    watermark has to read that or a till would go on offering money already spent.
-    """
+def test_credit_notes_are_not_sent_to_the_till(till):
     note = CreditNote.objects.create(
         store=till["store"],
         fy="26-27",
@@ -432,95 +424,9 @@ def test_an_open_credit_note_rides_down_and_a_spent_one_is_deleted(till):
     note.post()
 
     body = till["client"].get(URL).json()
-    assert body["credit_notes"] == [
-        {"number": note.doc_number, "remaining_paise": 120000, "expires_on": str(note.expires_on)}
-    ]
-    cursor = body["cursor"]
 
-    _spend(note, till, 120000)
-
-    delta = till["client"].get(URL, {"since": cursor}).json()
-    assert delta["credit_notes"] == []
-    assert delta["deleted"]["credit_notes"] == [note.doc_number]
-
-
-def test_a_partly_spent_note_arrives_with_its_remaining_balance(till):
-    note = CreditNote.objects.create(
-        store=till["store"],
-        fy="26-27",
-        value_paise=120000,
-        expires_on=timezone.localdate() + timedelta(days=180),
-    )
-    note.post()
-    cursor = till["client"].get(URL).json()["cursor"]
-
-    _spend(note, till, 50000)
-
-    delta = till["client"].get(URL, {"since": cursor}).json()
-    assert delta["credit_notes"] == [
-        {"number": note.doc_number, "remaining_paise": 70000, "expires_on": str(note.expires_on)}
-    ]
-    assert delta["deleted"]["credit_notes"] == []
-
-
-def test_a_note_that_expired_while_the_till_was_offline_arrives_as_a_deletion(till, monkeypatch):
-    """Nothing was written when it expired - a date simply passed (Rule 11).
-
-    So this arm of the delta cannot be a watermark comparison: it has to ask which
-    notes crossed their own deadline between the cursor and today, or a till
-    offline over a long weekend would keep honouring one.
-
-    The clock is moved rather than the row's history, because the row has no
-    history to move: a submitted document may not be UPDATEd (the FSM trigger
-    refuses it), so a note's `updated_at` cannot be back-dated in a fixture. And
-    the cursor is taken *after* the note was posted on purpose - that leaves the
-    watermark arm unable to match, so only the deadline arm can be what selects
-    it, which is the thing this test is about.
-    """
-    note = CreditNote.objects.create(
-        store=till["store"],
-        fy="26-27",
-        value_paise=120000,
-        expires_on=timezone.localdate() + timedelta(days=1),
-    )
-    note.post()
-    cursor = _cursor_now()
-    assert till["client"].get(URL, {"since": cursor}).json()["credit_notes"] == []
-
-    _three_days_later(monkeypatch)
-    delta = till["client"].get(URL, {"since": cursor}).json()
-
-    assert delta["deleted"]["credit_notes"] == [note.doc_number]
-    assert delta["credit_notes"] == []
-
-
-def test_a_cancelled_note_arrives_as_a_deletion(till):
-    note = CreditNote.objects.create(
-        store=till["store"],
-        fy="26-27",
-        value_paise=120000,
-        expires_on=timezone.localdate() + timedelta(days=180),
-    )
-    note.post()
-    cursor = till["client"].get(URL).json()["cursor"]
-
-    note.cancel()
-
-    delta = till["client"].get(URL, {"since": cursor}).json()
-
-    assert delta["deleted"]["credit_notes"] == [note.doc_number]
-    assert note.docstatus == DocStatus.CANCELLED
-
-
-def test_a_draft_note_is_not_money_yet_and_stays_home(till):
-    CreditNote.objects.create(
-        store=till["store"],
-        fy="26-27",
-        value_paise=120000,
-        expires_on=timezone.localdate() + timedelta(days=180),
-    )
-
-    assert till["client"].get(URL).json()["credit_notes"] == []
+    assert "credit_notes" not in body
+    assert "credit_notes" not in body["deleted"]
 
 
 @pytest.mark.parametrize(
@@ -685,35 +591,3 @@ def _cursor_now() -> str:
     the delta *predicate* rather than about that lap ask from now instead.
     """
     return timezone.now().isoformat().replace("+00:00", "Z")
-
-
-def _three_days_later(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Move the whole system's clock on three days.
-
-    A note dies because a date passed, and nothing else in this system can make a
-    date pass. Patching `django.utils.timezone.now` is safe on a read path: the
-    endpoint under test writes nothing, so no `auto_now` column is stamped from
-    the moved clock.
-    """
-    later = timezone.now() + timedelta(days=3)
-    monkeypatch.setattr("django.utils.timezone.now", lambda: later)
-
-
-def _spend(note: CreditNote, till: dict[str, Any], amount: int, *, till_seq: int = 201) -> None:
-    """Redeem `amount` off `note` through a bill, the way the counter does.
-
-    Through the accept pipeline rather than by INSERTing a redemption row: the
-    note's balance is only true if it is the sum of real redemptions, and a
-    fixture that wrote one straight would be testing itself.
-    """
-    payload = bill_payload(
-        till["store"],
-        till["salesman"],
-        till_seq=till_seq,
-        tenders=[
-            {"mode": "credit_note", "amount_paise": amount, "credit_note": note.doc_number},
-            {"mode": "cash", "amount_paise": MRP_PAISE - amount},
-        ],
-    )
-    response = till["client"].post(SALES_URL, payload, format="json")
-    assert response.status_code == 201, response.json()

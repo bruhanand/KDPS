@@ -109,11 +109,10 @@ class _ExchangeWriteSerializer(serializers.Serializer):
 
 
 class _TenderWriteSerializer(serializers.Serializer):
-    mode = serializers.ChoiceField(choices=SaleTender.Mode.values)
-    amount_paise = serializers.IntegerField(min_value=0)
-    credit_note = serializers.CharField(
-        max_length=128, allow_blank=True, required=False, default=""
+    mode = serializers.ChoiceField(
+        choices=(SaleTender.Mode.CASH, SaleTender.Mode.CARD, SaleTender.Mode.UPI)
     )
+    amount_paise = serializers.IntegerField(min_value=0)
     #: How the money was proven - `confirmed` (the bank answered) or `manual`
     #: (the cashier vouched: QR soundbox, static QR, no internet). Required on a
     #: UPI tender, forbidden on every other mode.
@@ -147,8 +146,8 @@ class _TenderWriteSerializer(serializers.Serializer):
 class _TotalsWriteSerializer(serializers.Serializer):
     gross_paise = serializers.IntegerField(min_value=0)
     discount_paise = serializers.IntegerField(min_value=0)
-    #: Deliberately unbounded below: an exchange whose returns outweigh its sales
-    #: nets negative and issues a credit note for the difference.
+    #: Parsed as an integer here; the accept pipeline refuses a negative total as
+    #: `EXCHANGE_SHORT` so the business refusal keeps its contract code.
     net_paise = serializers.IntegerField()
     gst_paise = serializers.IntegerField()
     #: Rounding to the nearest rupee can never move a bill by more than 50 paise,
@@ -167,7 +166,7 @@ class _TotalsWriteSerializer(serializers.Serializer):
 #: What is *stored* is derived from what the pipeline itself found
 #: (`accept._authorised_kind`), never from what arrives here - this validation
 #: only keeps the wire honest about what the till believes it is asking for.
-OVERRIDE_KINDS = ("credit_note",)
+OVERRIDE_KINDS = ("late_return",)
 
 
 class SellPolicyWriteSerializer(serializers.Serializer):
@@ -243,19 +242,8 @@ class SaleWriteSerializer(serializers.Serializer):
                 raise serializers.ValidationError(f"line {line['line_no']} appears twice.")
             seen.add(line["line_no"])
         attrs["all_lines"] = lines
-        # A tender of nothing is not a tender; the till sends an empty credit-note
-        # row whenever the panel has one open.
+        # A tender of nothing is not a tender.
         tenders = [t for t in attrs.get("tenders") or [] if t["amount_paise"] > 0]
-        # One note may only appear once on a bill. Two rows naming it would each
-        # be checked against the same untouched balance, pass, and then collide on
-        # the redemption's unique key - a 500 where the honest answer is "say how
-        # much of that note you are spending, once".
-        notes = [(t.get("credit_note") or "").strip() for t in tenders]
-        named = [n for n in notes if n]
-        if len(named) != len(set(named)):
-            raise serializers.ValidationError(
-                "A credit note may only be tendered once on a bill; add its amounts together."
-            )
         attrs["tenders"] = tenders
         return attrs
 
