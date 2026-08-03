@@ -1,8 +1,10 @@
 # pos-store-front - technical design (Phase 3)
 
+> **Superseded in part on 2 Aug 2026.** The POS counter redesign's grill/design/API/DB records win over this document for keyboard, returns, tenders, and discount authority: F2/F3/F4/F9/Esc/Enter are accelerators beside visible buttons; exchanges are equal-or-up; counter credit notes and the standalone plain-return surface retire; the HO-configured manual-discount cap is absolute, with no till override (Q5/Q5b). CreditNote/Return and discount-override passages below are an as-built historical record, not current design.
+
 Input: the approved `feature-analysis.md`, `grill-decisions.md`, `api-contract.md`, `db-design.md`.
 Money slice, so this phase is mandatory.
-Anand's Phase-3 rulings folded in: no F-key shortcuts (everything cursor-selectable), the Sell screen is a normal design-consistent page (no full-screen mode for now), RetailJI contributes skeleton placement only.
+Anand's Phase-3 rulings folded in. The original no-F-key decision was later superseded by POS counter redesign grill Q4; the Sell screen remains a normal design-consistent page, and RetailJI contributes skeleton placement only.
 
 ## Summary
 
@@ -22,7 +24,7 @@ Everything follows an existing traced pattern (Grn/StoreTransfer for documents, 
 - `services/costing_sweep.py` - `sweep_deferred(barcode, season)` called from a signal/hook where PT posting creates or prices a Cohort; posts event B for waiting lines.
 - `services/dataset.py` - snapshot/delta builder for `GET /api/sell/dataset` (per-section `updated_at > since`).
 - `views.py` / `urls.py` / `serializers.py` / `permissions.py` - DRF `APIView`s, explicit paths, `require_section("sell", ...)` gates: `DatasetView`, `SaleCreateView`, `SaleListView`, `SaleDetailView`, `RegisterView`, `RegisterHandoverView`, `HeldBillsView`, `ReturnCreateView`.
-- `maker_checker` wiring: `KINDS` entry + `ApprovalPolicy` row for the plain return (kind `sell_return`), self-clearing at manager approval - the manager's tap IS the approval, recorded through the existing approvals machinery rather than a bespoke override table. The over-cap discount override on a Sale stays an on-document evidence field (`override_by`) because it is verified at the till offline and the bill cannot wait for a server approval round-trip; the daily check audits it.
+- **Historical 30 July shape, superseded by counter redesign Q3/Q3b/Q5b:** `maker_checker` supplied a plain-return approval and `override_by` recorded an over-cap discount. The current counter has neither path: returns exist only as equal-or-up exchange legs, and discounts stop at the HO-configured cap. Manager evidence survives only for a late-exchange-window override.
 
 ### Backend - new app `offers`
 
@@ -62,8 +64,8 @@ Everything follows an existing traced pattern (Grn/StoreTransfer for documents, 
 
 ### Frontend - screens (all normal shell pages, existing UI kit, `data-testid` throughout)
 
-- `pages/sell/Billing.tsx` - the skeleton placement per D10 §4: scan/type-to-search box top-right (wedge capture via a `useWedgeScan` hook extracted from ScanScreen's sink + focus-keeper; ScanScreen itself is not reused - it is a full-screen count surface, wrong shape here), line grid centre (`.lines-table`), payment panel right (tender rows, split, tendered-cash/change), customer strip below, totals with "you saved", action row of plain buttons (Save & Print with lock+spinner, Print/Reprint, Hold Bill, Search, New Bill). **No keyboard shortcuts; every action is a visible button.** Salesman picker defaults to last-picked (one click to change). Over-cap discount opens the manager-PIN modal (verified against the cached hash offline). Sync light sits in the page header (green/amber+count/red), not a modified top bar.
-- `pages/sell/ReturnsExchange.tsx` - find original bill (local first, server when online), pick lines, reason + condition; exchange flows into the current bill; plain return is server-only and disabled offline with an explanatory note.
+- `pages/sell/Billing.tsx` - the skeleton placement per D10 §4: scan/type-to-search box top-right (wedge capture via a `useWedgeScan` hook extracted from ScanScreen's sink + focus-keeper; ScanScreen itself is not reused - it is a full-screen count surface, wrong shape here), line grid centre (`.lines-table`), payment panel right (tender rows, split, tendered-cash/change), customer strip below, totals with "you saved", action row of plain buttons (Save & Print with lock+spinner, Print/Reprint, Hold Bill, Search, New Bill). **Superseded clauses:** POS counter redesign Q4 adds F2/F3/F4/F9/Esc/Enter accelerators while keeping every action as a visible button; Q5/Q5b remove the manager-PIN discount override and make the HO-configured cap absolute. Salesman picker defaults to last-picked (one click to change). Sync light sits in the page header (green/amber+count/red), not a modified top bar.
+- `pages/sell/ReturnsExchange.tsx` - historical first surface: find original bill (local first, server when online), pick lines, reason + condition. POS counter redesign Q2/Q3/Q3b later folds this into the counter, retires standalone/plain returns, and keeps only equal-or-up exchanges.
 - `pages/sell/CustomerSearch.tsx` - by mobile/name/bill number; read-only detail + Reprint. No edit affordance exists.
 - `pages/Home.tsx` (rebuilt) - the Dashboard cards from `GET /api/store/dashboard` per the contract shape; quick-actions row; held-bills count links into Billing's hold list; manager row rendered only when present in the payload.
 - `pages/CrossStoreSearch.tsx` - `GET /api/stock/availability` results size-by-size; "Request this" posts the StockRequest with `source: cross_store_search`.

@@ -151,14 +151,13 @@
           <div class="m-chips"><span>Exact</span><span>₹2,900</span><span>₹3,000</span></div>
           <div class="m-tr"><span>Card</span><span class="amt">2,000</span></div>
           <div class="m-tr"><span>UPI · <u>show QR</u></span><span class="amt">0</span></div>
-          <div class="m-tr"><span>+ Credit note</span><span></span></div>
           <div class="m-bal green"><span>Change to give</span><span>₹152</span></div>
         </div>
         <div class="m-card">
           <div class="cap">Customer</div>
           <div class="m-field">98352…</div>
-          <div class="m-hits">Sunita Devi · 9835211442 · last visit 14 Jun</div>
-          <div class="m-hits">Sunil Kr · 9835299801 · new this year</div>
+          <div class="m-hits">Sunita Devi · 9835211442</div>
+          <div class="m-hits">Sunil Kumar · 9835299801</div>
           <div class="m-field" style="color:#c9ced8">Name</div>
           <div style="font-size:10px; color:var(--blue)">Business bill? add GSTIN ▸</div>
         </div>
@@ -188,24 +187,24 @@
 <h3>The payment card, rebuilt</h3>
 <ol>
   <li><b>"To pay ₹X"</b> — the hero number, updating live as lines enter.</li>
-  <li><b>Tender rows: Cash · Card · UPI · + Credit note — and these rows <i>are</i> split payment.</b> Any combination, no separate "split" button or mode: put an amount on one row, the balance line shows what's left, put the rest on another. Tapping into an empty amount box <b>pre-fills the remaining balance</b>; typing over it splits further. Example: ₹4,848 bill → 2,000 on Card → tap UPI, it offers 2,848, overtype 2,000 → tap Cash, it offers 848 → customer hands ₹1,000 → green "Change to give ₹152". This is the Oracle/Zoho/ERPNext pattern; the research found the explicit "Split payment" button (Shopify, Square) is the weaker one — an extra step on every mixed payment, and Square's version voids all legs if the split takes over five minutes. Credit notes stay dynamic rows with the cached balance/expiry check.</li>
+  <li><b>Tender rows: Cash · Card · UPI — and these rows <i>are</i> split payment.</b> Any combination, no separate "split" button or mode: put an amount on one row, the balance line shows what's left, put the rest on another. Tapping into an empty amount box <b>pre-fills the remaining balance</b>; typing over it splits further. Example: ₹4,848 bill → 2,000 on Card → tap UPI, it offers 2,848, overtype 2,000 → tap Cash, it offers 848 → customer hands ₹1,000 → green "Change to give ₹152". This is the Oracle/Zoho/ERPNext pattern; the research found the explicit "Split payment" button (Shopify, Square) is the weaker one — an extra step on every mixed payment, and Square's version voids all legs if the split takes over five minutes. <b>Counter credit notes are retired</b> by POS counter redesign grill Q3/Q3b.</li>
   <li><b>Quick chips under Cash</b>: Exact, and two round-ups (next ₹100 / ₹500) — one tap records what the customer handed over. <span class="badge b-open">Ruled yes — §4 D-2</span></li>
   <li><b>One balance line, colour-coded</b>: red <b>"Still to pay ₹X"</b> until covered, flipping to green <b>"Change to give ₹X"</b> the moment cash exceeds the bill. "Cash received" folds into the cash row rather than being a separate block.</li>
   <li><b>UPI row carries "show QR."</b> Entering an amount and tapping it opens the charge card: the amount huge, a QR panel (mock today, hardware later), and the states <i>Generating → Awaiting (Cancel · Check status) → Success (ref captured, bill proceeds) / Failed (retry or another tender) / Unknown ("can't reach the bank — check again")</i>. Built behind a payment adapter with a mock, the same shape as the print adapter, so the hardware slice later touches no screen.</li>
-  <li><b>Manager authorisation</b> (over-cap discount, doubtful credit note) stays a button on this card, opening the same PIN modal.</li>
-  <li>When an exchange nets in the customer's favour, the card swaps to the <b>"Owed to the customer"</b> credit-note card, unchanged.</li>
+  <li><b>Manager authorisation</b> no longer covers discounts or credit notes. Its surviving counter role is the late-exchange window override, recorded on the bill.</li>
+  <li>An exchange may never net in the customer's favour: the outgoing pieces must be equal-or-up, and Save &amp; Print refuses a short exchange with a plain explanation (POS counter redesign grill Q3/Q3b).</li>
 </ol>
 
 <h3>The customer card, rebuilt</h3>
 <ul>
-  <li><b>Mobile first.</b> From the third digit, matching customers list <b>directly under the field</b> — name, mobile, last visit. Enter (or tap) attaches; the card then shows the name and a small history chip ("3 visits · last 14 Jun").</li>
+  <li><b>Mobile first.</b> From the third digit, matching customers list <b>directly under the field</b> — name and mobile only. Enter (or tap) attaches. No visit count, last-visit date, spend, or other purchase history is shipped to the till.</li>
   <li><b>Unknown number → "bill to a new customer"</b> inline: name, nothing else. The bill still works with no customer at all.</li>
   <li><b>GSTIN moves behind a "Business bill?" disclosure.</b> It matters on a minority of bills; when opened it behaves exactly as today (state-code check, tax-kind banner).</li>
-  <li>This needs something the till doesn't have yet: a <b>customer lookup</b>. Today mobile/name are free text stored on the bill only. The till is offline-first, so the natural shape is a synced local customer list, like items and offers. <span class="badge b-open">Ruled: customer master, all-KDPS, synced — §4 D-3</span></li>
+  <li>The <b>Customer master is now built</b>: every till syncs all-KDPS mobile/name/GSTIN rows for offline lookup, while bills keep their text snapshots. Past bills are fetched only through the online, store-scoped bill search in counter return mode. <span class="badge b-open">Ruled: customer master, all-KDPS, synced — §4 D-3</span></li>
 </ul>
 
 <h3>What explicitly does not change</h3>
-<p class="note">Everything under the skin: scan-first entry with local lookup, offers applying themselves, per-line salesman with last-picked default, the ambiguous-barcode season question, not-in-system manual lines, hold semantics, commit-then-print, offline queue and sync light, the second-window guard, manager PIN gates, paper re-entry mode, exchange legs riding the bill. This is a re-framing, not a re-build of behaviour.</p>
+<p class="note">Everything under the skin: scan-first entry with local lookup, offers applying themselves, per-line salesman with last-picked default, the ambiguous-barcode season question, not-in-system manual lines, hold semantics, commit-then-print, offline queue and sync light, the second-window guard, the late-exchange-window manager PIN gate, paper re-entry mode, exchange legs riding the bill. This is a re-framing, not a re-build of behaviour.</p>
 </section>
 
 <!-- ============================================================ -->
@@ -214,15 +213,15 @@
 <p>The full record with Anand's reasoning: <code>docs/features/billing-screen-revamp/grill-decisions.md</code>. The substance:</p>
 <table>
   <tr><th style="width:8%">#</th><th style="width:28%">Question</th><th>Ruling</th></tr>
-  <tr><td><b>D-1</b></td><td>Keyboard behaviours (Enter-to-pay, Esc-to-scan)?</td><td><b>No keyboard behaviours of any kind</b> — no F-keys (re-affirmed), no Enter-to-pay, no Esc. Everything is a scan or a click; the scan box keeps its auto-focus. Plus a new explicit rule from the flow walk-through: <b>scanning the same barcode again increments the quantity on the existing line</b>, never a duplicate line.</td></tr>
+  <tr><td><b>D-1</b></td><td>Keyboard behaviours?</td><td><b>Superseded 2 Aug 2026 by the POS counter redesign grill Q4:</b> F2 Hold · F3 Look up / Find bill · F4 New bill · F9 Pay &amp; Print · Esc back to scan/dismiss error · Enter for the next bill on the finish overlay. Every action remains a visible button and handlers claim the keys with <code>preventDefault</code>. The scan box keeps its auto-focus, and scanning the same barcode again still increments the existing line.</td></tr>
   <tr><td><b>D-2</b></td><td>Quick-cash chips?</td><td><b>Yes</b> — Exact + the next two round figures, computed from what's still to pay. Refine denominations later if counters ask.</td></tr>
-  <tr><td><b>D-3</b></td><td>Customer lookup — how far?</td><td><b>A real customer master, all-KDPS, synced to every till</b> (shape c). One row per mobile; auto-created/refreshed at Save &amp; Print; tills hold names + numbers only; bills snapshot per Rule 3. KDPS's first customer master.</td></tr>
+  <tr><td><b>D-3</b></td><td>Customer lookup — how far?</td><td><b>A real customer master, all-KDPS, synced to every till</b> (shape c). One row per mobile; auto-created/refreshed at Save &amp; Print; tills hold mobile, name and optional GSTIN but no purchase history; bills snapshot per Rule 3. KDPS's first customer master.</td></tr>
   <tr><td><b>D-4</b></td><td>GST columns on the grid?</td><td><b>Collapse to a per-line rate badge</b> ("5%"/"18%"); the full breakup opens from the tax figure in the bottom bar. Print and calculation unchanged.</td></tr>
   <tr><td><b>D-5</b></td><td>Manual "UPI received" fallback?</td><td><b>Manual stays allowed forever</b> (billing never stops); every UPI tender stamped <b>confirmed</b> or <b>manual</b>; no manager PIN — control is the day close showing the confirmed/manual split per till. Charge card ships now on a mock adapter with the five states; the acquirer owns the timeout. Stays a non-money slice.</td></tr>
   <tr><td><b>D-6</b></td><td>Sound on scan?</td><td><b>Yes, both tones</b> (landed tick + distinct failure buzz), mute toggle in Till &amp; Sync.</td></tr>
   <tr><td><b>G-1</b></td><td>Draft / never losing the bill</td><td><b>Continuous autosave, no button</b> — every cart action persists instantly; "Draft · saved" in the top strip; crash/close restores mid-scan. Hold bill unchanged. Plus a <b>per-action Undo button</b> on the bill.</td></tr>
   <tr><td><b>G-2</b></td><td>Screen floor</td><td><b>The fixed frame holds at ≥1280px width</b> (covers 1366×768 laptops); narrower degrades honestly — bands stack, page scrolls. A till is a laptop in landscape.</td></tr>
-  <tr><td><b>G-3</b></td><td>Find a bill</td><td><b>Stays a jump</b> to the Customers tab — autosave makes leaving free. No overlay duplicate.</td></tr>
+  <tr><td><b>G-3</b></td><td>Find a bill</td><td><b>Superseded by POS counter redesign Q2:</b> the Customers tab retires. Counter return mode finds the original bill by receipt barcode, typed bill number, or Customer-master mobile/name search; the customer door uses the online store-scoped bill search and degrades honestly offline.</td></tr>
   <tr><td><b>G-4</b></td><td>Prompt placement</td><td><b>Nothing pushes the layout</b>: "did you mean" + not-in-system float from the scan box over the grid; the customer typeahead floats under the mobile field; the season question stays inline on the line.</td></tr>
 </table>
 </section>

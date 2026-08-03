@@ -1,5 +1,7 @@
 # pos-store-front - tickets (Phase 4)
 
+> Historical build plan. POS counter redesign issues #272/#273 supersede the counter credit-note and standalone-return slices listed below: the current counter is exchange-only, equal-or-up, with no credit-note issue or redemption.
+
 Published 31 Jul 2026 to GitHub (`bruhanand/KDPS`), all `ready-for-agent` except #190 (`ready-for-human`, hardware).
 Work the frontier: any ticket whose blockers are done.
 

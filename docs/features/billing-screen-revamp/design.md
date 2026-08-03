@@ -1,5 +1,7 @@
 # Billing screen revamp - Phase 3: technical design
 
+> **Later supersession (2 Aug 2026):** POS counter redesign grill Q4 restores F2/F3/F4/F9/Esc/Enter accelerators beside visible buttons; Q3/Q3b retire counter credit notes and standalone plain returns; Q5/Q5b make the HO-configured manual-discount cap absolute, with no till override. Those later rulings win wherever this document preserves the earlier frame's behaviour.
+
 > **Amended 2 Aug 2026.** Issue #243's round-1 review found the payment + customer rail taller than the space available at 1366×768 - "the line list is the only `overflow-y: auto`" (line below) was not achievable without trimming the two rail cards, which is #246's and #249's scope, not #243's. Anand ruled: the rail gets its own **temporary** `overflow-y: auto` so nothing is ever unreachable (flag-don't-block); #246/#249 must shrink the cards until that scrollbar disappears, restoring the single-scroll rule this doc describes. Read **`grill-decisions.md` § Amendments - 2 August 2026** first; where the two disagree, the amendment wins.
 
 ## Summary
@@ -66,7 +68,7 @@ Nothing posts; no ledger is touched.
 - `tender.ts` gains two pure helpers beside `splitOf`: `prefillFor(split, mode)` (the remaining `balance_paise` a tapped empty box adopts) and `cashChips(balance_paise)` → `[exact, next ₹100 multiple, next ₹500 multiple]`, deduped, empty when balance ≤ 0.
 - Interaction preserves the existing semantics: `payment.cash_paise === null` still means "cash takes the rest"; focusing a box materialises the prefill as an explicit value; typing over it splits. `whyPaymentCannotClose` is untouched.
 - One balance line renders from `splitOf`: `balance_paise > 0` → red "Still to pay"; cash over → green "Change to give" (from the existing `change_paise`).
-- The exchange-owed swap, credit-note rows, and the Authorised/ManagerPin path move into `PaymentCard` unchanged.
+- **Superseded by POS counter redesign grill Q3/Q3b/Q5b:** the exchange-owed swap, credit-note rows, and discount/note Authorised/ManagerPin path do not move into `PaymentCard`; they retire. The manager-PIN seam survives only for the late-exchange-window override.
 
 **UPI charge (`src/till/payment.ts` + `pages/sell/billing/UpiCharge.tsx` - new)**
 

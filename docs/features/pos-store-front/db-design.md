@@ -1,5 +1,7 @@
 # pos-store-front - DB design (Phase 2)
 
+> **Superseded in part on 2 Aug 2026.** `docs/features/pos-counter-redesign/db-design.md` wins for counter returns, credit notes, and discount authority. `sell_creditnote`, `sell_return`, `sell_returnline`, the `credit_note` tender enum, and discount-override evidence remain only for append-only historical rows; the counter has no issue/redeem/plain-return path, exchanges are equal-or-up, and the HO-configured manual-discount cap has no till override (Q5/Q5b).
+
 Companion to `api-contract.md`.
 Everything is marked **NEW** (table/column that does not exist) or **CHANGED** (existing table extended).
 Money is integer paise (`MoneyField`); every ledger-adjacent row carries actor + timestamps per Rule 10.
@@ -50,12 +52,10 @@ The reason is written next to the registration (same pattern as `REGISTERED_ROLE
 | salesman_default | FK sell.Salesman SET_NULL, null | last-picked default at commit, per D10 |
 | created_by | FK accounts.User PROTECT | the till login |
 
-Constraints: `UniqueConstraint(store, fy, till_seq)` `uq_sale_store_fy_seq`; CHECK `net_paise >= 0` is NOT added (an exchange-heavy bill can net negative → credit note, see contract).
+Constraints: `UniqueConstraint(store, fy, till_seq)` `uq_sale_store_fy_seq`; the database still carries historical negative-net/credit-note rows, while the current accept contract hard-refuses a new `net_paise < 0` exchange (`EXCHANGE_SHORT`, counter redesign Q3b).
 Indexes: (store, billed_at), customer_mobile, (store, origin).
 
-**Amended 31 Jul 2026 (#182).** Three columns added: `override_by` (FK accounts.User SET_NULL, null), `override_kind` (CharField 40, blank), `override_at` (DateTimeField, null) - migration `sell.0005`.
-The manager's tap is recorded on the bill as well as on the line, because what a manager authorises is not always a line: an unrecognised credit note is a *tender*, and the lines it helped pay for are ordinary lines.
-See the api-contract's 31 Jul amendment for the `kind` vocabulary and for what one tap does and does not cover.
+**Historical amendment, 31 Jul 2026 (#182).** Three columns were added: `override_by` (FK accounts.User SET_NULL, null), `override_kind` (CharField 40, blank), `override_at` (DateTimeField, null) - migration `sell.0005`. Existing rows retain that evidence. Counter redesign Q3b/Q5b later retired the discount and credit-note override kinds; new counter bills use manager evidence only for a late-exchange-window override.
 
 ### `sell_saleline` (NEW)
 
@@ -75,7 +75,7 @@ See the api-contract's 31 Jul amendment for the `kind` vocabulary and for what o
 | sold_before_inward | BooleanField default false | grill Q5 |
 | costing_status | CharField choices `posted/deferred`, default posted | deferred until GRN/PT prices the cohort |
 | return_reason | CharField(40), blank; condition CharField choices `good/damaged`, blank | return legs only |
-| override_by | FK accounts.User SET_NULL, null | manager who approved over-cap discount / exception |
+| override_by | FK accounts.User SET_NULL, null | historical discount/credit-note evidence; current counter uses manager evidence only for a late-exchange-window override (Q5b) |
 
 ### `sell_saletender` (NEW)
 
