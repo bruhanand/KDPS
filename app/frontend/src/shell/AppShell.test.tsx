@@ -1,4 +1,3 @@
-// @ts-expect-error Vitest runs in Node, while the production frontend deliberately excludes Node types.
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";

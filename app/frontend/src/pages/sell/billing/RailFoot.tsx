@@ -1,9 +1,11 @@
 import { CircleAlert } from "lucide-react";
+import type { CounterMode } from "./BillBar";
 
 /** The rail's fixed commit point, below the scrollable payment and customer tiles. */
 export function RailFoot({
   blocked,
   saving,
+  mode,
   paper,
   lastBillNumber,
   onReprint,
@@ -11,11 +13,21 @@ export function RailFoot({
 }: {
   blocked: string;
   saving: boolean;
+  mode: CounterMode;
   paper: number | null;
   lastBillNumber: string | null;
   onReprint: () => void;
   onSave: () => void;
 }) {
+  const primaryLabel =
+    saving
+      ? "Saving…"
+      : paper !== null
+        ? `Save bill ${paper}`
+        : mode === "return"
+          ? "Exchange & print"
+          : "Save & print";
+
   return (
     <footer className="bill-rail-foot">
       {blocked && (
@@ -40,11 +52,11 @@ export function RailFoot({
           type="button"
           className="btn btn-cta bill-rail-save"
           data-testid="bill-save"
-          title="Save & Print (F9)"
+          title={mode === "return" ? "Exchange & Print (F9)" : "Save & Print (F9)"}
           disabled={Boolean(blocked) || saving}
           onClick={onSave}
         >
-          {saving ? "Saving…" : paper === null ? "Save & Print" : `Save bill ${paper}`}
+          {primaryLabel}
           {!saving && <span className="bill-rail-key mono">F9</span>}
         </button>
       </div>

@@ -182,6 +182,12 @@ class SaleListCreateView(APIView):
             OpenApiParameter("mobile", str, description="Customer mobile contains"),
             OpenApiParameter("name", str, description="Customer name contains"),
             OpenApiParameter("doc", str, description="Bill number or document number contains"),
+            OpenApiParameter(
+                "recent",
+                int,
+                description="Return the N (1-10) most-recent store-scoped bills, newest-first."
+                " Mutually exclusive with mobile/name/doc.",
+            ),
         ],
         responses=SaleRowSerializer(many=True),
     )
@@ -189,6 +195,30 @@ class SaleListCreateView(APIView):
         mobile = (request.query_params.get("mobile") or "").strip()
         name = (request.query_params.get("name") or "").strip()
         doc = (request.query_params.get("doc") or "").strip()
+        recent_raw = (request.query_params.get("recent") or "").strip()
+
+        if recent_raw:
+            # ?recent is mutually exclusive with search filters.
+            if mobile or name or doc:
+                return Response(
+                    refusal_body(
+                        "VALIDATION",
+                        "?recent cannot be combined with mobile, name, or doc search filters.",
+                    ),
+                    status=400,
+                )
+            try:
+                n = int(recent_raw)
+                if n < 1 or n > 10:
+                    raise ValueError
+            except ValueError:
+                return Response(
+                    refusal_body("VALIDATION", "?recent must be a whole number between 1 and 10."),
+                    status=400,
+                )
+            rows = _sales(request.user).order_by("-billed_at")[:n]
+            return Response(SaleRowSerializer(rows, many=True).data)
+
         if not (mobile or name or doc):
             return Response(
                 refusal_body(

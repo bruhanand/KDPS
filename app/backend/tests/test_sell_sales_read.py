@@ -163,3 +163,41 @@ def test_a_reader_may_read_but_not_bill(db):
 
     assert client.get(f"{SALES_URL}?mobile=9876543210").status_code == 200
     assert client.post(SALES_URL, {}, format="json").status_code == 403
+
+
+def test_recent_bills_returns_newest_first_with_pieces_and_salespeople(counter):
+    client = counter["client"]
+    store = counter["store"]
+    salesman = counter["salesman"]
+
+    # Post a second bill
+    client.post(SALES_URL, bill_payload(store, salesman, till_seq=2), format="json")
+
+    response = client.get(f"{SALES_URL}?recent=3")
+    assert response.status_code == 200
+    rows = response.json()
+    assert len(rows) == 2
+    # Newest first: seq 2 then seq 1
+    assert rows[0]["doc_number"].endswith("/2")
+    assert rows[1]["doc_number"].endswith("/1")
+    # Check extra fields for recent-bill pick list
+    assert "pieces" in rows[0]
+    assert rows[0]["pieces"] == 1
+    assert "salespeople" in rows[0]
+    assert isinstance(rows[0]["salespeople"], list)
+
+
+def test_recent_bills_query_validation(counter):
+    client = counter["client"]
+
+    # Combined with search parameter -> 400
+    res = client.get(f"{SALES_URL}?recent=3&mobile=9876543210")
+    assert res.status_code == 400
+    assert res.json()["code"] == "VALIDATION"
+
+    # Out of range n -> 400
+    res_zero = client.get(f"{SALES_URL}?recent=0")
+    assert res_zero.status_code == 400
+
+    res_large = client.get(f"{SALES_URL}?recent=15")
+    assert res_large.status_code == 400

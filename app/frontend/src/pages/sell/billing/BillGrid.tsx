@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
 import { clampManualDiscount, qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
 import { hasSlab, ratePercent } from "../../../till/tax";
+import { usePositionedPopover } from "../../../shell/usePositionedPopover";
 import { RupeeInput } from "./RupeeInput";
 
 /** The counter's visible columns. Size folds into Item below 1440px, leaving a
@@ -89,13 +91,13 @@ export function Lines({
             <tr data-testid={`bill-line-${line.line_no}`}>
               <td className="bill-line-number">{line.line_no}</td>
               <td>
-                <ItemCell line={line} locked={locked} onEdit={onEdit} />
+                <ItemIdentityCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
+                {/* Operationally important badges visible in main row. */}
                 <div className="bill-item-meta">
-                  {!line.sold_before_inward && <span>{line.brand}</span>}
-                  {!line.sold_before_inward && <span className="bill-design">{line.design}</span>}
-                  {!line.sold_before_inward && <span className="bill-color">{line.color}</span>}
-                  <span className="mono bill-barcode">{line.barcode}</span>
-                  <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
+                  {!line.sold_before_inward && (
+                    <span title={`${line.brand} · ${line.barcode}`}>{line.brand}</span>
+                  )}
+                  <span className="mono bill-barcode" title={line.barcode}>{line.barcode}</span>
                   {line.offer_credits.map((credit) => (
                     <span className="bill-offer" key={credit.offer_id}>
                       {credit.offer_name || "Offer"}
@@ -218,6 +220,123 @@ interface CellProps {
 }
 
 /**
+ * The item identity cell: item name (or manual-desc input for off-tag lines)
+ * wrapped in a keyboard-accessible disclosure button that opens an anchored
+ * popover with secondary metadata (design, colour, season, HSN).
+ *
+ * Secondary metadata is hidden by default to keep each row compact. The
+ * season selector moves here while preserving the existing onEdit repricing
+ * path. Operationally critical badges (offer, off-tag, no-discount) stay in
+ * the main row's bill-item-meta strip (rendered by the caller).
+ */
+function ItemIdentityCell({
+  line,
+  locked,
+  onEdit,
+  onPicked,
+}: CellProps & { onPicked: () => void }) {
+  const [open, setOpen] = useState(false);
+  const openKey = open ? `item-detail-${line.key}` : null;
+  const close = () => setOpen(false);
+  const popoverId = `bill-item-detail-${line.key}`;
+  // fallbackSize = 300 (popover max-width in CSS), side = "below"
+  const { at, triggerRef, popoverRef } = usePositionedPopover<HTMLButtonElement>(
+    openKey,
+    close,
+    300,
+    "below",
+  );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="bill-item-disclosure-btn"
+        aria-expanded={open}
+        aria-controls={open ? popoverId : undefined}
+        aria-label={
+          open
+            ? `Close details for line ${line.line_no}`
+            : `Show details for line ${line.line_no}: ${line.item || line.design}`
+        }
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ItemCell line={line} locked={locked} onEdit={onEdit} />
+      </button>
+
+      {open &&
+        at &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            id={popoverId}
+            role="dialog"
+            aria-label={`Details for line ${line.line_no}`}
+            className="bill-item-popover"
+            style={{ top: at.top, bottom: at.bottom, left: at.left, maxHeight: at.maxHeight }}
+          >
+            <p className="eyebrow">Item details &middot; line {line.line_no}</p>
+
+            {line.design && (
+              <div className="bill-item-popover-row">
+                <label>Design</label>
+                <span title={line.design}>{line.design}</span>
+              </div>
+            )}
+            {line.color && (
+              <div className="bill-item-popover-row">
+                <label>Colour</label>
+                <span title={line.color}>{line.color}</span>
+              </div>
+            )}
+            {/* Season: selector if ambiguous, plain text otherwise. */}
+            {!line.sold_before_inward && (
+              <div className="bill-item-popover-row">
+                <label>Season</label>
+                {line.alternatives.length >= 2 ? (
+                  <select
+                    className="select bill-cell bill-season"
+                    disabled={locked}
+                    data-testid={`bill-season-${line.line_no}`}
+                    aria-label={`Season, line ${line.line_no}`}
+                    value={line.season}
+                    onChange={(e) => {
+                      const picked = line.alternatives.find((a) => a.season === e.target.value);
+                      if (!picked) return;
+                      onEdit(line.key, {
+                        season: picked.season,
+                        mrp_paise: picked.mrp_paise ?? 0,
+                        needs_price: picked.mrp_paise == null,
+                      });
+                      onPicked();
+                    }}
+                  >
+                    {line.alternatives.map((a) => (
+                      <option key={a.season} value={a.season}>
+                        {a.season}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span>{line.season}</span>
+                )}
+              </div>
+            )}
+            {line.hsn && (
+              <div className="bill-item-popover-row">
+                <label>HSN</label>
+                <span>{line.hsn}</span>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+/**
  * What the piece is: the books' word for it, or the cashier's (#186).
  *
  * A sold-before-inward line has no item name because nothing has ever recorded
@@ -252,54 +371,7 @@ function ItemCell({ line, locked, onEdit }: CellProps) {
   );
 }
 
-/**
- * The season, and the one-tap ask when there is a choice (A2).
- *
- * Never a modal and never a blocker: the line is already on the bill at the
- * oldest live season, and this is how a person changes their mind. It is the
- * only question this screen is allowed to ask mid-sale.
- */
-function SeasonCell({ line, locked, onEdit, onPicked }: CellProps & { onPicked: () => void }) {
-  if (line.sold_before_inward) {
-    // No season, because no cohort - and saying so is the point. This is the row
-    // the Dashboard will be counting until the paperwork arrives (#186).
-    return (
-      <span className="muted-cell" data-testid={`bill-not-in-system-${line.line_no}`}>
-        Not in the system yet
-      </span>
-    );
-  }
-  if (line.alternatives.length < 2) {
-    return <span className="muted-cell">{line.season}</span>;
-  }
-  return (
-    <select
-      className="select bill-cell bill-season"
-      disabled={locked}
-      data-testid={`bill-season-${line.line_no}`}
-      aria-label={`Season, line ${line.line_no}`}
-      value={line.season}
-      onChange={(e) => {
-        const picked = line.alternatives.find((a) => a.season === e.target.value);
-        if (!picked) return;
-        onEdit(line.key, {
-          season: picked.season,
-          mrp_paise: picked.mrp_paise ?? 0,
-          // The other season may be the one nobody priced, so the answer to
-          // "does this line still need a price?" moves with the season.
-          needs_price: picked.mrp_paise == null,
-        });
-        onPicked();
-      }}
-    >
-      {line.alternatives.map((a) => (
-        <option key={a.season} value={a.season}>
-          {a.season}
-        </option>
-      ))}
-    </select>
-  );
-}
+
 
 /** The ticket price. Editable only because a piece can reach a shelf with no
  *  MRP recorded (contract, step 3) - and then a human reads it off the tag.

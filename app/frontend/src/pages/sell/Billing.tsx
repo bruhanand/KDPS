@@ -49,11 +49,14 @@ import {
   findQueuedBillByDoc,
   foundFromExchange,
   fromServer,
+  mergeRecentBills,
+  recentQueuedBills,
+  resolveRecentMatch,
   searchKnownCustomers,
   searchQueuedBillsByCustomer,
   withQueuedReturns,
 } from "../../till/original";
-import type { FoundBill } from "../../till/original";
+import type { FoundBill, RecentBillSummary } from "../../till/original";
 import { LatestRequest } from "../../till/latest";
 import { withStableQueue } from "../../till/sync";
 import { mockPaymentAdapter } from "../../till/payment";
@@ -89,6 +92,7 @@ import { TaxFigure } from "./billing/TaxFigure";
 import { UpiCharge } from "./billing/UpiCharge";
 import {
   AgainstBill,
+  RecentBills,
   ReturnCustomerSearch,
 } from "./billing/ReturnCounter";
 import type { ReturnBillMatch, ReturnSearchKey } from "./billing/ReturnCounter";
@@ -229,17 +233,59 @@ function Counter({
   const [returnCustomers, setReturnCustomers] = useState<TillKnownCustomer[]>([]);
   const [returnMatches, setReturnMatches] = useState<ReturnBillMatch[] | null>(null);
   const [returnAsking, setReturnAsking] = useState<Ask[] | null>(null);
+  const [recentBills, setRecentBills] = useState<ReturnBillMatch[]>([]);
   const returnRequests = useRef(new LatestRequest());
   const returnPins = useWrongPins();
+  // Bumped by every commit so the in-memory copy re-reads the shelf the sale
+  // just moved. The sync time covers the other direction.
+  const [commits, setCommits] = useState(0);
+
   useEffect(() => {
     document.documentElement.dataset.counterMode = mode;
     return () => {
       delete document.documentElement.dataset.counterMode;
     };
   }, [mode]);
-  // Bumped by every commit so the in-memory copy re-reads the shelf the sale
-  // just moved. The sync time covers the other direction.
-  const [commits, setCommits] = useState(0);
+
+  useEffect(() => {
+    const db = engine?.db;
+    if (mode !== "return" || !db) return;
+    let active = true;
+    async function load() {
+      try {
+        const localSummaries = await recentQueuedBills(db!, 3);
+        let serverSummaries: RecentBillSummary[] = [];
+        if (navigator.onLine) {
+          try {
+            const res = await fetch("/api/sell/sales?recent=3");
+            if (res.ok) {
+              const data = await res.json();
+              serverSummaries = data.map((row: any) => ({
+                doc_number: row.doc_number,
+                billed_at: row.billed_at,
+                customer_name: row.customer_name || "",
+                customer_mobile: row.customer_mobile || "",
+                net_paise: row.net_paise,
+                local: null,
+              }));
+            }
+          } catch {
+            // Ignore fetch errors
+          }
+        }
+        const merged = mergeRecentBills(localSummaries, serverSummaries, 3);
+        if (active) {
+          setRecentBills(merged);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [mode, engine?.db, commits]);
   /** Open while a UPI charge is on the card (#248). It carries no state of its
    *  own beyond "open": the figure being charged is read from the UPI row at
    *  the moment it opens, and closing it leaves the bill untouched. */
@@ -682,6 +728,22 @@ function Counter({
     else next.delete("mode");
     setParams(next, { replace: true });
     window.requestAnimationFrame(scan.focus);
+  }
+
+  async function pickRecentBill(match: ReturnBillMatch) {
+    setReturnLooking(true);
+    setReturnError("");
+    try {
+      const found = await resolveRecentMatch(match);
+      const checked = engine?.db ? await withQueuedReturns(engine.db, found) : found;
+      setReturnFound(checked);
+      setExchangeFromPicked(checked, {});
+      setReturnSearchOpen(false);
+    } catch (err: any) {
+      setReturnError(err.message || "Could not load bill details.");
+    } finally {
+      setReturnLooking(false);
+    }
   }
 
   function setExchangeFromPicked(found: FoundBill, picked: PickedReturns) {
@@ -1462,31 +1524,34 @@ function Counter({
     "below",
   );
 
+  const returnReady = mode !== "return" || returnFound !== null;
+
   return (
     <div className="bill-page" data-mode={mode}>
-      {/* The counter owns its identity now: no generic page header, breadcrumb,
-          or section tabs are allowed into this room. */}
-      <div className="bill-top" aria-hidden={finishOpen || undefined}>
-        <BillBar
-          mode={mode}
-          nextNumber={till?.nextNumber ?? ""}
-          draftSaved={draftSaved}
-          salesmen={world.salesmen}
-          soldBy={soldBy}
-          differingLines={differingSalesmen}
-          heldCount={holds.length}
-          showingHolds={showHolds}
-          disabled={counterBlocked || locked}
-          canHold={cart.lines.length > 0}
-          onModeChange={changeMode}
-          onSoldByChange={pickBillSalesman}
-          onApplySoldBy={applyBillSalesman}
-          onShowHolds={() => setShowHolds((open) => !open)}
-          onHold={() => void holdBill()}
-          onLookup={openLookup}
-          onNewBill={newBill}
-        />
-        <ScanHero
+      {/* BillBar spans the full width of the counter frame (grid-column: 1 / -1). */}
+      <BillBar
+        mode={mode}
+        nextNumber={till?.nextNumber ?? ""}
+        draftSaved={draftSaved}
+        salesmen={world.salesmen}
+        soldBy={soldBy}
+        differingLines={differingSalesmen}
+        heldCount={holds.length}
+        showingHolds={showHolds}
+        disabled={counterBlocked || locked}
+        canHold={cart.lines.length > 0}
+        onModeChange={changeMode}
+        onSoldByChange={pickBillSalesman}
+        onApplySoldBy={applyBillSalesman}
+        onShowHolds={() => setShowHolds((open) => !open)}
+        onHold={() => void holdBill()}
+        onNewBill={newBill}
+      />
+
+      {/* Work area: left column (grid-column: 1). Only .bill-lines scrolls. */}
+      <section className="bill-lines">
+        <div className="bill-top" aria-hidden={finishOpen || undefined}>
+          <ScanHero
             mode={mode}
             boxRef={mergeRefs(scan.ref, scanFloat.triggerRef, returnSearchFloat.triggerRef)}
             value={typed}
@@ -1518,140 +1583,116 @@ function Counter({
             }}
           />
 
-        {paper !== null && (
-          <div className="bill-paper" data-testid="bill-paper">
-            <div>
-              <strong>Entering printed bill {paper}</strong> - this one was rung up on the
-              machine this counter replaced and never reached head office. Enter it exactly as
-              the printed copy reads. It keeps its own number, and nothing prints.
-            </div>
-            <div className="field">
-              <label htmlFor="bill-paper-at">Date and time on the printed copy</label>
-              <input
-                id="bill-paper-at"
-                className="input"
-                data-testid="bill-paper-at"
-                type="datetime-local"
+          {paper !== null && (
+            <div className="bill-paper" data-testid="bill-paper">
+              <div>
+                <strong>Entering printed bill {paper}</strong> - this one was rung up on the
+                machine this counter replaced and never reached head office. Enter it exactly as
+                the printed copy reads. It keeps its own number, and nothing prints.
+              </div>
+              <div className="field">
+                <label htmlFor="bill-paper-at">Date and time on the printed copy</label>
+                <input
+                  id="bill-paper-at"
+                  className="input"
+                  data-testid="bill-paper-at"
+                  type="datetime-local"
+                  disabled={locked}
+                  value={paperAt}
+                  onChange={(e) => setPaperAt(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn"
+                data-testid="bill-paper-cancel"
                 disabled={locked}
-                value={paperAt}
-                onChange={(e) => setPaperAt(e.target.value)}
-              />
+                onClick={leavePaperMode}
+              >
+                <X size={15} /> Not this one
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn"
-              data-testid="bill-paper-cancel"
-              disabled={locked}
-              onClick={leavePaperMode}
-            >
-              <X size={15} /> Not this one
-            </button>
-          </div>
-        )}
+          )}
 
-        {/* A draft this screen would not auto-restore (#244, the 2 Aug 2026
-            draft-age and paper-conflict rulings): a previous business day, or
-            a paper number the counter no longer holds. Flagged, never applied
-            or dropped on the cashier's behalf - and, like `paper` above,
-            rendered from its own always-on band rather than through the
-            one-line alert (#243), because it is a question with two buttons
-            on it that must stay reachable however many other banners are
-            true at the same time. */}
-        {pendingDraft && (
-          <div className="bill-alert bill-pending-draft" data-testid="bill-pending-draft">
-            <AlertTriangle size={15} />
-            <span>
-              {pendingDraft.reason === "stale"
-                ? "A bill was left in progress on a previous business day."
-                : pendingDraft.draft.paper !== null
-                  ? `A bill was left in progress mid paper re-entry (bill ${pendingDraft.draft.paper}), ` +
-                    "which the counter no longer matches to what is open now."
-                  : "A bill was left in progress while the counter was mid a paper re-entry."}{" "}
-              Resume it, or start fresh.
-            </span>
-            <span className="bill-pending-draft-actions">
-              <button
-                type="button"
-                className="btn"
-                data-testid="bill-pending-draft-resume"
-                onClick={resumePendingDraft}
-              >
-                Resume
-              </button>
-              <button
-                type="button"
-                className="btn"
-                data-testid="bill-pending-draft-discard"
-                onClick={discardPendingDraft}
-              >
-                Discard
-              </button>
-            </span>
-          </div>
-        )}
+          {pendingDraft && (
+            <div className="bill-alert bill-pending-draft" data-testid="bill-pending-draft">
+              <AlertTriangle size={15} />
+              <span>
+                {pendingDraft.reason === "stale"
+                  ? "A bill was left in progress on a previous business day."
+                  : pendingDraft.draft.paper !== null
+                    ? `A bill was left in progress mid paper re-entry (bill ${pendingDraft.draft.paper}), ` +
+                      "which the counter no longer matches to what is open now."
+                    : "A bill was left in progress while the counter was mid a paper re-entry."}{" "}
+                Resume it, or start fresh.
+              </span>
+              <span className="bill-pending-draft-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-pending-draft-resume"
+                  onClick={resumePendingDraft}
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-pending-draft-discard"
+                  onClick={discardPendingDraft}
+                >
+                  Discard
+                </button>
+              </span>
+            </div>
+          )}
 
-        {alert === "loading" && <p className="warn-note">Opening the counter…</p>}
-        {alert === "no-price-list" && (
-          <p className="warn-note" data-testid="bill-no-price-list">
-            This counter has no local price list yet. Sync from Till &amp; Sync before billing.
-          </p>
-        )}
-        {alert === "print-problem" && (
-          <p className="bill-alert" data-testid="bill-print-problem">
-            <AlertTriangle size={15} />
-            {printProblem}
-          </p>
-        )}
-        {alert === "note" && (
-          <p className="ok-note" data-testid="bill-note">
-            {note}
-          </p>
-        )}
-        {/* A gift is earned, not deducted: it takes nothing off any line, so
-            without this row the counter has no way of knowing the customer is
-            owed a trolley - and D5 Q11 is clear that it "only counts if it was
-            actually handed to the customer". Scanning it puts it on the bill
-            at its token price like any other piece. The out-of-stock fallback
-            the engine also supports has no control here yet; that needs a
-            decline gesture and a re-price, and it is its own ticket. */}
-        {alert === "gift" &&
-          bill.entitlements.map((gift) => (
-            <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
-              <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
-              {gift.token_price_paise > 0 ? (
-                <>
-                  {" "}
-                  at its token price of <Money paise={gift.token_price_paise} />
-                </>
-              ) : (
-                " free of charge"
-              )}
-              , and hand it over.
+          {alert === "loading" && <p className="warn-note">Opening the counter…</p>}
+          {alert === "no-price-list" && (
+            <p className="warn-note" data-testid="bill-no-price-list">
+              This counter has no local price list yet. Sync from Till &amp; Sync before billing.
             </p>
-          ))}
-        {/* Day close, until store open/close (I3) defines one properly: a
-            bill parked before today is put to the store, and stays parked
-            until somebody answers. Nothing expires on a timer (grill Q13). */}
-        {alert === "holds-due" && (
-          <p className="bill-alert" data-testid="bill-holds-due">
-            <AlertTriangle size={15} />
-            {toReview.length === 1
-              ? "1 bill has been on hold since before today."
-              : `${toReview.length} bills have been on hold since before today.`}{" "}
-            Keep each one for tomorrow or let it go.
-            <button type="button" className="btn" onClick={() => setShowHolds(true)}>
-              Review them
-            </button>
-          </p>
-        )}
-      </div>
+          )}
+          {alert === "print-problem" && (
+            <p className="bill-alert" data-testid="bill-print-problem">
+              <AlertTriangle size={15} />
+              {printProblem}
+            </p>
+          )}
+          {alert === "note" && (
+            <p className="ok-note" data-testid="bill-note">
+              {note}
+            </p>
+          )}
+          {alert === "gift" &&
+            bill.entitlements.map((gift) => (
+              <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
+                <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
+                {gift.token_price_paise > 0 ? (
+                  <>
+                    {" "}
+                    at its token price of <Money paise={gift.token_price_paise} />
+                  </>
+                ) : (
+                  " free of charge"
+                )}
+                , and hand it over.
+              </p>
+            ))}
+          {alert === "holds-due" && (
+            <p className="bill-alert" data-testid="bill-holds-due">
+              <AlertTriangle size={15} />
+              {toReview.length === 1
+                ? "1 bill has been on hold since before today."
+                : `${toReview.length} bills have been on hold since before today.`}{" "}
+              Keep each one for tomorrow or let it go.
+              <button type="button" className="btn" onClick={() => setShowHolds(true)}>
+                Review them
+              </button>
+            </p>
+          )}
+        </div>
 
-      {/* Work area: only `.bill-lines` scrolls (G-2/G-4). The counter itself
-          cannot bill (#189) - its data was cleared, or this is the second
-          window on one till - and Rule 5 says collapsing alerts to one line
-          must not soften that: rather than a thin banner above a bill nobody
-          can act on, a blocked counter takes over this whole band. */}
-      <div className="bill-work" aria-hidden={finishOpen || undefined}>
         {till?.blocked ? (
           <p
             className="bill-alert bill-alert-stop bill-blocked-area"
@@ -1665,101 +1706,98 @@ function Counter({
           </p>
         ) : (
           <>
-            <section className="bill-lines">
-              {showHolds && (
-                <HeldBills
-                  holds={holds}
-                  toReview={toReview}
-                  blocked={holdsBlocked}
-                  onResume={(hold) => void resumeHold(hold)}
-                  onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
-                  onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
-                />
-              )}
-              {mode === "return" && returnFound ? (
-                <AgainstBill
-                  found={returnFound}
-                  picked={returnPicked}
-                  outgoing={returnOutgoing}
-                  late={isPastReturnWindow(
-                    returnFound.billed_at,
-                    world.policy.return_window_days,
-                  )}
-                  windowDays={world.policy.return_window_days}
-                  locked={locked}
-                  onPick={pickReturnLine}
-                  onTakeEverything={() =>
-                    setExchangeFromPicked(
-                      returnFound,
-                      takeEverythingBack(returnFound, returnPicked),
-                    )
-                  }
-                  onOutgoing={(outgoing) => {
-                    setReturnOutgoing(outgoing);
-                    setReturnError("");
-                    clearScan();
-                    window.requestAnimationFrame(scan.focus);
-                  }}
-                  onChangeBill={changeReturnBill}
-                />
-              ) : bill.exchange ? (
-                <ExchangeBack
-                  exchange={bill.exchange}
-                  refundPaise={bill.refund_paise}
-                  locked={locked}
-                  onRemove={removeLeg}
-                />
-              ) : null}
-              <Lines
-                lines={bill.lines}
-                salesmen={world.salesmen}
+            {showHolds && (
+              <HeldBills
+                holds={holds}
+                toReview={toReview}
+                blocked={holdsBlocked}
+                onResume={(hold) => void resumeHold(hold)}
+                onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
+                onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
+              />
+            )}
+            {mode === "return" && !returnFound && (
+              <RecentBills recentBills={recentBills} onPick={pickRecentBill} />
+            )}
+            {mode === "return" && returnFound ? (
+              <AgainstBill
+                found={returnFound}
+                picked={returnPicked}
+                outgoing={returnOutgoing}
+                late={isPastReturnWindow(
+                  returnFound.billed_at,
+                  world.policy.return_window_days,
+                )}
+                windowDays={world.policy.return_window_days}
                 locked={locked}
-                onEdit={editLine}
-                onSalesman={pickSalesman}
-                onPicked={scan.focus}
-                onRemove={removeLine}
-                onUndo={undo}
-                canUndo={undoStack.length > 0}
-                footer={<Totals bill={bill} taxKind={taxKind} />}
+                onPick={pickReturnLine}
+                onTakeEverything={() =>
+                  setExchangeFromPicked(
+                    returnFound,
+                    takeEverythingBack(returnFound, returnPicked),
+                  )
+                }
+                onOutgoing={(outgoing) => {
+                  setReturnOutgoing(outgoing);
+                  setReturnError("");
+                  clearScan();
+                  window.requestAnimationFrame(scan.focus);
+                }}
+                onChangeBill={changeReturnBill}
               />
-            </section>
-
-            <aside className="bill-pay">
-              <div className="bill-rail-body">
-                <PaymentPanel
-                  bill={bill}
-                  payment={cart.payment}
-                  locked={locked}
-                  onChange={editPayment}
-                  onShowQr={() => setCharging(true)}
-                />
-                <CustomerStrip
-                  value={customer}
-                  storeStateCode={storeState}
-                  // The counter's own phone book, for the typeahead (#249). Read
-                  // through `engine.db` rather than a second `TillDb`, the same
-                  // rule the draft follows - two Dexie connections to one
-                  // database block each other through a version change.
-                  db={engine?.db ?? null}
-                  locked={locked}
-                  // `editCustomer`, not `setCustomer`: the strip's fields are
-                  // part of the same autosaved snapshot the cart is (#244), so
-                  // every edit has to reach `onScreenRef` too.
-                  onChange={editCustomer}
-                />
-              </div>
-              <RailFoot
-                blocked={blocked}
-                saving={saving}
-                paper={paper}
-                lastBillNumber={lastBill?.bill.doc_number ?? null}
-                onReprint={() => lastBill && void print(lastBill.receipt)}
-                onSave={trySave}
+            ) : bill.exchange ? (
+              <ExchangeBack
+                exchange={bill.exchange}
+                refundPaise={bill.refund_paise}
+                locked={locked}
+                onRemove={removeLeg}
               />
-            </aside>
+            ) : null}
+            <Lines
+              lines={bill.lines}
+              salesmen={world.salesmen}
+              locked={locked}
+              onEdit={editLine}
+              onSalesman={pickSalesman}
+              onPicked={scan.focus}
+              onRemove={removeLine}
+              onUndo={undo}
+              canUndo={undoStack.length > 0}
+              footer={<Totals bill={bill} taxKind={taxKind} />}
+            />
           </>
         )}
-      </div>
+      </section>
+
+      {/* Payment rail: right column (grid-column: 2). */}
+      <aside className="bill-pay">
+        <div className="bill-rail-body">
+          <PaymentPanel
+            bill={bill}
+            payment={cart.payment}
+            locked={locked}
+            returnReady={returnReady}
+            onChange={editPayment}
+            onShowQr={() => setCharging(true)}
+          />
+          <CustomerStrip
+            value={customer}
+            storeStateCode={storeState}
+            db={engine?.db ?? null}
+            locked={locked}
+            onChange={editCustomer}
+          />
+        </div>
+        <RailFoot
+          blocked={blocked}
+          saving={saving}
+          mode={mode}
+          paper={paper}
+          lastBillNumber={lastBill?.bill.doc_number ?? null}
+          onReprint={() => lastBill && void print(lastBill.receipt)}
+          onSave={trySave}
+        />
+      </aside>
 
       {finishOpen && lastBill && (
         <FinishOverlay
@@ -1889,7 +1927,6 @@ function Counter({
           }}
         />
       )}
-
     </div>
   );
 }

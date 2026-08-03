@@ -309,3 +309,46 @@ function wantedQty(typed: string, maximum: number): number {
   if (!Number.isFinite(whole) || whole <= 0) return 0;
   return Math.min(whole, maximum);
 }
+
+/** Three recent bills shown in the empty return grid for quick selection. */
+export function RecentBills({
+  recentBills,
+  onPick,
+}: {
+  recentBills: ReturnBillMatch[];
+  onPick: (match: ReturnBillMatch) => void;
+}) {
+  if (!recentBills.length) return null;
+  return (
+    <div className="bill-recent-panel" data-testid="bill-recent-panel">
+      <div className="bill-recent-head">
+        <p className="eyebrow">Recent bills</p>
+        <span className="muted-cell">Pick one to start return</span>
+      </div>
+      <div className="bill-recent-rows">
+        {recentBills.map((match) => (
+          <button
+            key={match.doc_number}
+            type="button"
+            className="bill-recent-row"
+            data-testid={`bill-recent-${match.doc_number}`}
+            onClick={() => onPick(match)}
+          >
+            <div className="bill-recent-row-left">
+              <strong>{match.doc_number}</strong>
+              <small>
+                {match.customer_name || "Walk-in customer"}
+                {match.customer_mobile ? ` · ${match.customer_mobile}` : ""}
+              </small>
+            </div>
+            <div className="bill-recent-row-right">
+              <strong><Money paise={match.net_paise} /></strong>
+              <small>{formatDateTime(match.billed_at)}</small>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+

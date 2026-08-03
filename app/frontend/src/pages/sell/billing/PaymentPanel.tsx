@@ -37,17 +37,25 @@ function offerIf(empty: boolean, owed: number): number | null {
  * splits, and one colour-coded line says whether money is still coming in or
  * going back out. None of it moves a figure `splitOf` computes, so the day-close
  * numbers are the same numbers.
+ *
+ * `returnReady` is false while the counter is in return mode but no original
+ * bill has been loaded yet - the tender inputs are disabled and a short
+ * explanation replaces the normal "To pay" state.
  */
 export function PaymentPanel({
   bill,
   payment,
   locked,
+  returnReady = true,
   onChange,
   onShowQr,
 }: {
   bill: ReturnType<typeof priceCart>;
   payment: Payment;
   locked: boolean;
+  /** False when return mode is active but no original bill has been found yet.
+   *  The tile is visible but tender inputs are disabled. */
+  returnReady?: boolean;
   onChange: (patch: Partial<Payment>) => void;
   /** Open the QR charge card against whatever the UPI row is taking (#248). */
   onShowQr: () => void;
@@ -64,91 +72,110 @@ export function PaymentPanel({
   const showReceived = split.cash_paise > 0 || payment.cash_received_paise > 0;
 
   return (
-    <section className="bill-payment-panel">
+    <section
+      className="bill-payment-panel"
+      data-return-ready={returnReady ? undefined : "false"}
+    >
       <div className="bill-payment-heading">
         <p className="eyebrow">To pay</p>
         <p className="bill-due" data-testid="bill-due">
-          <Money paise={bill.net_paise} />
+          {returnReady ? (
+            <Money paise={bill.net_paise} />
+          ) : (
+            <>Nothing yet &middot; ₹0</>
+          )}
         </p>
       </div>
 
-      <div className="bill-payment-stack">
-        <div className="bill-payment-method bill-cash-block">
-          <TenderRow
-            testId="bill-cash"
-            label="Cash"
-            icon={<Banknote size={16} />}
-            paise={split.cash_paise}
-            // Empty in the sense the prefill cares about: the row shows the
-            // balance it is about to absorb, but nobody has typed in it yet.
-            prefillPaise={offerIf(payment.cash_paise === null, owed)}
-            derived={payment.cash_paise === null}
-            locked={locked}
-            onChange={(paise) => onChange({ cash_paise: paise })}
-          />
-          <CashChips
-            chips={chips}
-            locked={locked}
-            onPick={(paise) => onChange({ cash_received_paise: paise })}
-          />
-          {showReceived && (
-            <TenderRow
-              testId="bill-cash-received"
-              label="Cash received"
-              paise={payment.cash_received_paise}
-              // Never prefilled: what the customer physically handed over is the
-              // one figure on this panel the till has no business guessing - the
-              // chips are how it is offered, one deliberate tap at a time.
-              locked={locked}
-              quiet
-              onChange={(paise) => onChange({ cash_received_paise: paise ?? 0 })}
-            />
-          )}
-        </div>
-        <div className="bill-payment-method bill-upi-block">
-          <TenderRow
-            testId="bill-upi"
-            label="UPI"
-            icon={<Smartphone size={16} />}
-            paise={payment.upi_paise}
-            prefillPaise={offerIf(payment.upi_paise === 0, owed)}
-            locked={locked}
-            onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
-            action={
-              <RestButton
-                disabled={locked || !canFillTenderRest(split, "upi")}
-                onClick={() => onChange(restTenderPatch(split, "upi"))}
-              />
-            }
-          />
-          {(split.upi_paise > 0 || split.upi_confirmed) && (
-            <UpiProof
-              confirmed={split.upi_confirmed}
-              locked={locked || split.upi_confirmed !== null}
-              onShowQr={onShowQr}
-            />
-          )}
-        </div>
-        <div className="bill-payment-method">
-          <TenderRow
-            testId="bill-card"
-            label="Card"
-            icon={<CreditCard size={16} />}
-            paise={payment.card_paise}
-            prefillPaise={offerIf(payment.card_paise === 0, owed)}
-            locked={locked}
-            onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
-            action={
-              <RestButton
-                disabled={locked || !canFillTenderRest(split, "card")}
-                onClick={() => onChange(restTenderPatch(split, "card"))}
-              />
-            }
-          />
-        </div>
-      </div>
+      {/* Return mode before original bill is found: brief explanation. */}
+      {!returnReady && (
+        <p className="bill-payment-return-hint">
+          Scan or find the original bill first to enable payment.
+        </p>
+      )}
 
-      <BalanceLine split={split} />
+      {/* One connected tile: Cash, UPI, Card separated by internal dividers. */}
+      <div className="bill-rail-tile bill-payment-tile">
+        <div className="bill-payment-stack">
+          <div className="bill-payment-method bill-cash-block">
+            <TenderRow
+              testId="bill-cash"
+              label="Cash"
+              icon={<Banknote size={16} />}
+              paise={split.cash_paise}
+              // Empty in the sense the prefill cares about: the row shows the
+              // balance it is about to absorb, but nobody has typed in it yet.
+              prefillPaise={offerIf(payment.cash_paise === null, owed)}
+              derived={payment.cash_paise === null}
+              locked={locked || !returnReady}
+              onChange={(paise) => onChange({ cash_paise: paise })}
+            />
+            <CashChips
+              chips={chips}
+              locked={locked || !returnReady}
+              onPick={(paise) => onChange({ cash_received_paise: paise })}
+            />
+            {showReceived && (
+              <TenderRow
+                testId="bill-cash-received"
+                label="Cash received"
+                paise={payment.cash_received_paise}
+                // Never prefilled: what the customer physically handed over is the
+                // one figure on this panel the till has no business guessing - the
+                // chips are how it is offered, one deliberate tap at a time.
+                locked={locked || !returnReady}
+                quiet
+                onChange={(paise) => onChange({ cash_received_paise: paise ?? 0 })}
+              />
+            )}
+          </div>
+          <hr className="bill-tile-divider" />
+          <div className="bill-payment-method bill-upi-block">
+            <TenderRow
+              testId="bill-upi"
+              label="UPI"
+              icon={<Smartphone size={16} />}
+              paise={payment.upi_paise}
+              prefillPaise={offerIf(payment.upi_paise === 0, owed)}
+              locked={locked || !returnReady}
+              onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
+              action={
+                <RestButton
+                  disabled={locked || !returnReady || !canFillTenderRest(split, "upi")}
+                  onClick={() => onChange(restTenderPatch(split, "upi"))}
+                />
+              }
+            />
+            {(split.upi_paise > 0 || split.upi_confirmed) && (
+              <UpiProof
+                confirmed={split.upi_confirmed}
+                locked={locked || split.upi_confirmed !== null}
+                onShowQr={onShowQr}
+              />
+            )}
+          </div>
+          <hr className="bill-tile-divider" />
+          <div className="bill-payment-method">
+            <TenderRow
+              testId="bill-card"
+              label="Card"
+              icon={<CreditCard size={16} />}
+              paise={payment.card_paise}
+              prefillPaise={offerIf(payment.card_paise === 0, owed)}
+              locked={locked || !returnReady}
+              onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
+              action={
+                <RestButton
+                  disabled={locked || !returnReady || !canFillTenderRest(split, "card")}
+                  onClick={() => onChange(restTenderPatch(split, "card"))}
+                />
+              }
+            />
+          </div>
+        </div>
+        {/* Balance footer inside the tile */}
+        <BalanceLine split={split} />
+      </div>
     </section>
   );
 }
