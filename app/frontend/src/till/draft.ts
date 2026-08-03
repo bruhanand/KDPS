@@ -206,9 +206,8 @@ export function rekeyDraft(draft: DraftPayload): DraftPayload {
   const authorisation = draft.cart.authorisation
     ? {
         ...draft.cart.authorisation,
-        // `Ask.ref` is either a line key or a credit-note number (`pin.ts`) -
-        // a lookup with a fallback, never an unconditional rewrite, so a note
-        // number is left exactly as it stood.
+        // A late-return ask names the original bill, not a mutable cart line.
+        // The fallback leaves that document number exactly as it stood.
         asks: draft.cart.authorisation.asks.map((ask) => ({
           ...ask,
           ref: map.get(ask.ref) ?? ask.ref,

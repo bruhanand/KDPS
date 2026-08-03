@@ -54,16 +54,13 @@ describe("the customer's copy", () => {
     expect(receiptHtml(bill(), STORE, { cashReceivedPaise: 149900 })).not.toContain("Change");
   });
 
-  it("says how the bill was paid, mode by mode (#182)", () => {
-    // The customer's copy has to name the card and the note: those are the two
-    // lines they come back to query, and a bill that only said "₹1,499" would
-    // leave the counter re-deriving a split from memory.
+  it("says how the bill was paid, mode by mode", () => {
     const html = receiptHtml(
       bill({
         tenders: [
           { mode: "cash", amount_paise: 29900 },
           { mode: "card", amount_paise: 100000 },
-          { mode: "credit_note", amount_paise: 20000, credit_note: "26-27/DEO/CRN/4" },
+          { mode: "upi", amount_paise: 20000, upi_state: "manual" },
         ],
       }),
       STORE,
@@ -71,8 +68,7 @@ describe("the customer's copy", () => {
 
     expect(html).toContain("Card");
     expect(html).toContain("₹1,000.00");
-    expect(html).toContain("Credit note");
-    expect(html).toContain("26-27/DEO/CRN/4");
+    expect(html).toContain("UPI");
   });
 
   it("gives change against the cash the bill took, not against the bill", () => {

@@ -320,10 +320,9 @@ def test_revenue_is_net_of_the_tax_the_customer_paid(counter):
     assert account_balance(GLAccount.CASH) == MRP_PAISE
 
 
-def test_a_credit_note_tender_extinguishes_the_liability_it_raised(counter):
-    """Spending a note takes the liability off, and no cash comes in for it."""
+def test_a_negative_exchange_writes_neither_sale_nor_credit_note_liability(counter):
+    """Equal-or-up refuses the old change-note posting path before it writes."""
     stock_in(counter["store"], 4)
-    # A bill that nets negative issues a note; the next bill spends it.
     dearer = MRP_PAISE
     first = counter["client"].post(
         SALES_URL, bill_payload(counter["store"], counter["salesman"], till_seq=1), format="json"
@@ -355,31 +354,12 @@ def test_a_credit_note_tender_extinguishes_the_liability_it_raised(counter):
         "gst_paise": gst_on(cheaper) - gst_on(dearer),
     }
     payload["tenders"] = []
-    issued = counter["client"].post(SALES_URL, payload, format="json")
-    assert issued.status_code == 201, issued.json()
-    note = Sale.objects.get(pk=issued.json()["id"]).credit_notes_issued.get()
-    _assert_golden(Sale.objects.get(pk=issued.json()["id"]), "credit-note-issued")
-    owed_to_customer = -account_balance(GLAccount.CREDIT_NOTE_LIABILITY)
-    # The leg is the note, to the paisa: the bill's own liability and the document
-    # it minted cannot say different numbers.
-    assert owed_to_customer == note.value_paise
+    refused = counter["client"].post(SALES_URL, payload, format="json")
 
-    third = bill_payload(
-        counter["store"], counter["salesman"], till_seq=3, mrp_paise=note.value_paise
-    )
-    third["tenders"] = [
-        {
-            "mode": "credit_note",
-            "amount_paise": note.value_paise,
-            "credit_note": note.doc_number,
-        }
-    ]
-    spent = counter["client"].post(SALES_URL, third, format="json")
-
-    assert spent.status_code == 201, spent.json()
-    _assert_golden(Sale.objects.get(pk=spent.json()["id"]), "credit-note-redeemed")
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "EXCHANGE_SHORT"
+    assert not Sale.objects.filter(till_seq=2).exists()
     assert account_balance(GLAccount.CREDIT_NOTE_LIABILITY) == 0
-    # A note is not money: no cash row was written for it.
     assert not CashLedgerEntry.objects.filter(mode="credit_note").exists()
     assert trial_balance() == 0
 

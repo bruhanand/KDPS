@@ -91,12 +91,6 @@ export interface OfferEvidence {
 /** Nothing applied. Written as `{}`, exactly as the server writes it. */
 export type NoOffer = Record<string, never>;
 
-export interface TillCreditNote {
-  number: string;
-  remaining_paise: number;
-  expires_on: string;
-}
-
 export interface TillSalesman {
   id: number;
   code: string;
@@ -146,6 +140,8 @@ export interface TillPolicy {
   /** Whether head office allows a cashier's manual discount to stack on a line
    * already reduced by the rulebook. Defaults to false for an older server. */
   manual_discount_on_offer_lines: boolean;
+  /** How many local calendar days after its bill an exchange needs no manager. */
+  return_window_days: number;
 }
 
 export interface TillStoreIdentity {
@@ -163,7 +159,6 @@ export interface DatasetPayload {
   stock: TillStock[];
   gst_slabs: TillGstSlab[];
   offers: TillOffer[];
-  credit_notes: TillCreditNote[];
   salesmen: TillSalesman[];
   managers: TillManager[];
   seasons: TillSeason[];
@@ -181,7 +176,6 @@ export interface DatasetPayload {
   deleted: {
     items: string[];
     offers: number[];
-    credit_notes: string[];
   };
 }
 
@@ -283,9 +277,8 @@ export interface BillExchange {
 export interface BillTender {
   /** The four trimmed modes and no others - `SaleTender.Mode` on the server, and
    *  a `ChoiceField` there, so a fifth string is a bill the queue halts on. */
-  mode: "cash" | "card" | "upi" | "credit_note";
+  mode: "cash" | "card" | "upi";
   amount_paise: number;
-  credit_note?: string;
   /** How the money was proven - required by the server on a UPI row, forbidden
    *  on every other mode (#241). The till only ever sends `manual` until the QR
    *  charge card (#248) lands. */

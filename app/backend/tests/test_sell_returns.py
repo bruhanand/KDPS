@@ -186,9 +186,8 @@ def test_the_note_expires_on_the_policy_and_not_on_a_constant(counter):
     assert body["expires_on"] == str(note.expires_on)
 
 
-def test_the_note_the_return_issued_spends_at_the_store_that_issued_it(counter):
-    """The whole point of a credit note: the money stays inside the system until
-    it is spent on a real bill, and it is spendable where the customer is."""
+def test_a_historical_return_note_is_no_longer_a_sale_tender(counter):
+    """Return history remains readable, but current bills cannot redeem its note."""
     original = _sell(counter, till_seq=1)
     note_number = _take_back(counter, _return_payload(counter, original)).json()["credit_note"]
 
@@ -198,8 +197,9 @@ def test_the_note_the_return_issued_spends_at_the_store_that_issued_it(counter):
     ]
     response = counter["client"].post(SALES_URL, payload, format="json")
 
-    assert response.status_code == 201, response.json()
-    assert CreditNote.objects.get(doc_number=note_number).remaining_paise == 0
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert CreditNote.objects.get(doc_number=note_number).remaining_paise == MRP_PAISE
 
 
 # --- the manager's tap -----------------------------------------------------

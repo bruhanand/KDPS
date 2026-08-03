@@ -22,6 +22,7 @@ untied.
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from _sell import (
@@ -40,6 +41,7 @@ from _sell import (
     stock_in,
     upi_tender,
 )
+from django.utils import timezone
 
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLEntry, trial_balance
@@ -525,7 +527,7 @@ def _issue_note(store, value_paise: int = 50000) -> CreditNote:
     return note
 
 
-def test_a_credit_note_pays_part_of_a_bill_and_is_drawn_down(counter):
+def test_a_credit_note_is_not_a_tender(counter):
     _shelf(counter["store"], 3)
     note = _issue_note(counter["store"])
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
@@ -536,14 +538,13 @@ def test_a_credit_note_pays_part_of_a_bill_and_is_drawn_down(counter):
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    note.refresh_from_db()
-    assert note.remaining_paise == 0
-    assert note.status == CreditNote.Status.SPENT
-    assert CreditNoteRedemption.objects.get().amount_paise == 50000
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+    assert not CreditNoteRedemption.objects.exists()
 
 
-def test_a_note_this_store_does_not_recognise_is_refused_without_a_manager(counter):
+def test_an_unknown_credit_note_tender_is_validation(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
     payload["tenders"] = [
@@ -553,13 +554,11 @@ def test_a_note_this_store_does_not_recognise_is_refused_without_a_manager(count
 
     response = _post(counter, payload)
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "CREDIT_NOTE_INVALID"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
-def test_a_manager_may_take_an_unrecognised_note_and_it_is_flagged(counter):
-    """Grill Q4 - the note may be genuine and simply unsynced, and the customer
-    is standing there. The daily check gets it, not the queue."""
+def test_a_manager_cannot_restore_the_retired_credit_note_tender(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
     payload["tenders"] = [
@@ -570,20 +569,12 @@ def test_a_manager_may_take_an_unrecognised_note_and_it_is_flagged(counter):
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    assert response.json()["flags"] == [ContinuityFlag.Kind.CN_UNVERIFIED]
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
     assert not CreditNoteRedemption.objects.exists()
 
 
-def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter):
-    """#182 - the override is the only evidence such a bill has.
-
-    A credit-note override has no line to hang the manager off: the tender is a
-    bill-level fact and the line it helped pay for is an ordinary line. Without
-    the bill carrying it, the daily check sees "somebody took an unknown note"
-    with no name against it, which is the exact evidence the counter's second eye
-    exists to leave.
-    """
+def test_a_retired_note_override_writes_no_manager_evidence(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
     payload["tenders"] = [
@@ -598,14 +589,11 @@ def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter)
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    sale = Sale.objects.get()
-    assert sale.override_by == counter["manager"]
-    assert sale.override_kind == "credit_note"
-    assert sale.override_at.isoformat() == "2026-07-30T12:29:00+00:00"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
-def test_a_note_manager_override_cannot_lift_the_discount_cap(counter):
+def test_a_retired_note_tender_is_rejected_before_discount_policy(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["tenders"] = [
@@ -619,8 +607,8 @@ def test_a_note_manager_override_cannot_lift_the_discount_cap(counter):
 
     response = _post(counter, payload)
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
 def test_a_kind_nothing_recognises_is_refused(counter):
@@ -634,15 +622,15 @@ def test_a_kind_nothing_recognises_is_refused(counter):
     assert not Sale.objects.exists()
 
 
-def test_a_credit_note_override_does_not_authorise_a_discount(counter):
+def test_credit_note_has_left_the_override_vocabulary(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["override"] = {"user_id": counter["manager"].id, "kind": "credit_note"}
 
     response = _post(counter, payload)
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
 def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
@@ -657,24 +645,19 @@ def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
     assert sale.override_at is None
 
 
-def test_an_override_naming_somebody_who_is_not_a_manager_leaves_no_evidence(counter):
-    """A refused override is not evidence of anything - and the bill that carried
-    it does not exist, because the discount it was offered for is refused."""
+def test_a_retired_override_kind_writes_no_evidence(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["override"] = {"user_id": counter["cashier"].id, "kind": "credit_note"}
 
     response = _post(counter, payload)
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
     assert not Sale.objects.exists()
 
 
-def test_one_note_cannot_be_tendered_twice_on_one_bill(counter):
-    """Both rows would be checked against the same untouched balance and both
-    would pass, then collide on the redemption key. The honest answer is to say
-    how much of the note is being spent, once."""
+def test_two_retired_note_tenders_are_still_validation(counter):
     _shelf(counter["store"], 3)
     note = _issue_note(counter["store"])
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
@@ -708,9 +691,7 @@ def test_a_bill_cannot_take_less_than_its_lines_by_inventing_rounding(counter):
     assert not Sale.objects.exists()
 
 
-def test_another_stores_note_is_not_spendable_here(counter):
-    """Same-store only in v1 - one till per store is what makes offline
-    redemption safe, and that guarantee stops at the shop door."""
+def test_a_historical_note_from_another_store_is_not_a_tender(counter):
     elsewhere = build_store(code="SEL-RAN", state="20")
     note = _issue_note(elsewhere)
     _shelf(counter["store"], 3)
@@ -722,8 +703,8 @@ def test_another_stores_note_is_not_spendable_here(counter):
 
     response = _post(counter, payload)
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "CREDIT_NOTE_INVALID"
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
 # --- exchange --------------------------------------------------------------
@@ -774,6 +755,98 @@ def test_a_good_piece_given_back_returns_to_the_shelf(counter):
     assert leg.qty == 1 and leg.amount == COST_PAISE
     after = StockOnHand.objects.get(store=counter["store"], sku_code="8901000000011").net_qty
     assert after == before  # one out, one back in
+
+
+def test_an_exchange_where_returns_outweigh_sales_is_refused(counter):
+    original = _original_bill(counter)
+    payload = _exchange_payload(counter, original, till_seq=2)
+    refund = original.lines.get().net_paise
+    payload["lines"] = []
+    payload["totals"] = {
+        "gross_paise": 0,
+        "discount_paise": 0,
+        "net_paise": -refund,
+        "gst_paise": -gst_on(refund),
+        "round_paise": 0,
+    }
+    payload["tenders"] = []
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "EXCHANGE_SHORT"
+    assert not Sale.objects.filter(till_seq=2).exists()
+
+
+def test_a_late_exchange_needs_a_store_manager_and_records_their_evidence(counter):
+    policy = SellPolicy.current()
+    policy.return_window_days = 7
+    policy.save(update_fields=["return_window_days"])
+    original_payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    original_payload["billed_at"] = (timezone.now() - timedelta(days=8)).isoformat()
+    original_response = _post(counter, original_payload)
+    assert original_response.status_code == 201
+    original = Sale.objects.get(pk=original_response.json()["id"])
+    payload = _exchange_payload(counter, original, till_seq=2)
+    payload["billed_at"] = timezone.now().isoformat()
+
+    refused = _post(counter, payload)
+
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "OVERRIDE_REQUIRED"
+    assert not Sale.objects.filter(till_seq=2).exists()
+
+    approved_at = timezone.now().isoformat()
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "late_return",
+        "at": approved_at,
+    }
+    accepted = _post(counter, payload)
+
+    assert accepted.status_code == 201
+    exchange = Sale.objects.get(pk=accepted.json()["id"])
+    assert exchange.override_by == counter["manager"]
+    assert exchange.override_kind == "late_return"
+    assert exchange.override_at is not None
+    assert exchange.lines.get(direction=SaleLine.Direction.RETURN).override_by == counter["manager"]
+
+
+def test_an_offline_exchange_is_judged_when_it_happened_not_when_it_syncs(counter):
+    policy = SellPolicy.current()
+    policy.return_window_days = 7
+    policy.save(update_fields=["return_window_days"])
+    original_payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    original_payload["billed_at"] = (timezone.now() - timedelta(days=8)).isoformat()
+    original_response = _post(counter, original_payload)
+    original = Sale.objects.get(pk=original_response.json()["id"])
+    payload = _exchange_payload(counter, original, till_seq=2)
+    # The exchange happened yesterday, exactly seven local dates after the sale,
+    # but only reached the server today after its window had crossed.
+    payload["billed_at"] = (timezone.now() - timedelta(days=1)).isoformat()
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get(pk=response.json()["id"]).override_by is None
+
+
+def test_an_in_window_exchange_discards_unsolicited_manager_evidence(counter):
+    original = _original_bill(counter)
+    payload = _exchange_payload(counter, original, till_seq=2)
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "late_return",
+        "at": timezone.now().isoformat(),
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    exchange = Sale.objects.get(pk=response.json()["id"])
+    assert exchange.override_by is None
+    assert exchange.override_kind == ""
+    assert exchange.override_at is None
 
 
 def test_a_damaged_piece_given_back_goes_to_quarantine_not_the_shelf(counter):
@@ -905,28 +978,31 @@ def test_a_part_return_is_rounded_half_up_and_the_parts_sum_to_the_whole(counter
     refunds = []
     for i, seq in enumerate((2, 3, 4), start=1):
         payload = bill_payload(counter["store"], counter["salesman"], till_seq=seq)
-        payload["lines"] = []
+        refund = 334 if i == 3 else 333
+        payload["lines"][0]["mrp_paise"] = refund
+        payload["lines"][0]["net_paise"] = refund
+        payload["lines"][0]["gst_paise"] = gst_on(refund)
         payload["exchange"] = {
             "original": {"store": counter["store"].code, "fy": FY, "till_seq": 1},
             "lines": [
                 {
-                    "line_no": 1,
+                    "line_no": 2,
                     "barcode": "8901000000011",
                     "qty": 1,
-                    "refund_paise": 334 if i == 3 else 333,
+                    "refund_paise": refund,
                     "gst_rate": "5",
-                    "gst_paise": gst_on(334 if i == 3 else 333),
+                    "gst_paise": gst_on(refund),
                     "condition": "good",
                     "original_line": 1,
                 }
             ],
         }
-        refunds.append(334 if i == 3 else 333)
+        refunds.append(refund)
         payload["totals"] = {
-            "gross_paise": 0,
+            "gross_paise": refund,
             "discount_paise": 0,
-            "net_paise": -refunds[-1],
-            "gst_paise": -gst_on(refunds[-1]),
+            "net_paise": 0,
+            "gst_paise": 0,
             "round_paise": 0,
         }
         payload["tenders"] = []
@@ -964,8 +1040,7 @@ def test_a_return_against_a_bill_from_the_paper_era_is_taken_and_flagged(counter
     assert ContinuityFlag.Kind.RETURN_ORIG_MISSING in response.json()["flags"]
 
 
-def test_a_bill_that_owes_the_customer_money_issues_a_note_and_no_cash(counter):
-    """Grill Q7 - cash never leaves the drawer on a return."""
+def test_a_bill_that_would_owe_the_customer_money_is_refused(counter):
     original = _original_bill(counter)
     payload = _exchange_payload(counter, original, till_seq=2)
     # Give back the piece and buy nothing: the bill nets negative.
@@ -981,13 +1056,9 @@ def test_a_bill_that_owes_the_customer_money_issues_a_note_and_no_cash(counter):
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    note = CreditNote.objects.get(source_sale__isnull=False)
-    assert note.value_paise == MRP_PAISE
-    assert note.doc_number.startswith(f"{FY}/{counter['store'].code}/CRN/")
-    assert note.status == CreditNote.Status.OPEN
-    # 180 days from the billing date, per the policy dial.
-    assert str(note.expires_on) == "2027-01-26"
+    assert response.status_code == 422
+    assert response.json()["code"] == "EXCHANGE_SHORT"
+    assert not Sale.objects.filter(till_seq=2).exists()
 
 
 # --- the B2B corner --------------------------------------------------------

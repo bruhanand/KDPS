@@ -17,11 +17,10 @@ import {
 import type { Cart } from "./cart";
 import { legFor } from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
-import type { Ask, Authorisation } from "./pin";
-import { newNote } from "./tender";
+import type { Authorisation } from "./pin";
 import type { Payment } from "./tender";
 import { item, season } from "./testSupport";
-import type { TillCreditNote, TillGstSlab, TillOffer } from "./types";
+import type { TillGstSlab, TillOffer } from "./types";
 
 const SLAB: TillGstSlab = {
   hsn_prefix: "",
@@ -31,25 +30,7 @@ const SLAB: TillGstSlab = {
   effective_from: "2020-01-01",
 };
 
-/** ₹1,200 left on it, good until January. */
-const NOTE: TillCreditNote = {
-  number: "26-27/DEO/CRN/4",
-  remaining_paise: 120000,
-  expires_on: "2027-01-30",
-};
-
-const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [], creditNotes: [NOTE] };
-
-/** A manager who has already put their PIN in for exactly these asks. */
-function approved(...asks: Ask[]): Authorisation {
-  return { user_id: 7, name: "R. Kumar", asks, at: "2026-07-30T12:29:00.000Z" };
-}
-
-/** What the bill is about to ask a manager for, from the bill itself - so a test
- *  approves what the screen would actually have shown. */
-function asksOf(cart: Cart, options: Parameters<typeof priceCart>[3] = {}): Ask[] {
-  return priceCart(cart, WORLD, "2026-07-30", options).asks;
-}
+const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [] };
 
 function cartOf(...lines: Cart["lines"]): Cart {
   return { ...emptyCart(), lines };
@@ -238,7 +219,6 @@ describe("the cashier's discount cap", () => {
 
     expect(bill.lines[0].cap_paise).toBe(15000);
     expect(bill.lines[0].over_cap).toBe(true);
-    expect(bill.asks).toEqual([]);
     expect(whyItCannotClose(bill)).toMatch(/head office/i);
   });
 
@@ -294,33 +274,6 @@ describe("what stops a bill closing", () => {
     const cart = paying(cartOf(scanned(149900)), { cash_paise: 10000, card_paise: 10000 });
 
     expect(whyItCannotClose(priceCart(cart, WORLD, "2026-07-30"))).toMatch(/does not cover/i);
-  });
-
-  it("a credit note this counter cannot check, until a manager approves it", () => {
-    const cart = paying(cartOf(scanned(149900)), {
-      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }],
-    });
-
-    const bill = priceCart(cart, WORLD, "2026-07-30");
-
-    expect(bill.needsAuthorising).toEqual([
-      {
-        kind: "credit_note",
-        ref: "26-27/XXX/CRN/9",
-        paise: 50000,
-        label: "26-27/XXX/CRN/9",
-      },
-    ]);
-    expect(whyItCannotClose(bill)).toMatch(/has to approve/i);
-    expect(
-      whyItCannotClose(
-        priceCart(
-          { ...cart, authorisation: approved(...asksOf(cart)) },
-          WORLD,
-          "2026-07-30",
-        ),
-      ),
-    ).toBe("");
   });
 
   it("nothing, when cash quietly takes the whole bill", () => {
@@ -437,10 +390,9 @@ describe("a GSTIN on the bill (#187)", () => {
 
 describe("the bill's split, as the till hands it over", () => {
   const split = paying(cartOf(scanned(149900, { salesman: 3 })), {
-    cash_paise: 29900,
+    cash_paise: 49900,
     card_paise: 50000,
     upi_paise: 50000,
-    notes: [{ ...newNote(), number: NOTE.number, amount_paise: 20000 }],
   });
 
   it("carries a row per mode that took money", () => {
@@ -449,32 +401,11 @@ describe("the bill's split, as the till hands it over", () => {
     });
 
     expect(drafted.tenders).toEqual([
-      { mode: "cash", amount_paise: 29900 },
+      { mode: "cash", amount_paise: 49900 },
       { mode: "card", amount_paise: 50000 },
       { mode: "upi", amount_paise: 50000, upi_state: "manual" },
-      { mode: "credit_note", amount_paise: 20000, credit_note: NOTE.number },
     ]);
     expect(drafted.tenders.reduce((n, t) => n + t.amount_paise, 0)).toBe(drafted.totals.net_paise);
-  });
-
-  it("names the manager, what they saw and when they typed the PIN", () => {
-    const paidWithUnknownNote = paying(cartOf(scanned(149900, { salesman: 3 })), {
-      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }],
-    });
-    const authorised = {
-      ...paidWithUnknownNote,
-      authorisation: approved(...asksOf(paidWithUnknownNote)),
-    };
-
-    const drafted = toDraft(priceCart(authorised, WORLD, "2026-07-30"), {
-      billedAt: "2026-07-30T12:31:00.000Z",
-    });
-
-    expect(drafted.override).toEqual({
-      user_id: 7,
-      kind: "credit_note",
-      at: "2026-07-30T12:29:00.000Z",
-    });
   });
 
 });
@@ -830,22 +761,24 @@ describe("a piece coming back on the same bill", () => {
     expect(bill.gst_paise).toBe(7138 - 5714);
   });
 
-  it("takes no money at all when the returns outweigh the sales", () => {
-    // ₹1,200 back against a ₹499 shirt: the customer is owed ₹701, and it leaves
-    // as a credit note (grill Q7) rather than out of the drawer.
+  it("refuses to close when the returns outweigh the sales", () => {
+    // ₹1,200 back against a ₹499 shirt: the customer is owed ₹701, so the
+    // equal-or-up gate refuses the bill before anything leaves the drawer.
     const bill = priced({ ...cartOf(scanned(49900)), exchange: exchangeOf(sold()) });
 
     expect(bill.net_paise).toBe(49900 - 120000);
-    expect(bill.credit_note_paise).toBe(120000 - 49900);
-    expect(whyItCannotClose(bill)).toBe("");
+    expect(whyItCannotClose(bill)).toMatch(
+      /pieces going out must be worth at least what is coming back/i,
+    );
     expect(toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" }).tenders).toEqual([]);
   });
 
   it("is a bill even with nothing being bought", () => {
     const bill = priced({ ...emptyCart(), exchange: exchangeOf(sold()) });
 
-    expect(whyItCannotClose(bill)).toBe("");
-    expect(bill.credit_note_paise).toBe(120000);
+    expect(whyItCannotClose(bill)).toMatch(
+      /pieces going out must be worth at least what is coming back/i,
+    );
   });
 
   it("numbers the returned legs on from the sold lines", () => {
@@ -870,6 +803,34 @@ describe("a piece coming back on the same bill", () => {
     const draft = toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" });
     expect(draft.exchange).toMatchObject({
       lines: [{ refund_paise: 120000, gst_rate: "5.00", gst_paise: 5714, condition: "good" }],
+    });
+  });
+
+  it("carries a matching late-window manager approval onto the bill", () => {
+    const exchange = exchangeOf(sold());
+    const authorisation: Authorisation = {
+      user_id: 7,
+      name: "Store manager",
+      asks: [
+        {
+          kind: "late_return",
+          ref: exchange.original.doc_number,
+          paise: 120000,
+          label: exchange.original.doc_number,
+        },
+      ],
+      at: "2026-07-30T12:30:00Z",
+    };
+    const bill = priced({
+      ...cartOf(scanned(149900)),
+      exchange,
+      authorisation,
+    });
+
+    expect(toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" }).override).toEqual({
+      user_id: 7,
+      kind: "late_return",
+      at: "2026-07-30T12:30:00Z",
     });
   });
 

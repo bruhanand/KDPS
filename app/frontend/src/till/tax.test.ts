@@ -29,7 +29,7 @@ const SLAB: TillGstSlab = {
   effective_from: "2020-01-01",
 };
 
-const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [], creditNotes: [] };
+const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [] };
 
 function scanned(barcode: string, mrp: number | null, over: Partial<Cart["lines"][number]> = {}) {
   return {

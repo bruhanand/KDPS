@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { describeOriginal, legFor, returnableQty, whyExchangeCannotClose } from "./exchange";
+import {
+  describeOriginal,
+  isPastReturnWindow,
+  legFor,
+  returnableQty,
+  whyExchangeCannotClose,
+} from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
 
 // The counter's half of an exchange, minus the arithmetic (#184, D2).
@@ -39,6 +45,22 @@ describe("how much of a line is still returnable", () => {
   it("counts what has already gone back, whichever way it went", () => {
     expect(returnableQty(line({ qty: 3, returned_qty: 2 }))).toBe(1);
     expect(returnableQty(line({ qty: 3, returned_qty: 3 }))).toBe(0);
+  });
+});
+
+describe("the return window on the till's local calendar", () => {
+  const now = new Date(2026, 7, 3, 12);
+
+  it("keeps the last allowed day inside the window", () => {
+    expect(isPastReturnWindow("2026-07-04T06:30:00Z", 30, now)).toBe(false);
+  });
+
+  it("requires a manager on the following local date", () => {
+    expect(isPastReturnWindow("2026-07-03T06:30:00Z", 30, now)).toBe(true);
+  });
+
+  it("fails closed when the original date cannot be read", () => {
+    expect(isPastReturnWindow("not-a-date", 30, now)).toBe(true);
   });
 });
 

@@ -31,12 +31,12 @@
 // revenue and no tax against a garment that left the shop.
 
 import { normaliseGstin, taxKindFor } from "./gstin";
-import { refundTotals, whyExchangeCannotClose } from "./exchange";
+import { lateReturnAsk, refundTotals, whyExchangeCannotClose } from "./exchange";
 import type { Exchange } from "./exchange";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
-import { covers, kindsOf, UNVERIFIED_NOTE } from "./pin";
-import type { Ask, Authorisation } from "./pin";
+import { covers } from "./pin";
+import type { Authorisation } from "./pin";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
 import { emptyPayment, splitOf, toTenders, whyPaymentCannotClose } from "./tender";
 import type { Payment, TenderSplit } from "./tender";
@@ -46,7 +46,6 @@ import type {
   NoOffer,
   OfferEvidence,
   StackedCredit,
-  TillCreditNote,
   TillGstSlab,
   TillCustomer,
   TillItem,
@@ -165,14 +164,9 @@ export interface PricedBill {
    *  and `toDraft` read one object rather than two. */
   exchange: Exchange | null;
   /** What the pieces coming back are worth, and the tax inside that. Both are
-   *  subtracted from the bill: the customer pays the difference, and a bill that
-   *  comes out negative hands the difference over as a credit note instead of
-   *  taking money (grill Q7). */
+   *  subtracted from the bill: the customer pays the non-negative difference. */
   refund_paise: number;
   refund_gst_paise: number;
-  /** What the customer is owed when the returns outweigh the sales - the face
-   *  value of the note the bill will issue. Nought on every ordinary bill. */
-  credit_note_paise: number;
   /** Gifts this bill has earned - a trolley at a token price, and the like. The
    *  counter scans them as ordinary lines; this is the prompt to do so. */
   entitlements: Entitlement[];
@@ -183,24 +177,16 @@ export interface PricedBill {
   gst_paise: number;
   /** The figure staff quote to the customer. */
   saved_paise: number;
-  /** How the money is being put up, resolved against this counter's own notes. */
+  /** How the money is being put up. */
   split: TenderSplit;
   /** Who authorised the exceptions on this bill, if anybody has. */
   authorisation: Authorisation | null;
-  /** Everything on this bill a manager has to agree to - empty on an ordinary
-   *  bill, and still listed here when a manager has already agreed to it. */
-  asks: Ask[];
-  /** The asks nobody has agreed to yet. Empty means the bill can close. */
-  needsAuthorising: Ask[];
 }
 
 export interface PricingWorld {
   seasons: TillSeason[];
   slabs: TillGstSlab[];
   offers: TillOffer[];
-  /** The open notes this store issued, as the last sync left them. Offline
-   *  redemption is only ever against one of these (grill Q4). */
-  creditNotes: TillCreditNote[];
 }
 
 export interface PricingOptions {
@@ -397,12 +383,9 @@ export function priceCart(
   const subtotal = lines.reduce((n, l) => n + l.net_paise, 0) - refunds.refund_paise;
   const round = roundingOf(subtotal);
   const net = subtotal + round;
-  // A bill that owes the customer money takes nothing at all: no tender, and the
-  // difference leaves as a credit note (grill Q7). `splitOf` is asked for nought
-  // rather than for a negative, so the panel does not invite a cashier to pay
-  // out of the drawer.
-  const split = splitOf(cart.payment, Math.max(net, 0), world.creditNotes, day);
-  const asks = asksOn(split);
+  // Negative bills are refused by `whyItCannotClose`; resolving the raw figure
+  // here keeps the payment arithmetic honest until that guard explains why.
+  const split = splitOf(cart.payment, net);
 
   return {
     lines,
@@ -412,7 +395,6 @@ export function priceCart(
     exchange: cart.exchange,
     refund_paise: refunds.refund_paise,
     refund_gst_paise: refunds.gst_paise,
-    credit_note_paise: Math.max(-net, 0),
     entitlements: rulebook.entitlements,
     subtotal_paise: subtotal,
     round_paise: round,
@@ -427,8 +409,6 @@ export function priceCart(
     saved_paise: discount,
     split,
     authorisation: cart.authorisation,
-    asks,
-    needsAuthorising: asks.filter((ask) => !covers(cart.authorisation, [ask])),
   };
 }
 
@@ -481,26 +461,6 @@ export function creditsOn(evidence: OfferEvidence | NoOffer): StackedCredit[] {
     });
   }
   return [...credits, ...stacked];
-}
-
-/**
- * Everything on this bill a manager has to agree to, one entry per thing.
- *
- * Only an unverified credit note remains a bill-level manager ask. Manual
- * discounts are constrained directly by the policy dials instead.
- */
-function asksOn(split: TenderSplit): Ask[] {
-  const asks: Ask[] = [];
-  for (const standing of split.notes) {
-    if (!standing.doubt) continue;
-    asks.push({
-      kind: UNVERIFIED_NOTE,
-      ref: standing.note.number,
-      paise: standing.note.amount_paise,
-      label: standing.note.number,
-    });
-  }
-  return asks;
 }
 
 function priceLine(
@@ -619,6 +579,9 @@ export function whyItCannotClose(bill: PricedBill): string {
       "manual discount stacking off."
     );
   }
+  if (bill.net_paise < 0) {
+    return "The pieces going out must be worth at least what is coming back.";
+  }
   // Found in browser QA of #185, and it is #181's rule rather than that ticket's:
   // `_resolve_line` refuses a line with no salesman on it, and the counter was
   // letting one through. The bill printed, the customer paid, and the queue then
@@ -630,8 +593,7 @@ export function whyItCannotClose(bill: PricedBill): string {
   if (unattributed) {
     return `Line ${unattributed.line_no} has no salesman. Pick who sold the piece.`;
   }
-  const notesCovered = !bill.needsAuthorising.some((ask) => ask.kind === UNVERIFIED_NOTE);
-  return whyPaymentCannotClose(bill.split, notesCovered);
+  return whyPaymentCannotClose(bill.split);
 }
 
 export interface BillIdentity {
@@ -656,10 +618,8 @@ export interface BillIdentity {
  * for a ₹1,499 sale would refuse to balance and would be ₹501 out if it did.
  *
  * The manager's authorisation rides along as the contract's `override`, naming
- * who and when. Only an authorisation that actually covers what the bill needs
- * is sent: one obtained for a credit note, on a bill that has since grown an
- * over-cap discount, is a manager's name on something they never saw - and
- * `whyItCannotClose` has already stopped that bill from getting here.
+ * who and when. Only an authorisation that matches this exchange's original bill
+ * and value is sent; a stale tap is not evidence for a different return.
  */
 export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
   const lines: BillLine[] = bill.lines.map((line) => ({
@@ -738,10 +698,6 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     b2b_tax_kind: taxKindFor(gstin, storeState ?? ""),
     lines,
     ...(exchange ? { exchange } : {}),
-    // A bill that owes the customer money takes nothing: `splitOf` was asked
-    // about nought, so there is nothing here to filter out, and the server
-    // checks the same identity from the other side (`_check_totals` expects the
-    // tenders to come to `max(net, 0)`).
     tenders: toTenders(bill.split),
     totals: {
       gross_paise: bill.gross_paise,
@@ -750,13 +706,11 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       gst_paise: bill.gst_paise,
       round_paise: bill.round_paise,
     },
-    ...(bill.authorisation && bill.asks.length
+    ...(bill.exchange && bill.authorisation && covers(bill.authorisation, [lateReturnAsk(bill.exchange)])
       ? {
           override: {
             user_id: bill.authorisation.user_id,
-            // The remaining bill-level PIN path is an unverified credit note.
-            // `kindsOf` owns that closed wire vocabulary.
-            kind: kindsOf(bill.asks).join("+"),
+            kind: "late_return" as const,
             at: bill.authorisation.at,
           },
         }

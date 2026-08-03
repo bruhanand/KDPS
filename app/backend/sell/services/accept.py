@@ -9,8 +9,8 @@ That single fact decides the shape of everything below:
   requirement with a lock in it: the loser blocks on the unique index, wakes to an
   `IntegrityError`, and reads back what the winner wrote (the Shopify pattern,
   grill Q5).
-* **Flag, never block.** Six things can be wrong with a bill that has already
-  happened - a gap in the numbering, a credit note nobody recognises, a return
+* **Flag, never block.** Things can be wrong with a bill that has already
+  happened - a gap in the numbering, a return
   against a bill from the paper era, tax that disagrees with the dated slab - and
   none of them is a reason to refuse a sale the store already made. They become
   `ContinuityFlag` rows on the store's queue and the bill lands (Rule 8).
@@ -45,8 +45,6 @@ from sell.gstin import normalise as gstin_normalise
 from sell.gstin import state_code as gstin_state_code
 from sell.models import (
     ContinuityFlag,
-    CreditNote,
-    CreditNoteRedemption,
     DeferredCosting,
     IrnQueueItem,
     Sale,
@@ -233,15 +231,25 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     store = _resolve_store(data["store"], actor)  # step 1
     original_bill = _resolve_original_bill(data, store)  # step 8
     lines = _prepare_lines(data, store, original_bill)  # steps 5, 8
+    late_return = _mark_late_returns(lines, original_bill, data["billed_at"])
     _check_line_arithmetic(lines)  # step 3
     _check_totals(data, lines)  # step 3
     rulebook = _server_resolution(data, store, lines)  # steps 6 and 12 share it
     override = manager_for_override((data.get("override") or {}).get("user_id"), store)
+    if late_return and override is None:
+        raise AcceptError(
+            "OVERRIDE_REQUIRED",
+            "That bill is past the store's return window. A manager has to approve taking it back.",
+            422,
+        )
+    # An unsolicited manager id is not evidence. The server derives whether an
+    # exception exists; ordinary sales and in-window exchanges carry no override.
+    if not late_return:
+        override = None
     _check_discount_policy(lines, rulebook)  # step 6
-    tender_plan = _plan_tenders(data, store, override)  # step 7
     _guard_bill_number(data, store)  # step 4
 
-    sale = _write_sale(data, store, actor, original_bill, lines, override, tender_plan)  # step 9
+    sale = _write_sale(data, store, actor, original_bill, lines, override)  # step 9
     minted = sale.post()
 
     flags: list[str] = []
@@ -249,8 +257,7 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     flags += _flag_missing_originals(sale, store, lines)  # step 8
     _write_stock_legs(sale, store, lines, actor)  # step 10, the stock half
     _record_deferred(store, lines)  # step 5
-    flags += _apply_tenders(sale, store, tender_plan)  # step 7
-    _issue_change_note(sale, store, actor)  # step 8
+    _apply_tenders(sale, data["tenders"])  # step 7
     _post_value(sale, lines, actor)  # step 10, the two value events
     flags += _apply_b2b(sale, store, data)  # step 11
     flags += _advisory_gst_check(sale, store, lines)  # step 12
@@ -351,6 +358,29 @@ def _prepare_lines(
         prepared.append(line)
     _check_return_quantities(prepared)
     return prepared
+
+
+def _mark_late_returns(
+    lines: list[_PreparedLine], original_bill: Sale | None, exchanged_at: Any
+) -> bool:
+    """Mark a known exchange whose original bill is outside the policy window.
+
+    Lateness is derived from the submitted original and today's policy, never
+    from a till checkbox. Paper-era returns have no trustworthy sale date and
+    keep their existing missing-original flag path.
+    """
+    if original_bill is None or not any(line.is_return for line in lines):
+        return False
+    # Judge when the offline exchange happened, not when its queue eventually
+    # reaches head office. Crossing midnight while offline must not turn a valid,
+    # already-printed bill into a refusal.
+    days_old = (timezone.localdate(exchanged_at) - timezone.localdate(original_bill.billed_at)).days
+    late = days_old > SellPolicy.current().return_window_days
+    if late:
+        for line in lines:
+            if line.is_return:
+                line.override_needed = True
+    return late
 
 
 def _prepare_sale_line(
@@ -522,10 +552,14 @@ def _check_totals(data: dict[str, Any], lines: list[_PreparedLine]) -> None:
                 f"says {declared}.",
                 422,
             )
+    if totals["net_paise"] < 0:
+        raise AcceptError(
+            "EXCHANGE_SHORT",
+            "The pieces going out must be worth at least what is coming back.",
+            422,
+        )
     tendered = sum(t["amount_paise"] for t in data["tenders"])
-    # A bill that nets negative takes no money at all: the difference leaves as a
-    # credit note, never as cash out of the drawer (grill Q7).
-    expected = max(totals["net_paise"], 0)
+    expected = totals["net_paise"]
     if tendered != expected:
         raise AcceptError(
             "TENDER_MISMATCH",
@@ -671,54 +705,6 @@ def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook) -> N
             rulebook.drift.add(line.payload["line_no"])
 
 
-@dataclass
-class _TenderPlan:
-    payload: dict[str, Any]
-    note: CreditNote | None = None
-    unverified: bool = False
-
-
-def _plan_tenders(data: dict[str, Any], store: Store, override: Any) -> list[_TenderPlan]:
-    """Step 7 - recognise every credit note offered, before anything is written.
-
-    Same-store only in v1 (grill Q4). A note this store does not recognise is not
-    automatically a refusal: with a manager's OK the bill is taken and the note is
-    flagged into the daily check, because the customer is standing there and the
-    note may well be genuine and simply unsynced. Without that OK it is refused.
-    """
-    plans: list[_TenderPlan] = []
-    for payload in data["tenders"]:
-        if payload["mode"] != SaleTender.Mode.CREDIT_NOTE:
-            plans.append(_TenderPlan(payload=payload))
-            continue
-        note = _recognised_note(payload, store)
-        if note is not None:
-            plans.append(_TenderPlan(payload=payload, note=note))
-            continue
-        if override is None:
-            raise AcceptError(
-                "CREDIT_NOTE_INVALID",
-                f"Credit note '{payload['credit_note']}' is not one this store issued, "
-                "is spent or expired, or does not hold that much. A manager of this "
-                "store has to approve taking it.",
-                422,
-            )
-        plans.append(_TenderPlan(payload=payload, unverified=True))
-    return plans
-
-
-def _recognised_note(payload: dict[str, Any], store: Store) -> CreditNote | None:
-    number = (payload.get("credit_note") or "").strip()
-    if not number:
-        return None
-    note = CreditNote.objects.select_for_update().filter(doc_number=number, store=store).first()
-    if note is None or note.status != CreditNote.Status.OPEN:
-        return None
-    if note.remaining_paise < payload["amount_paise"]:
-        return None
-    return note
-
-
 def _guard_bill_number(data: dict[str, Any], store: Store) -> None:
     """Step 4 - is this number already somebody else's bill?
 
@@ -741,22 +727,13 @@ def _guard_bill_number(data: dict[str, Any], store: Store) -> None:
         raise _bill_number_taken(data)
 
 
-def _authorised_kind(lines: list[_PreparedLine], tenders: list[_TenderPlan]) -> str:
+def _authorised_kind(lines: list[_PreparedLine]) -> str:
     """What the manager's tap on this bill was actually for.
 
     Derived from what the pipeline itself found, never taken from the payload's
-    `override.kind`. The till is the party the override constrains, so a bill
-    could otherwise file an over-cap discount under "credit_note" - and the daily
-    check, which groups on exactly this field, would count neither honestly.
-
-    The two are joined in one fixed order when a manager was asked both at once,
-    so the value a check groups on has one spelling
-    (`sell.serializers.OVERRIDE_KINDS`).
+    `override.kind`. Its sole remaining meaning is a late-return window override.
     """
-    kinds = []
-    if any(plan.unverified for plan in tenders):
-        kinds.append("credit_note")
-    return "+".join(kinds)
+    return "late_return" if any(line.override_needed for line in lines) else ""
 
 
 def _write_sale(
@@ -766,15 +743,14 @@ def _write_sale(
     original_bill: Sale | None,
     lines: list[_PreparedLine],
     override: Any,
-    tenders: list[_TenderPlan],
 ) -> Sale:
     """Step 9 - the draft and its lines, before a number exists."""
     customer = data.get("customer") or {}
     totals = data["totals"]
     buyer_gstin = gstin_normalise(customer.get("gstin") or "")
     # What the till said about the manager's tap. Only the *time* is taken from
-    # it - a clock this server does not have - and only when the pipeline
-    # recognised the person it named.
+    # it - a clock this server does not have - and only when the pipeline both
+    # recognised the person and independently found a late return.
     authorisation = (data.get("override") or {}) if override else {}
     sale = Sale.objects.create(
         idempotency_uuid=data["idempotency_uuid"],
@@ -808,7 +784,7 @@ def _write_sale(
         # been discarded by `manager_for_override`, and recording the id anyway
         # would put a name on a bill that person never authorised.
         override_by=override,
-        override_kind=_authorised_kind(lines, tenders) if override else "",
+        override_kind=_authorised_kind(lines) if override else "",
         override_at=authorisation.get("at"),
         created_by=actor,
     )
@@ -1007,52 +983,16 @@ def _post_value(sale: Sale, lines: list[_PreparedLine], actor: Any) -> None:
     )
 
 
-def _apply_tenders(sale: Sale, store: Store, plans: list[_TenderPlan]) -> list[str]:
-    """Step 7 - write the tenders, and spend the notes among them."""
-    flags: list[str] = []
-    unverified: list[str] = []
-    for plan in plans:
+def _apply_tenders(sale: Sale, plans: list[dict[str, Any]]) -> None:
+    """Step 7 - write the cash, card and UPI tenders."""
+    for payload in plans:
         SaleTender.objects.create(
             sale=sale,
-            mode=plan.payload["mode"],
-            amount_paise=plan.payload["amount_paise"],
-            credit_note=plan.note,
-            upi_state=plan.payload.get("upi_state") or "",
-            upi_reference=plan.payload.get("upi_reference") or "",
+            mode=payload["mode"],
+            amount_paise=payload["amount_paise"],
+            upi_state=payload.get("upi_state") or "",
+            upi_reference=payload.get("upi_reference") or "",
         )
-        if plan.note is not None:
-            CreditNoteRedemption.objects.create(
-                credit_note=plan.note, sale=sale, amount_paise=plan.payload["amount_paise"]
-            )
-        elif plan.unverified:
-            unverified.append((plan.payload.get("credit_note") or "").strip())
-    if unverified:
-        flags.append(_flag(sale, store, ContinuityFlag.Kind.CN_UNVERIFIED, {"notes": unverified}))
-    return flags
-
-
-def _issue_change_note(sale: Sale, store: Store, actor: Any) -> CreditNote | None:
-    """Step 8 - an exchange that owes the customer money owes it as a note.
-
-    Cash never leaves the drawer on a return (grill Q7): the difference becomes a
-    credit note against this bill, spendable at this store until it expires.
-    """
-    if sale.net_paise >= 0:
-        return None
-    policy = SellPolicy.current()
-    note = CreditNote.objects.create(
-        store=store,
-        fy=sale.fy,
-        customer_name=sale.customer_name,
-        customer_mobile=sale.customer_mobile,
-        value_paise=-sale.net_paise,
-        expires_on=timezone.localdate(sale.billed_at)
-        + timedelta(days=policy.credit_note_validity_days),
-        source_sale=sale,
-        created_by=actor if getattr(actor, "is_authenticated", False) else None,
-    )
-    note.post()
-    return note
 
 
 def _b2b_tax_kind(buyer_gstin: str, store: Store) -> str:

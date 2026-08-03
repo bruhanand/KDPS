@@ -34,7 +34,6 @@ import { tillToday } from "../../till/pricing";
 import { storeStateCodeOf, taxKindFor } from "../../till/gstin";
 import type { B2bTaxKind } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
-import type { Ask } from "../../till/pin";
 import { mockPaymentAdapter } from "../../till/payment";
 import type { PaymentAdapter, UpiCharged } from "../../till/payment";
 import { browserPrintAdapter } from "../../till/print";
@@ -64,7 +63,6 @@ import { PaymentPanel } from "./billing/PaymentPanel";
 import { RailFoot } from "./billing/RailFoot";
 import { TaxFigure } from "./billing/TaxFigure";
 import { UpiCharge } from "./billing/UpiCharge";
-import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
 // ---------------------------------------------------------------------------
@@ -92,21 +90,11 @@ import "./Billing.css";
 // anything: every price, every tax rate and every stock figure comes from the
 // counter's own copy, so the screen behaves identically with the line up or down.
 //
-// The payment panel is the four trimmed modes and a manager's PIN (#182). Three
-// things about it are also decisions.
+// The payment panel has three incoming tender modes.
 //
 // **Cash is the balance until somebody types in it.** An ordinary all-cash sale
 // should not need the total keyed into a box to say so, and a split should be
 // exactly as explicit as it is. `tender.ts` holds that rule.
-//
-// **A credit note is checked against this counter's own cached list**, offline,
-// same-store only (grill Q4). A note it does not recognise may still be genuine
-// and simply unsynced, with the customer standing there - so it takes a manager
-// and goes up flagged, which is what the server does with it too.
-//
-// **The manager types a PIN, not a name.** The PIN establishes who they are, and
-// the bill records it - and an authorisation only covers what the manager was
-// shown, so an exception keyed in after they walked away asks again.
 //
 // **A hold is not a bill** (#185, grill Q13). Parking a cart writes one row in
 // one local table: no number is taken, no piece leaves the shelf, nothing is
@@ -118,8 +106,8 @@ import "./Billing.css";
 // Exchange screen picks which lines of an old bill are being given back and parks
 // them; this screen picks them up and nets them against whatever is being bought
 // instead. The refund is what the customer *paid*, never today's price, and a
-// bill that ends up owing them money takes no payment at all - the difference
-// leaves as a credit note, and cash never comes out of the drawer.
+// bill whose returns outweigh its outgoing pieces is refused before close, and
+// cash never comes out of the drawer.
 //
 // **A scan that finds nothing never sends the customer away** (#186, grill Q5).
 // The tag is in their hand, so the counter offers to bill it off the tag: a line
@@ -199,12 +187,8 @@ function Counter({
   const [billSalesman, setBillSalesman] = useState<number | null | undefined>(undefined);
   const [mode, setMode] = useState<CounterMode>("sale");
   // Bumped by every commit so the in-memory copy re-reads the shelf the sale
-  // just moved - and, since #182, the credit notes it just spent. The sync time
-  // covers the other direction.
+  // just moved. The sync time covers the other direction.
   const [commits, setCommits] = useState(0);
-  /** Open when a manager is being asked for their PIN, carrying exactly what
-   *  they are being shown - which is also what their approval will cover. */
-  const [asking, setAsking] = useState<Ask[] | null>(null);
   /** Open while a UPI charge is on the card (#248). It carries no state of its
    *  own beyond "open": the figure being charged is read from the UPI row at
    *  the moment it opens, and closing it leaves the bill untouched. */
@@ -252,7 +236,6 @@ function Counter({
    *  a speed bump: the hash is on this device by design (grill Q1), so what it
    *  buys is somebody guessing having to stand at the counter visibly doing
    *  nothing. */
-  const pins = useWrongPins();
   // The hold list opens on demand, and opens itself when the Dashboard's "bills
   // on hold" row sent somebody here to clear them (`/sell?holds=1`). Read once,
   // into state: after that the panel is the cashier's to open and close, and a
@@ -282,9 +265,17 @@ function Counter({
       if (taken && parked) {
         onScreenRef.current = {
           ...onScreenRef.current,
-          cart: { ...onScreenRef.current.cart, exchange: parked },
+          cart: {
+            ...onScreenRef.current.cart,
+            exchange: parked,
+            authorisation: parked.authorisation ?? null,
+          },
         };
-        setCart((current) => ({ ...current, exchange: parked }));
+        setCart((current) => ({
+          ...current,
+          exchange: parked,
+          authorisation: parked.authorisation ?? null,
+        }));
         setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
       }
     });
@@ -1082,7 +1073,7 @@ function Counter({
   }, [closeScanFloat]);
 
   useCounterKeys({
-    disabled: Boolean(asking || charging || showHolds || counterBlocked || saving || holding),
+    disabled: Boolean(charging || showHolds || counterBlocked || saving || holding),
     finishOpen,
     onHold: () => void holdBill(),
     onLookup: () => navigate("/sell/customers"),
@@ -1337,11 +1328,6 @@ function Counter({
                   payment={cart.payment}
                   locked={locked}
                   onChange={editPayment}
-                  // Everything the bill asks for, not only the part still unapproved:
-                  // a manager looking at a second exception should see the first one
-                  // they agreed to as well, and the fresh authorisation replaces the
-                  // old one whole.
-                  onAsk={() => setAsking(bill.asks)}
                   onShowQr={() => setCharging(true)}
                 />
                 <CustomerStrip
@@ -1435,26 +1421,6 @@ function Counter({
           onConfirmed={upiConfirmed}
           onClose={() => {
             setCharging(false);
-            scan.focus();
-          }}
-        />
-      )}
-
-      {asking && (
-        <ManagerPin
-          managers={world.managers}
-          asks={asking}
-          wrong={pins.wrong}
-          onWrong={pins.wasWrong}
-          onClose={() => {
-            setAsking(null);
-            scan.focus();
-          }}
-          onAuthorised={(authorisation) => {
-            setCart((current) => ({ ...current, authorisation }));
-            pins.clear();
-            setAsking(null);
-            setNote(`${authorisation.name} approved what this bill needed approving.`);
             scan.focus();
           }}
         />
@@ -1860,9 +1826,9 @@ function NoCounter() {
     <div className="page-pad">
       <PageHeader lead="The counter." />
       <p className="warn-note" data-testid="bill-no-counter">
-        This login is not a counter. A till signs in as one store: the local price list, the
-        credit notes and the manager authorisations all belong to a single shop, so a login
-        that can see several has no counter to bill from.
+        This login is not a counter. A till signs in as one store: the local price list and
+        manager authorisations belong to a single shop, so a login that can see several has no
+        counter to bill from.
       </p>
     </div>
   );

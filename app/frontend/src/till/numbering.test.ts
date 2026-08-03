@@ -159,65 +159,6 @@ describe("the local shelf", () => {
   });
 });
 
-describe("the counter's own credit notes (#182)", () => {
-  const NOTE = { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" };
-
-  /** The one-line bill, part-paid with `spent` off the note. */
-  function paidWithNote(spent: number, number = NOTE.number) {
-    return draft({
-      tenders: [
-        { mode: "credit_note", amount_paise: spent, credit_note: number },
-        { mode: "cash", amount_paise: 149900 - spent },
-      ],
-    });
-  }
-
-  it("comes down by what the bill spent, in the same transaction as the bill", async () => {
-    // The server draws the real balance down when the bill syncs, which may be
-    // days later. Until then a note whose local balance had not moved would pay
-    // for a second bill, and a third, all of them refused at head office.
-    const { db, storeCode } = till();
-    await db.creditNotes.put(NOTE);
-
-    await commitBill(db, storeCode, paidWithNote(50000));
-
-    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(70000);
-  });
-
-  it("cannot be spent twice by two bills in a row", async () => {
-    const { db, storeCode } = till();
-    await db.creditNotes.put(NOTE);
-
-    await commitBill(db, storeCode, paidWithNote(120000));
-    await commitBill(db, storeCode, paidWithNote(120000));
-
-    // The second bill is the counter's to refuse before it is written - what is
-    // asserted here is that the cache says so rather than reading full again.
-    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(0);
-  });
-
-  it("stays on the counter at nought rather than vanishing", async () => {
-    // "There is nothing left on that note" and "never heard of that note" are
-    // different sentences with different remedies.
-    const { db, storeCode } = till();
-    await db.creditNotes.put(NOTE);
-
-    await commitBill(db, storeCode, paidWithNote(120000));
-
-    expect(await db.creditNotes.get(NOTE.number)).toBeTruthy();
-  });
-
-  it("invents no note for one the counter has never been sent", async () => {
-    // An unverified note, taken on a manager's OK. There is no local balance to
-    // move, and inventing one would be inventing money.
-    const { db, storeCode } = till();
-
-    await commitBill(db, storeCode, paidWithNote(50000, "26-27/XXX/CRN/9"));
-
-    expect(await db.creditNotes.count()).toBe(0);
-  });
-});
-
 describe("re-entering a bill from its printed copy (#189)", () => {
   /** A counter that has already passed `seq` - which is what makes a hole a hole. */
   async function counterPast(seq: number) {

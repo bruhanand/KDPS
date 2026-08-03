@@ -44,7 +44,7 @@ function discountedCart(discountPaise: number): Cart {
 function renderDiscount(discountPaise: number): string {
   const bill = priceCart(
     discountedCart(discountPaise),
-    { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [OFFER], creditNotes: [] },
+    { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [OFFER] },
     "2026-07-30",
     { capPercent: "10.00", allowManualDiscountOnOfferLines: false },
   );

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Banknote, CheckCircle2, CreditCard, KeyRound, Plus, QrCode, Smartphone, X } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, QrCode, Smartphone } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
 import type { priceCart } from "../../../till/cart";
@@ -7,12 +7,10 @@ import {
   balanceStandingOf,
   canFillTenderRest,
   cashChips,
-  newNote,
-  notePrefillFor,
   prefillFor,
   restTenderPatch,
 } from "../../../till/tender";
-import type { NoteStanding, Payment, TenderSplit } from "../../../till/tender";
+import type { Payment, TenderSplit } from "../../../till/tender";
 import { RupeeInput } from "./RupeeInput";
 
 /** One tender row's offer: the balance if the row is standing empty, nothing if
@@ -24,7 +22,7 @@ function offerIf(empty: boolean, owed: number): number | null {
 }
 
 /**
- * The four trimmed modes, the notes among them, and what is still unpaid (#182,
+ * The three incoming tender modes and what is still unpaid,
  * rebuilt by #246 around one rule: what is still owed is always on screen, and
  * tapping a tender row fills it).
  *
@@ -45,42 +43,16 @@ export function PaymentPanel({
   payment,
   locked,
   onChange,
-  onAsk,
   onShowQr,
 }: {
   bill: ReturnType<typeof priceCart>;
   payment: Payment;
   locked: boolean;
   onChange: (patch: Partial<Payment>) => void;
-  onAsk: () => void;
   /** Open the QR charge card against whatever the UPI row is taking (#248). */
   onShowQr: () => void;
 }) {
   const { split } = bill;
-  // An exchange whose returns outweigh its sales pays the *customer*, and it pays
-  // them in a credit note rather than out of the drawer (#184, grill Q7). The
-  // panel closes rather than showing a negative to collect: there is no amount to
-  // take, and a cash box a cashier could still type into is a drawer somebody
-  // could still open.
-  if (bill.credit_note_paise > 0) {
-    return (
-      <section className="bill-payment-panel bill-payment-owed" data-testid="bill-owes-customer">
-        <div className="bill-payment-heading">
-          <p className="eyebrow">Owed to the customer</p>
-          <p className="bill-due" data-testid="bill-credit-note">
-            <Money paise={bill.credit_note_paise} />
-          </p>
-        </div>
-        <div className="bill-rail-tile bill-payment-tile">
-          <p className="bill-owed-note">
-            The pieces coming back are worth more than the ones going out. Save &amp; Print issues a
-            credit note for the difference, spendable at this shop - no cash comes out of the
-            drawer. Its number prints on the bill.
-          </p>
-        </div>
-      </section>
-    );
-  }
   const owed = prefillFor(split);
   // The cash row is what the customer is handing notes against, so the chips are
   // read off it rather than off `balance_paise` - which is nought on the
@@ -178,26 +150,6 @@ export function PaymentPanel({
         <BalanceLine split={split} />
       </div>
 
-      <div className="bill-notes-tile">
-        <Notes
-          notes={split.notes}
-          locked={locked}
-          prefillFor={(standing) =>
-            offerIf(standing.note.amount_paise === 0, notePrefillFor(split, standing))
-          }
-          onChange={(index, patch) =>
-            onChange({
-              notes: payment.notes.map((note, i) => (i === index ? { ...note, ...patch } : note)),
-            })
-          }
-          onAdd={() => onChange({ notes: [...payment.notes, newNote()] })}
-          onRemove={(index) =>
-            onChange({ notes: payment.notes.filter((_, i) => i !== index) })
-          }
-        />
-      </div>
-
-      <Authorised bill={bill} locked={locked} onAsk={onAsk} />
     </section>
   );
 }
@@ -378,124 +330,4 @@ function RestButton({ disabled, onClick }: { disabled: boolean; onClick: () => v
       rest
     </button>
   );
-}
-
-/** The credit notes on this bill, and what the counter knows about each. */
-function Notes({
-  notes,
-  locked,
-  prefillFor,
-  onChange,
-  onAdd,
-  onRemove,
-}: {
-  notes: NoteStanding[];
-  locked: boolean;
-  prefillFor: (standing: NoteStanding) => number | null;
-  onChange: (index: number, patch: { number?: string; amount_paise?: number }) => void;
-  onAdd: () => void;
-  onRemove: (index: number) => void;
-}) {
-  return (
-    <div className="bill-notes">
-      {notes.map((standing, index) => (
-        <div className="bill-note" key={standing.note.key}>
-          <div className="bill-note-row">
-            <input
-              className="input bill-cell"
-              data-testid={`bill-note-number-${index}`}
-              aria-label={`Credit note number, row ${index + 1}`}
-              autoComplete="off"
-              placeholder="Credit note number"
-              disabled={locked}
-              value={standing.note.number}
-              onChange={(e) => onChange(index, { number: e.target.value })}
-            />
-            <RupeeInput
-              testId={`bill-note-amount-${index}`}
-              label={`Credit note amount, row ${index + 1}`}
-              paise={standing.note.amount_paise}
-              locked={locked}
-              placeholder="0"
-              prefillPaise={prefillFor(standing)}
-              onChange={(paise) => onChange(index, { amount_paise: paise ?? 0 })}
-            />
-            <button
-              type="button"
-              className="line-del"
-              disabled={locked}
-              data-testid={`bill-note-remove-${index}`}
-              aria-label={`Take credit note row ${index + 1} off the bill`}
-              onClick={() => onRemove(index)}
-            >
-              <X size={14} />
-            </button>
-          </div>
-          {standing.cached && !standing.doubt && (
-            <span className="muted-cell" data-testid={`bill-note-left-${index}`}>
-              <Money paise={standing.cached.remaining_paise} /> left · good to{" "}
-              {standing.cached.expires_on}
-            </span>
-          )}
-          {standing.doubt && (
-            <span className="bill-overcap" data-testid={`bill-note-doubt-${index}`}>
-              {standing.doubt}
-            </span>
-          )}
-        </div>
-      ))}
-      <button
-        type="button"
-        className="btn bill-note-add"
-        data-testid="bill-note-add"
-        disabled={locked}
-        onClick={onAdd}
-      >
-        <Plus size={14} />
-        Credit note
-      </button>
-    </div>
-  );
-}
-
-/** The manager's tap: what this bill needs, and who has agreed to it. */
-function Authorised({
-  bill,
-  locked,
-  onAsk,
-}: {
-  bill: ReturnType<typeof priceCart>;
-  locked: boolean;
-  onAsk: () => void;
-}) {
-  const { asks, needsAuthorising, authorisation } = bill;
-  if (!asks.length && !authorisation) return null;
-  return (
-    <div className="bill-authorised" data-testid="bill-authorised">
-      {authorisation && (
-        <span className="muted-cell" data-testid="bill-authorised-by">
-          Approved by {authorisation.name} at {formatClock(authorisation.at)}
-        </span>
-      )}
-      {needsAuthorising.length > 0 && (
-        <button
-          type="button"
-          className="btn"
-          data-testid="bill-ask-manager"
-          disabled={locked}
-          onClick={onAsk}
-        >
-          <KeyRound size={15} />
-          Manager approval
-        </button>
-      )}
-    </div>
-  );
-}
-
-function formatClock(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? iso
-    : at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }

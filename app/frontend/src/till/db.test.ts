@@ -40,7 +40,7 @@ function storeCode(): string {
 }
 
 describe("the till's schema", () => {
-  it("upgrades a version-3 database in place, keeping its unsynced bills (#245)", async () => {
+  it("drops cached credit notes while keeping unsynced bills on a version-4 upgrade", async () => {
     const code = storeCode();
     // Version 3 exactly as it shipped with #244, spelled out here rather than
     // imported: the point of the test is that today's class can open *that*
@@ -60,10 +60,16 @@ describe("the till's schema", () => {
     });
     old.version(2).stores({ seasons: "code" });
     old.version(3).stores({ draft: "" });
+    old.version(4).stores({ customers: "mobile" });
     await old.open();
     await old.table("queue").add({ doc_number: "26-27/DEO/SAL/74", idempotency_uuid: "u-1" });
     await old.table("meta").put({ key: "nextSeq", value: 75 });
     await old.table("items").put({ barcode: "8901000000011", season: "FW25" });
+    await old.table("creditNotes").put({
+      number: "26-27/DEO/CRN/4",
+      remaining_paise: 120000,
+      expires_on: "2027-01-30",
+    });
     old.close();
 
     const db = tillDb(code);
@@ -76,5 +82,6 @@ describe("the till's schema", () => {
     expect(await db.items.count()).toBe(1);
     // And the new table exists, empty, waiting for the next dataset pull.
     expect(await db.customers.count()).toBe(0);
+    expect(db.tables.map((table) => table.name)).not.toContain("creditNotes");
   });
 });

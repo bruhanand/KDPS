@@ -1,8 +1,7 @@
 """What the counter knows: the till's bootstrap and its delta feed (#179, D10).
 
 The till bills **offline**. Everything it needs to price a scan, name a piece,
-tax it, credit a salesman, honour a credit note and let a manager override a
-discount has to be sitting on the device before the network goes away - so this
+tax it and credit a salesman has to be sitting on the device before the network goes away - so this
 module is the whole of the till's knowledge, and a row missing from it is a
 counter that cannot sell a shirt it can see on the shelf.
 
@@ -23,8 +22,8 @@ cost-shaped key or number, and that test is the belt to this braces.
 salesmen, its manager PINs, the season master's ordering and the shop floor's
 money dials are a handful of rows each: a delta over five rows saves nothing and
 would need a deletion channel the contract does not give it, so they are replaced
-wholesale on every response. `deleted` therefore names exactly the three sections
-that can lose a row invisibly - items, offers, credit notes.
+wholesale on every response. `deleted` therefore names the two sections
+that can lose a row invisibly - items and offers.
 
 **The cursor deliberately laps backwards, and even so it is not the whole
 guarantee.** `updated_at` is stamped when a row is written, not when its
@@ -54,11 +53,10 @@ from django.utils.dateparse import parse_datetime
 
 from accounts.models import User
 from accounts.till_pin import STORE_BOUND_SCOPES, may_hold_till_pin
-from core.documents import DocStatus
 from masters.models import Cohort, Customer, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
 from offers.models import Offer
-from sell.models import CreditNote, CreditNoteRedemption, Salesman, SellPolicy
+from sell.models import Salesman, SellPolicy
 from stockledger.models import StockOnHand
 
 #: How far behind the clock the returned cursor sits. See the module docstring for
@@ -116,9 +114,7 @@ class Sync:
     middle one carried its meaning in a null check - `if since is not None` reads
     as a missing value where what it means is "this is a delta, not a bootstrap".
     `is_bootstrap` says that, and `today` rides along because every section that
-    judges a deadline has to judge it against the *same* day: a payload built
-    across two midnights can put a credit note in `credit_notes` under one clock
-    and in `deleted` under the other.
+    judges a deadline has to judge it against the *same* day.
     """
 
     store: Store
@@ -148,15 +144,13 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
 
     One `timezone.now()` for the whole answer, taken before any query: it is both
     the day the deadline sections are judged against and the base of the cursor
-    handed back, and a payload built across two instants can put a note in
-    `credit_notes` under one clock and in `deleted` under the other.
+    handed back.
 
     An unreadable `since` is a bootstrap, not a refusal - see `_read_cursor`.
     """
     started = timezone.now()
     sync = Sync(store=store, since=_read_cursor(since_raw), today=timezone.localdate(started))
 
-    notes_open, notes_closed = _credit_notes(sync)
     offers_live, offers_withdrawn = _offers(sync)
     return {
         "cursor": _stamp(started - CURSOR_LAP),
@@ -173,7 +167,6 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         # and stops an offer on its own clock while offline (grill Q3) - the
         # dates ride inside the data rather than being applied by this query.
         "offers": offers_live,
-        "credit_notes": notes_open,
         "salesmen": _salesmen(sync),
         "managers": _managers(store),
         "seasons": _seasons(),
@@ -182,7 +175,6 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "deleted": {
             "items": _withdrawn_items(sync),
             "offers": offers_withdrawn,
-            "credit_notes": notes_closed,
         },
     }
 
@@ -400,7 +392,7 @@ def _seasons() -> list[dict[str, Any]]:
     ]
 
 
-def _policy() -> dict[str, str | bool]:
+def _policy() -> dict[str, str | bool | int]:
     """The dials the counter has to hold offline.
 
     The cap is B2: below it a manual discount is the cashier's to give, above it
@@ -414,7 +406,8 @@ def _policy() -> dict[str, str | bool]:
     arrived as 7.499999 would put the counter and the server on opposite sides of
     a cap.
     """
-    return SellPolicy.current().as_till_policy()
+    policy = SellPolicy.current()
+    return {**policy.as_till_policy(), "return_window_days": policy.return_window_days}
 
 
 def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:
@@ -440,9 +433,8 @@ def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:
 def _offers(sync: Sync) -> tuple[list[dict[str, Any]], list[int]]:
     """The rulebook this counter prices with, and the rules it must forget.
 
-    Two things make this awkward in the same way `_credit_notes` is, and for the
-    same underlying reason - a rule can stop mattering without anybody writing to
-    its row:
+    Two things make this awkward for the same underlying reason - a rule can stop
+    mattering without anybody writing to its row:
 
       · **A rule dies of a date.** `ends_on` passes and nothing is stamped, so a
         delta also asks which rules crossed their own end date between the cursor
@@ -485,66 +477,6 @@ def _offers(sync: Sync) -> tuple[list[dict[str, Any]], list[int]]:
             # which store scope a rule used to have - cannot be done from here.
             withdrawn.append(offer.id)
     return sending, withdrawn
-
-
-def _credit_notes(sync: Sync) -> tuple[list[dict[str, Any]], list[str]]:
-    """The notes this store issued, split into "still worth money" and "stop
-    honouring this".
-
-    Three things make this the fiddliest section here, and all three are
-    consequences of the credit note being a *document*:
-
-      · Its balance is not a column. A submitted document may not be UPDATEd (the
-        FSM trigger refuses it), so spending a note appends a redemption row and
-        moves nothing on the note itself. The balance is therefore annotated in
-        SQL, by the model (`with_balance`) so the subtraction is not spelled twice
-        - and that annotation is why the "what changed" filter reaches the
-        redemptions through `pk__in` rather than a join, which would quietly
-        restrict the `Sum` to the rows that matched the filter.
-      · It can expire with nothing written. A note goes dead because a date
-        passed, so the delta has to ask which notes crossed their own deadline
-        between the cursor and today, or a till that was offline over a weekend
-        would go on honouring one.
-      · It can only be closed, never removed. So a note leaving the till's cache
-        is a `deleted` entry, and the till stops offering it.
-    """
-    notes = CreditNote.objects.filter(store=sync.store).exclude(docstatus=DocStatus.DRAFT)
-    if sync.is_bootstrap:
-        # A bootstrap reports nothing as closed, so a note that is already past its
-        # date can only be read and thrown away. Bounding it here keeps the query
-        # proportional to the notes a counter might actually be handed, rather than
-        # to every note the store has ever written.
-        notes = notes.filter(expires_on__gte=sync.today)
-    else:
-        redeemed = CreditNoteRedemption.objects.filter(
-            credit_note__store=sync.store, created_at__gt=sync.from_moment
-        ).values("credit_note_id")
-        notes = notes.filter(
-            Q(updated_at__gt=sync.from_moment)
-            | Q(pk__in=redeemed)
-            | Q(
-                expires_on__gte=timezone.localdate(sync.from_moment),
-                expires_on__lt=sync.today,
-            )
-        )
-
-    still_worth_money: list[dict[str, Any]] = []
-    closed: list[str] = []
-    for note in CreditNote.with_balance(notes).order_by("doc_number"):
-        remaining = int(getattr(note, CreditNote.BALANCE))
-        if note.status_at(remaining, sync.today) == CreditNote.Status.OPEN:
-            still_worth_money.append(
-                {
-                    "number": note.doc_number,
-                    "remaining_paise": remaining,
-                    "expires_on": note.expires_on.isoformat(),
-                }
-            )
-        elif not sync.is_bootstrap:
-            # Only a delta reports one: a bootstrap has nothing cached to close,
-            # and every note it does not send is one the till never knew about.
-            closed.append(note.doc_number)
-    return still_worth_money, closed
 
 
 def _salesmen(sync: Sync) -> list[dict[str, Any]]:

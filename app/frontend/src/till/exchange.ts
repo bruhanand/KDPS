@@ -31,6 +31,8 @@
 
 import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
+import { LATE_RETURN } from "./pin";
+import type { Ask, Authorisation } from "./pin";
 import { splitInclusive } from "./pricing";
 
 /** The bill an exchange gives back against, as the counter found it. */
@@ -90,6 +92,9 @@ export interface ExchangeLeg {
 export interface Exchange {
   original: ExchangeOriginal;
   lines: ExchangeLeg[];
+  /** The manager's late-window approval, when this exchange needed one. Optional
+   *  so an exchange parked by an older till still restores safely. */
+  authorisation?: Authorisation | null;
 }
 
 let legKeys = 0;
@@ -189,6 +194,29 @@ export function refundTotals(legs: ExchangeLeg[]): { refund_paise: number; gst_p
     refund_paise: legs.reduce((n, leg) => n + leg.refund_paise, 0),
     gst_paise: legs.reduce((n, leg) => n + leg.gst_paise, 0),
   };
+}
+
+/** The exact late-window decision shown to a manager for this exchange. */
+export function lateReturnAsk(exchange: Exchange): Ask {
+  return {
+    kind: LATE_RETURN,
+    ref: exchange.original.doc_number,
+    paise: refundTotals(exchange.lines).refund_paise,
+    label: exchange.original.doc_number,
+  };
+}
+
+/** Whether the original bill is beyond the cached local-calendar-day window. */
+export function isPastReturnWindow(
+  billedAt: string,
+  windowDays: number,
+  now: Date = new Date(),
+): boolean {
+  const billed = new Date(billedAt);
+  if (Number.isNaN(billed.getTime())) return true;
+  const localDay = (date: Date): number =>
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+  return localDay(now) - localDay(billed) > Math.max(0, windowDays);
 }
 
 /** Whether this bill can close with these legs on it - or why not.
