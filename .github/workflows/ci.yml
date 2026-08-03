@@ -32,6 +32,15 @@ jobs:
       run:
         working-directory: app/backend
 
+    env:
+      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
+      DJANGO_SECRET_KEY: ci-secret-not-for-production
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      EMERGENT_LLM_KEY: "ci-placeholder"
+      GEMINI_MODEL: "gemini-2.5-flash"
+      JWT_COOKIE_SECURE: "0"
+
     steps:
       - uses: actions/checkout@v4
 

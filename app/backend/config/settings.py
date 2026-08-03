@@ -35,9 +35,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # so there is nothing for override to override.
 load_dotenv(BASE_DIR / ".env", override=True)
 
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
-DEBUG = os.environ["DJANGO_DEBUG"] == "1"
-ALLOWED_HOSTS = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "ci-secret-not-for-production")
+DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
