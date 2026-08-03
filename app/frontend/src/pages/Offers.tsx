@@ -24,6 +24,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useAuth } from "../auth/AuthContext";
 import { meetsCapability } from "../shell/navConfig";
 import { useList } from "../lib/hooks";
+import { PromotionsTabs } from "../components/PromotionsTabs";
 
 interface OfferRow {
   id: number;
@@ -80,6 +81,7 @@ export function OffersPage() {
   return (
     <div className="page-pad">
       <PageHeader lead="Every rule your counter is pricing with, and the ones on their way. The till applies these itself as each piece is scanned, offline included - nothing here needs a decision, and nothing here is edited at a store." />
+      <PromotionsTabs />
 
       {mayAuthor && (
         <div className="toolbar">

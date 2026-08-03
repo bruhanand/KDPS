@@ -211,6 +211,11 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Transfers", to: "/transfer" },
       { label: "Send Stock", to: "/transfer/new" },
+      // Bulk-splits one arrived warehouse batch into a draft per destination
+      // store — the grid Ops Head fills in once instead of raising the same
+      // transfer by hand, store by store (#229's stub, rebuilt on the existing
+      // engine rather than a posting module of its own).
+      { label: "Distribution", to: "/transfer/distribution" },
       { label: "Stock Request", to: "/transfer/requests" },
       { label: "In-Transit", to: "/transfer/in-transit" },
     ],
@@ -290,6 +295,12 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Store Targets", to: "/money/store-targets" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
+      // The partner-billing dial (Rule 12): filed under Money, not Setup, for
+      // the same reason Store Targets is — the gate deciding the filing is
+      // `money`, which Owner and Accounts already hold, and putting it behind
+      // Setup's `sell: manage` rung (as it briefly was) walled Owner out of a
+      // screen the API itself lets them read and write.
+      { label: "Partner Billing", to: "/money/partner-billing" },
       // The B2B bills head office still owes an e-invoice reference (#187).
       //
       // Filed under Money rather than Sell, and that is the gate deciding the
@@ -311,15 +322,17 @@ export const SECTIONS: NavSectionDef[] = [
     label: "Offers & Price",
     icon: Tag,
     layer: "intelligence",
+    // Consolidated from five entries to three "pillars" (Aug 2026 redesign):
+    // authoring a rule and running the EOSS markdown ladder both just make more
+    // rows in the same `Offer` table, so "New Offer" and "EOSS Planning" moved
+    // inside Promotions as its own in-page tabs/CTA rather than sidebar heads of
+    // their own — `deepLink`-style reachability, without a fold's shared URL.
+    // Their routes (`/offers/new`, `/offers/eoss`) are unchanged; only the
+    // sidebar shrank.
     items: [
-      { label: "Price List", to: "/offers/price-list" },
-      { label: "Offers", to: "/offers" },
-      // Authoring, at `operate` (D11 §6). The write endpoint used to ask for
-      // `manage`, which only IT holds, so the people the access table hands
-      // offers to could not write one - the reason there was no such screen.
-      { label: "New Offer", to: "/offers/new", minCapability: "operate" },
-      { label: "Discounts", to: "/offers/discounts" },
-      { label: "EOSS Planning", to: "/offers/eoss" },
+      { label: "Price Book", to: "/offers/price-list" },
+      { label: "Promotions", to: "/offers" },
+      { label: "Discount Reports", to: "/offers/discounts" },
     ],
   },
   {
@@ -397,9 +410,6 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   // The Upload Bill stub, deleted in #228 - the bill goes up inside "New
   // receipt". Anyone holding the old link lands on Receive.
   ["/receive/upload-bill", "/receive"],
-  // The Distribution stub, deleted in #229 - the stub is gone for every role,
-  // and distribution returns later as a rare-case feature of a transfer.
-  ["/transfer/distribution", "/transfer"],
   ["/outbound/transfers", "/transfer"],
   ["/outbound/rtvs", "/return-to-brand"],
   ["/outbound/adjustments", "/stock-count/adjustments"],
@@ -683,7 +693,7 @@ const STORE_LAYOUT: PersonaLayout = [
   { section: "money", tabs: ["/money/day-summary", "/money/store-targets", "/money/expenses"] },
   {
     section: "offers_price",
-    tabs: ["/offers/price-list", "/offers", "/offers/discounts", "/offers/eoss"],
+    tabs: ["/offers/price-list", "/offers", "/offers/discounts"],
   },
   {
     section: "reports",

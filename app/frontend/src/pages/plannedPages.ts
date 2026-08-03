@@ -107,10 +107,9 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // leave a menu line whose own page said "go and do it over there".
 
   // ---- Transfer -----------------------------------------------------------
-  // Nothing. Distribution promised a screen to split newly arrived stock across
-  // stores; #229 deleted the stub for every role - distribution returns later
-  // as a rare-case feature of the transfer flow, not a promise sitting empty in
-  // the sidebar. Its old URL now redirects to Transfer.
+  // Nothing. Distribution's stub was deleted in #229; the real screen shipped
+  // later as "Distribution grid" (bulk-splits an arrived batch into per-store
+  // transfer drafts) rather than a promise sitting empty in the sidebar.
 
   // ---- Money --------------------------------------------------------------
   "/money/payments": {

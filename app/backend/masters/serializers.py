@@ -47,6 +47,7 @@ class StoreSerializer(serializers.ModelSerializer):
             "state_name",
             "state_code",
             "is_active",
+            "is_partner",
         ]
 
 

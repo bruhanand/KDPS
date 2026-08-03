@@ -94,11 +94,12 @@ interface Store {
   gstin: number;
   gstin_number: string;
   is_active: boolean;
+  is_partner: boolean;
 }
 
 interface GstinOpt { id: number; gstin: string; state_name: string; state_code: string; legal_entity_name: string; legal_entity: number; is_active: boolean; }
 
-const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", gstin: 0, is_active: true };
+const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", gstin: 0, is_active: true, is_partner: false };
 
 export function StoresPage() {
   const canEdit = useSteward();
@@ -112,14 +113,14 @@ export function StoresPage() {
 
   async function save() {
     setError(""); setOk("");
-    const payload = { code: form.code, name: form.name, store_type: form.store_type, city: form.city, gstin: form.gstin || null, is_active: form.is_active };
+    const payload = { code: form.code, name: form.name, store_type: form.store_type, city: form.city, gstin: form.gstin || null, is_active: form.is_active, is_partner: form.is_partner };
     try {
       if (form.id) await api.patch(`/masters/stores/${form.id}`, payload);
       else await api.post("/masters/stores", payload);
       setForm(blankStore); setOpen(false); setOk("Store saved."); reload();
     } catch (e) { setError(apiErrorMessage(e)); }
   }
-  function edit(s: Store) { setOpen(true); setOk(""); setError(""); setForm({ id: s.id, code: s.code, name: s.name, store_type: s.store_type, city: s.city || "", gstin: s.gstin, is_active: s.is_active }); }
+  function edit(s: Store) { setOpen(true); setOk(""); setError(""); setForm({ id: s.id, code: s.code, name: s.name, store_type: s.store_type, city: s.city || "", gstin: s.gstin, is_active: s.is_active, is_partner: s.is_partner }); }
   function add() { setForm(blankStore); setOpen(true); setOk(""); setError(""); }
 
   return (
@@ -147,6 +148,10 @@ export function StoresPage() {
               {gstins.map((g) => <option key={g.id} value={g.id}>{g.state_name} · {g.gstin}</option>)}
             </select>
             <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="store-active-checkbox" /> Active</label>
+            <label className="check-row">
+              <input type="checkbox" checked={form.is_partner} onChange={(e) => setForm({ ...form, is_partner: e.target.checked })} data-testid="store-partner-checkbox" />
+              Partner store (franchisee — billed at Purchase Price on every transfer)
+            </label>
             <button className="btn btn-cta" onClick={save} disabled={!form.code || !form.name || !form.gstin} data-testid="store-save-button"><Save size={15} /> Save store</button>
           </div>
         </div>
@@ -154,13 +159,13 @@ export function StoresPage() {
       <div className="table-wrap">
         <table className="data" data-testid="stores-table">
           <thead>
-            <tr><th>Code</th><th>Name</th><th>Type</th><th>City</th><th>State</th><th>GSTIN</th><th>Status</th>{canEdit && <th />}</tr>
+            <tr><th>Code</th><th>Name</th><th>Type</th><th>City</th><th>State</th><th>GSTIN</th><th>Status</th><th>Partner</th>{canEdit && <th />}</tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8}>Loading…</td></tr>
+              <tr><td colSpan={9}>Loading…</td></tr>
             ) : data.length === 0 ? (
-              <tr data-testid="stores-empty"><td colSpan={8}>{q ? `No store matches “${q}”.` : "No stores yet."}</td></tr>
+              <tr data-testid="stores-empty"><td colSpan={9}>{q ? `No store matches “${q}”.` : "No stores yet."}</td></tr>
             ) : data.map((s) => (
               <tr key={s.id} data-testid={`store-row-${s.code}`}>
                 <td><b className="mono">{s.code}</b></td>
@@ -170,6 +175,7 @@ export function StoresPage() {
                 <td><span className={`chip chip-${s.state_name === "Bihar" ? "amber" : "blue"}`}>{s.state_name}</span></td>
                 <td className="mono" style={{ fontSize: 12.5 }}>{s.gstin_number}</td>
                 <td><span className={`chip chip-${s.is_active ? "green" : "red"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
+                <td data-testid={`store-partner-${s.code}`}>{s.is_partner ? <span className="chip chip-amber">Partner</span> : "—"}</td>
                 {canEdit && <td><button className="btn btn-sm" onClick={() => edit(s)} data-testid={`edit-store-${s.code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>
             ))}

@@ -179,6 +179,9 @@ export interface TransferT {
   lines: TransferLineT[];
   receipt: ReceiptT | null;
   gap_closure: GapClosureT | null;
+  /** Set at dispatch only when the destination is a partner store: qty × the
+   *  books' Purchase Price (Rule 12). Null for every ordinary transfer. */
+  partner_billing_value_paise: number | null;
 }
 
 export const GAP_STATE_LABEL: Record<string, string> = {
@@ -959,6 +962,18 @@ export function TransferDetailPage() {
         <div className="card section-card" style={{ marginBottom: 18 }}>
           <p className="eyebrow">E-way bill</p>
           <h3 className="h3 mono">{t.eway_bill_number}</h3>
+        </div>
+      )}
+
+      {/* Only ever set when the destination is a partner store (Rule 12) —
+          every ordinary transfer leaves this null, exactly as before. */}
+      {t.partner_billing_value_paise != null && (
+        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="partner-billing-card">
+          <p className="eyebrow">Partner billing</p>
+          <h3 className="h3"><Money paise={t.partner_billing_value_paise} /> at Purchase Price</h3>
+          <p className="lead" style={{ marginTop: 4 }}>
+            {t.destination_store_code} is a partner store — this is what it owes for this transfer.
+          </p>
         </div>
       )}
 

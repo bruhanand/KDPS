@@ -371,7 +371,10 @@ def post_transfer_dispatch(
     is flagged, never blocked. With no plan lines (store→store scan-to-build)
     the scans *become* the lines, enriched from the source stock.
 
-    Stock move only, no GL (cross-state IGST invoice is manual by decision).
+    Stock move only, no GL for a normal move (cross-state IGST invoice is manual
+    by decision) — except a partner-store destination, which is always billed at
+    Purchase Price and, per the chain's `BillingPolicy` dial, may also raise a
+    receivable (see `_bill_partner_store`).
 
     Refuses unless the Operations Head (or the Owner, overriding) has approved
     the transfer — ``require_approved``, at the posting layer rather than the
@@ -423,9 +426,21 @@ def post_transfer_dispatch(
     # so an in-memory-only assignment here left `dispatch_date` and
     # `dispatched_by` NULL for good — the screen has always shown a blank
     # "dispatched by" on every transfer ever sent.
+    #
+    # `partner_billing_value_paise` joins the same save for the same reason: a
+    # partner store is billed at Purchase Price on every transfer it receives
+    # (#see `_bill_partner_store`), and the figure must be computed from the
+    # scanned lines while they are still in hand — not after `post()`, when the
+    # document itself can no longer be written.
     transfer.dispatch_date = timezone.now()
     transfer.dispatched_by = user
-    transfer.save(update_fields=["dispatch_date", "dispatched_by"])
+    update_fields = ["dispatch_date", "dispatched_by"]
+    if transfer.destination_store.is_partner:
+        transfer.partner_billing_value_paise = sum(
+            line.qty_dispatched * line.unit_cost_paise for line in dispatch_lines
+        )
+        update_fields.append("partner_billing_value_paise")
+    transfer.save(update_fields=update_fields)
 
     # Post the document (mint number, set SUBMITTED — saves everything atomically)
     transfer.post()
@@ -459,7 +474,46 @@ def post_transfer_dispatch(
             )
         )
 
+    _bill_partner_store(transfer, user)
+
     return entries
+
+
+def _bill_partner_store(transfer: StoreTransfer, user=None) -> None:
+    """The other half of partner billing: raising the receivable, if the
+    chain-wide `BillingPolicy` dial says to.
+
+    `partner_billing_value_paise` is already computed and saved (before
+    `post()` — a submitted document cannot be written again), so this only
+    ever reads it. Every other transfer stays "stock move only, no GL" exactly
+    as before — this only ever fires when the destination itself is flagged a
+    partner and holds a positive billed value.
+    """
+    from outbound.models import BillingPolicy
+
+    value_paise = transfer.partner_billing_value_paise or 0
+    if value_paise <= 0 or BillingPolicy.current().mode != BillingPolicy.Mode.GL_POSTING:
+        return
+
+    doc_ref = PostingRef(
+        doc_type="STO",
+        doc_number=transfer.doc_number,
+        store=transfer.destination_store,
+        gstin=transfer.destination_store.gstin,
+        posted_by=user,
+    )
+    post_entries(
+        doc_ref,
+        [
+            dr(
+                GLAccount.PARTNER_RECEIVABLE,
+                value_paise,
+                memo=f"Partner billing: {transfer.destination_store.code} billed at PP",
+            ),
+            cr(GLAccount.INVENTORY, value_paise, memo="Partner billing: inventory exit at PP"),
+        ],
+        posted_by=user,
+    )
 
 
 def _resolve_extra_identity(transfer: StoreTransfer, barcode: str) -> dict[str, int | str]:

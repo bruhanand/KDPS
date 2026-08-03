@@ -16,11 +16,13 @@ import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { AccessMatrixPage } from "./pages/AccessMatrix";
 import { SellPolicySettingsPage } from "./pages/SellPolicySettings";
+import { PartnerBillingPage } from "./pages/PartnerBilling";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
 import { TransferListPage, TransferNewPage, TransferDetailPage, TransferPtPage } from "./pages/OutboundTransfers";
+import { DistributionGridPage } from "./pages/DistributionGrid";
 import { StockRequestListPage, StockRequestNewPage, StockRequestDetailPage } from "./pages/OutboundStockRequests";
 import { InTransitPage } from "./pages/OutboundInTransit";
 import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
@@ -94,7 +96,8 @@ const BUILT: Screen[] = [
   // Transfer
   { id: "transfer-list", path: "/transfer", element: <TransferListPage /> },
   { id: "transfer-new", path: "/transfer/new", element: <TransferNewPage /> },
-  // Before /transfer/:id, or "in-transit"/"requests" would be read as a transfer id (#71).
+  // Before /transfer/:id, or "in-transit"/"requests"/"distribution" would be read as a transfer id (#71).
+  { id: "transfer-distribution", path: "/transfer/distribution", element: <DistributionGridPage /> },
   { id: "transfer-in-transit", path: "/transfer/in-transit", element: <InTransitPage /> },
   { id: "stock-request-list", path: "/transfer/requests", element: <StockRequestListPage /> },
   { id: "stock-request-new", path: "/transfer/requests/new", element: <StockRequestNewPage /> },
@@ -151,6 +154,7 @@ const BUILT: Screen[] = [
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
   { id: "irn-queue", path: "/money/irn-queue", element: <IrnQueue /> },
+  { id: "partner-billing", path: "/money/partner-billing", element: <PartnerBillingPage /> },
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },

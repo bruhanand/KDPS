@@ -77,13 +77,13 @@ describe("the route table", () => {
   });
 
   it("Transfer sub-screens do not swallow the Transfer document ids", () => {
-    // Distribution's stub is gone (#229); its address sits exactly where
-    // /transfer/:id looks for a document number, so it needs its own legacy
-    // route or it would open "transfer number distribution" — the same case
-    // #228 solved for Upload Bill. /transfer/in-transit and /transfer/requests
-    // are built (#71, #74) — all three sit where ids live.
+    // Distribution's stub was gone at #229; the real screen shipped later
+    // (Distribution grid) at its own address, so it now sits beside the other
+    // named sub-screens rather than behind a legacy redirect.
+    // /transfer/in-transit and /transfer/requests are built (#71, #74) — all
+    // three sit where ids live.
     expect(screenAt("/transfer/requests")).toBe("stock-request-list");
-    expect(screenAt("/transfer/distribution")).toBe("legacy:/transfer/distribution");
+    expect(screenAt("/transfer/distribution")).toBe("transfer-distribution");
     expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");
     // The transfer's own PT hangs off the document, not off the section (#72).

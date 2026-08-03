@@ -52,6 +52,13 @@ class GLAccount:
     CREDIT_NOTE_LIABILITY = "CREDIT_NOTE_LIABILITY"  # unspent credit notes owed to customers
     ROUND_OFF = "ROUND_OFF"  # the rupee-rounding line that makes a bill balance
 
+    # -- partner store billing (outbound, configurable) ----------------------
+    # A partner store is a distinct business behind our own network (e.g. a
+    # franchisee), so stock it receives is billed to it at Purchase Price rather
+    # than simply restocked. Whether that also posts here is a chain-wide dial
+    # (`outbound.BillingPolicy`) — this account only exists for when it does.
+    PARTNER_RECEIVABLE = "PARTNER_RECEIVABLE"  # owed by a partner store, billed at PP (asset)
+
 
 class GLEntry(LedgerEntry):
     """One leg of a balanced value posting (append-only general ledger).

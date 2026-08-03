@@ -24,6 +24,7 @@ import {
 import { api, apiErrorMessage } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { useList } from "../lib/hooks";
+import { PromotionsTabs } from "../components/PromotionsTabs";
 import "./OffersEoss.css";
 
 interface SeasonRow {
@@ -146,6 +147,7 @@ export function OffersEossPage() {
   return (
     <div className="page-pad">
       <PageHeader
+        title="EOSS Planning"
         lead="Styles falling behind their season's sell-through target, with a suggested markdown depth - never applied until you say so. Approving turns a row into the exact rulebook offer your counter already knows how to price with."
         actions={
           <div className="eoss-toolbar">
@@ -181,6 +183,7 @@ export function OffersEossPage() {
           </div>
         }
       />
+      <PromotionsTabs />
 
       {error && (
         <div className="login-error" style={{ maxWidth: 560 }} data-testid="eoss-error">

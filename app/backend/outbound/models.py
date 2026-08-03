@@ -30,6 +30,11 @@ class TransferReason(models.TextChoices):
     SEASONAL_SWAP = "seasonal_swap", "Seasonal swap"
     FREE_FLOOR_SPACE = "free_floor_space", "Free floor space"
     CUSTOMER_WAITING = "customer_waiting", "Customer waiting"
+    # Warehouse → many stores, split from one arrived batch by the Distribution
+    # grid (Ops Head enters qty-per-store, one draft per destination). Its own
+    # reason rather than OTHER: the grid always sends it, so a person reading the
+    # transfer later can tell "this was allocated" from "somebody typed a reason".
+    WAREHOUSE_ALLOCATION = "warehouse_allocation", "Warehouse allocation"
     OTHER = "other", "Other"
 
 
@@ -214,6 +219,13 @@ class StoreTransfer(Document):
         related_name="transfers_dispatched",
     )
     dispatch_date = models.DateTimeField(null=True, blank=True)
+    partner_billing_value_paise = MoneyField(
+        null=True,
+        blank=True,
+        help_text="Set at dispatch, only when the destination is a partner store: "
+        "qty dispatched × the books' Purchase Price. Always computed for the "
+        "record; whether it also posts a receivable is `BillingPolicy.current()`.",
+    )
 
     # Receipt fields are stored on the companion TransferReceipt model
     # (submitted documents are DB-level immutable per kernel rule)
@@ -1509,3 +1521,61 @@ class Recount(models.Model):
 
     def __str__(self) -> str:
         return f"Recount {self.sku_code}: {self.first_counted_qty} → {self.counted_qty}"
+
+
+
+# ---------------------------------------------------------------------------
+# Partner store billing policy (chain-wide dial, Rule 12)
+# ---------------------------------------------------------------------------
+
+
+class BillingPolicy(TimeStampedModel):
+    """The one chain-wide answer to "does billing a partner store at Purchase
+    Price also touch the ledger?" — a dial (Rule 12), not a decision baked into
+    the posting engine.
+
+    A partner store (a franchisee behind our own network) is billed at PP on
+    every transfer it receives (`StoreTransfer.partner_billing_value_paise`,
+    always computed at dispatch). ``INFORMATIONAL`` stops there — the figure is
+    shown on the document only, matching today's "transfer posts stock, not GL"
+    rule for every other move. ``GL_POSTING`` additionally raises a receivable:
+    Dr `PARTNER_RECEIVABLE` / Cr `INVENTORY` at PP, no margin, because a sale to
+    a partner at pass-through cost carries none to book.
+
+    One row, mirroring `sell.SellPolicy` — there is exactly one dial and it does
+    not vary by store today.
+    """
+
+    SINGLETON_PK = 1
+
+    class Mode(models.TextChoices):
+        INFORMATIONAL = "informational", "Informational only — no ledger entry"
+        GL_POSTING = "gl_posting", "Post a receivable at Purchase Price"
+
+    mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.INFORMATIONAL)
+    set_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="billing_policies_set",
+        help_text="Who last chose this dial.",
+    )
+
+    class Meta:
+        db_table = "outbound_billing_policy"
+        verbose_name_plural = "billing policies"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(id=1), name="ck_billingpolicy_singleton"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Partner billing: {self.get_mode_display()}"
+
+    @classmethod
+    def current(cls) -> "BillingPolicy":
+        """The live dial, creating the row at its safe default (informational,
+        no ledger write) if it is somehow gone."""
+
+        row, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return row

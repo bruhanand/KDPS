@@ -1,0 +1,41 @@
+{
+  "summary": "Tested the new Distribution Grid, Partner Store billing, Offers/Price IA simplification, and mocked Tag Printing screens (owner/ops1 credentials). Distribution Grid, Stores partner flag, Offers sidebar/tabs/CTA, Price Book print-tag mock, and the Partner billing card on the transfer detail page all work correctly end-to-end. Found ONE CRITICAL access-control bug: the owner role cannot open /setup/settings at all (route guard requires sell:manage, which owner does not hold), so the newly-added 'Partner store billing' policy card is completely unreachable for the owner — the exact persona the spec requires to configure it. Verified the card and full radio-toggle/persistence flow works correctly for superadmin (break-glass) as a sanity check of the component itself.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/auth/login (sections/capabilities for role it_admin)",
+        "issue": "admin's (it_admin role) login payload has no 'money' entry in capabilities/sections at all, even though a direct call to accounts.permissions.user_can(admin_user, 'money', 'view') in a Django shell returns True. This inconsistency means admin also cannot see the Partner Billing card (canView resolves false client-side) despite apparently holding the permission server-side by one measure. Not spec-blocking since spec only requires owner access, but worth reconciling the two permission surfaces."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Owner -> Setup -> Settings -> Partner store billing",
+        "issue": "CRITICAL: navigating to /setup/settings as owner (Owner@123) renders a full 'No access' / 'You don't have access to this page' screen. Root cause: the page's route guard resolves via navConfig's 'Counter Settings' nav item (section 'sell', minCapability: 'manage'), because SellPolicySettingsPage is the same component/route the PartnerBillingCard was appended to. Owner's role only holds 'sell: view' (not 'manage'), so the whole page — including the new billing-policy card, gated only at money:view/manage which owner DOES hold — is unreachable. Confirmed via /api/auth/login payload: owner.capabilities.sell = 'view', not 'manage'. Only admin/superadmin (it_admin, is_superuser) can reach the page today.",
+        "affected_selectors": ["[data-testid=\"billing-policy-card\"]", "[data-testid=\"billing-policy-informational\"]", "[data-testid=\"billing-policy-gl-posting\"]", "[data-testid=\"billing-policy-saved\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "P0 FIX NEEDED: Give the Partner Billing card its own reachable route/nav entry (or relax the /setup/settings page's route guard) so Owner can actually reach it. Options: (a) move PartnerBillingCard to its own page gated at money:view/manage (e.g. under Money section, which owner already holds at 'manage'), or (b) add a second nav item pointing at /setup/settings gated at money:manage so the route guard's itemOwning() resolves to a less restrictive gate for users who only need the billing card, or (c) split SellPolicySettingsPage into two independently-routed pages. As shipped, the acceptance criterion 'Owner can switch the mode and it persists' cannot be exercised by an owner through the UI at all today — they hit a hard access wall before ever seeing the card.",
+    "Reconcile it_admin's missing 'money' section in the login payload vs. the permissive result of accounts.permissions.user_can(...) — decide which is authoritative."
+  ],
+  "critical_code_review_comments": [
+    "DistributionGrid.tsx: clean implementation — bulk-creates one draft store_split transfer per destination via the existing /outbound/transfers POST, correctly uses Promise.allSettled so a partial failure doesn't lose successful drafts, and surfaces cross-state e-way-bill requirement per destination. Verified working end-to-end (2 drafts created, reason=warehouse_allocation persisted).",
+    "posting.py _bill_partner_store / partner_billing_value_paise: computed pre-post() as required (submitted docs immutable) — confirmed via existing seeded transfer /transfer/1 rendering the correct ₹2,800 card.",
+    "SellPolicySettings.tsx PartnerBillingCard component itself is correct (verified fully functional for superadmin: loads policy, both radios toggle, save confirmation shows, persists across reload) — the bug is entirely in where it was placed (inherited page-level route gate), not in the component's own money:view/manage gating.",
+    "navConfig.ts's 'Counter Settings' nav item (sell:manage) and PartnerBillingCard's own gate (money:view/manage) were never reconciled when the card was appended to that page — a textbook case of the 'sidebar and API/route guard must agree' rule (#85 in this codebase's own convention) being violated in the other direction: the API-side gate for the card is looser than the page-level route gate wrapping it."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (all endpoints exercised returned expected data/behavior)", "frontend": "~90% (one critical access-control gap on the Partner Billing settings screen for owner; every other reviewed flow passed)"},
+  "test_credentials": "owner/Owner@123, ops1/Ops@123, superadmin/Super@123 (used only to sanity-check the PartnerBillingCard component itself, since owner is blocked by the route guard), admin/Admin@123 (also blocked, though for a different capability reason — see minor backend issue).",
+  "seed_data_creation": "Added a StockOnHand row directly via Django shell for store RAN-WH / sku_code LP-SLIM-WHT-38 (qty 20) purely to exercise the Distribution Grid end-to-end, since no warehouse-type store had any stock seeded (seed_outbound_demo only stocks DEO and BANKA). This created 2 real draft transfers (RAN-WH->BKR id 3, RAN-WH->DEO id 2, reason=warehouse_allocation, qty 5 each) which are left in DRAFT status in the DB — harmless test data, but flagging for cleanup awareness. BillingPolicy was toggled to gl_posting and back to informational during testing (final state confirmed = informational, set_by = K. D. Proprietor, matching the sane state requested).",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Everything EXCEPT the owner's access to /setup/settings works correctly: Stores partner checkbox+persistence (BANKA already partner, chip renders, edit form reflects saved state), Distribution Grid full flow (source dropdown scoped to store_type=warehouse only — confirmed via code and via the one seeded warehouse RAN-WH; had to seed test stock there), destination checkboxes + partner chip, SKU search/add/qty grid, submit -> 2 drafts created and visible on /transfer with correct reason, Offers sidebar reduced to exactly 3 items (Price Book/Promotions/Discount Reports), PromotionsTabs row + EOSS tab navigation + 'Write an offer' CTA all present and working, Price Book 'Print tag' mock modal + confirm + mocked 'sent' message all correct, Partner billing card on /transfer/1 renders ₹2,800 with correct copy. The ONE blocking issue is the route-guard access wall on /setup/settings for the owner role — main agent should fix that before this feature set can be considered demo-ready for the owner persona, then a quick owner-session re-test of the billing-policy save+reload+GL-mode-switch flow (already validated end-to-end for superadmin) would close this out."
+}

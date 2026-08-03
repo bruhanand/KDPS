@@ -15,7 +15,7 @@
 //     act on.
 
 import { useState } from "react";
-import { History, IndianRupee, Search, Tag } from "lucide-react";
+import { History, IndianRupee, Printer, Search, Tag } from "lucide-react";
 
 import { PageHeader } from "../components/PageHeader";
 import { api, apiErrorMessage } from "../lib/api";
@@ -65,6 +65,7 @@ export function PriceListPage() {
   const [term, setTerm] = useState("");
   const [asOf, setAsOf] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [printing, setPrinting] = useState<Row | null>(null);
 
   const query = `/offers/price-list?q=${encodeURIComponent(term)}${asOf ? `&as_of=${asOf}` : ""}`;
   const { data, loading, reload } = useDoc<{
@@ -172,6 +173,15 @@ export function PriceListPage() {
                     >
                       <History size={14} /> Ticket &amp; trail
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      style={{ marginLeft: 6 }}
+                      onClick={() => setPrinting(row)}
+                      data-testid={`price-print-tag-${row.barcode}`}
+                    >
+                      <Printer size={13} /> Print tag
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -189,6 +199,49 @@ export function PriceListPage() {
           }}
         />
       )}
+      {printing && <TagPrintModal row={printing} onClose={() => setPrinting(null)} />}
+    </div>
+  );
+}
+
+/** Mocked (Rule 12): no printer is wired up yet — this simulates the ticket a
+ *  real one would produce, so Ops can preview the flow while the hardware
+ *  integration is scoped as its own ticket. */
+function TagPrintModal({ row, onClose }: { row: Row; onClose: () => void }) {
+  const [sent, setSent] = useState(false);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="tag-print-modal" style={{ maxWidth: 380 }}>
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow"><Printer size={14} /> Print tag (mock)</p>
+            <h3 className="h3">{row.brand || "(unbranded)"}</h3>
+          </div>
+          <button type="button" className="btn btn-sm" onClick={onClose} data-testid="tag-print-close">Close</button>
+        </div>
+        <div className="card section-card" style={{ marginTop: 14, textAlign: "center" }} data-testid="tag-preview">
+          <p className="eyebrow">{row.item || "Piece"}</p>
+          <p style={{ fontWeight: 700 }}>{row.design} {row.color} {row.size}</p>
+          <p className="mono muted-cell">{row.barcode}</p>
+          <h2 className="h2" style={{ marginTop: 8 }}>{money(row.mrp_paise)}</h2>
+          <p className="muted-cell">MRP incl. of all taxes</p>
+        </div>
+        {sent ? (
+          <p className="ok-note" style={{ marginTop: 14 }} data-testid="tag-print-sent">
+            Sent to printer (mock) — no physical printer is wired up yet.
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-cta"
+            style={{ marginTop: 14, width: "100%" }}
+            onClick={() => setSent(true)}
+            data-testid="tag-print-confirm"
+          >
+            <Printer size={15} /> Print
+          </button>
+        )}
+      </div>
     </div>
   );
 }

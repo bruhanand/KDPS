@@ -621,7 +621,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       };
       expect(tabLabels("transfer")).toEqual(["Transfers", "Stock Request", "In-Transit"]);
       expect(tabLabels("money")).toEqual(["Day Summary", "Store Targets", "Expenses"]);
-      expect(tabLabels("offers_price")).toEqual(["Price List", "Offers", "Discounts", "EOSS Planning"]);
+      expect(tabLabels("offers_price")).toEqual(["Price Book", "Promotions", "Discount Reports"]);
       expect(tabLabels("reports")).toEqual([
         "Sales Reports",
         "Stock Reports",
@@ -866,8 +866,6 @@ describe("legacy URLs", () => {
     "/outbound/vflips",
     "/outbound/vflips/new",
     "/outbound/vflips/12",
-    // Not a pre-#87 address but a deleted one: the Distribution stub (#229).
-    "/transfer/distribution",
     "/ledgers/stock",
     "/ledgers/stock-on-hand",
     "/ledgers/vendor",

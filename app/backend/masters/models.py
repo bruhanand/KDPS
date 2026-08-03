@@ -64,6 +64,12 @@ class Store(TimeStampedModel):
     gstin = models.ForeignKey(Gstin, on_delete=models.PROTECT, related_name="stores")
     city = models.CharField(max_length=80, blank=True, default="")
     is_active = models.BooleanField(default=True)
+    is_partner = models.BooleanField(
+        default=False,
+        help_text="A franchisee/partner store rather than a KDPS-owned one. Stock "
+        "transferred here is billed to the partner at Purchase Price — see "
+        "`outbound.BillingPolicy` for whether that also posts to the ledger.",
+    )
 
     class Meta:
         ordering = ["name"]

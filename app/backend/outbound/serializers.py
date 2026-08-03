@@ -16,6 +16,7 @@ from masters.models import Brand, Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
     AdjustmentReason,
+    BillingPolicy,
     CountScope,
     CountSession,
     CountSessionLine,
@@ -446,6 +447,7 @@ class StoreTransferReadSerializer(ApprovedDocumentSerializer):
             "lines",
             "receipt",
             "gap_closure",
+            "partner_billing_value_paise",
         ]
 
 
@@ -459,6 +461,21 @@ class StoreTransferPlanLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreTransferLine
         fields = ["sku_code", "qty_planned"]
+
+
+class BillingPolicySerializer(serializers.ModelSerializer):
+    """The one partner-billing dial, read and written whole — mirrors
+    `sell.SellPolicyView`'s shape (#271's pattern, applied here)."""
+
+    mode_label = serializers.CharField(source="get_mode_display", read_only=True)
+    set_by_name = serializers.SerializerMethodField()
+
+    def get_set_by_name(self, obj: BillingPolicy) -> str:
+        return display_name(obj.set_by)
+
+    class Meta:
+        model = BillingPolicy
+        fields = ["mode", "mode_label", "set_by_name", "updated_at"]
 
 
 class StoreTransferWriteSerializer(serializers.ModelSerializer):

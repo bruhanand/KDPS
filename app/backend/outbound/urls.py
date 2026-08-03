@@ -32,6 +32,7 @@ from outbound.views import (
     AdjustmentDetailView,
     AdjustmentListCreateView,
     AdjustmentSubmitView,
+    BillingPolicyView,
     CountLookupView,
     CountSessionCreateView,
     CountSessionScanView,
@@ -118,6 +119,8 @@ urlpatterns = [
         name="gap-closure-request-approval",
     ),
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
+    # The chain-wide partner-billing dial (#271's pattern, applied here).
+    path("partner-billing-policy", BillingPolicyView.as_view(), name="partner-billing-policy"),
     # Stock requests — the pull side of a transfer (#74)
     path("stock-search", CrossLocationStockSearchView.as_view(), name="stock-search"),
     path("stock-requests", StockRequestListCreateView.as_view(), name="stock-request-list"),

@@ -54,6 +54,7 @@ from outbound.counting import (
 )
 from outbound.maker_checker import ask_again
 from outbound.models import (
+    BillingPolicy,
     CountSession,
     MarkDamaged,
     ReceiptStatus,
@@ -72,6 +73,7 @@ from outbound.permissions import (
     CanCreateReturnToBrand,
     CanExecuteVFlip,
     CanFlipOwnership,
+    CanManageBillingPolicy,
     CanReadReturnToBrand,
     CanReadTransferPT,
     CanWriteReturnToBrand,
@@ -99,6 +101,7 @@ from outbound.returnable import cap_for, returnable_pool
 from outbound.scoping import scope_stock_requests, scope_transfers
 from outbound.serializers import (
     ApplyVarianceInputSerializer,
+    BillingPolicySerializer,
     CountScanInputSerializer,
     CountSessionCreateSerializer,
     CountSessionReadSerializer,
@@ -716,6 +719,27 @@ class CrossLocationStockSearchView(APIView):
                 "truncated": qs.count() > len(rows),
             }
         )
+
+
+class BillingPolicyView(APIView):
+    """The one partner-billing dial: informational-only, or also a receivable
+    at Purchase Price. Read at `money: view`, changed at `money: manage` —
+    see `CanManageBillingPolicy`."""
+
+    permission_classes = [IsAuthenticated, CanManageBillingPolicy]
+
+    def get(self, request: Request) -> Response:
+        return Response(BillingPolicySerializer(BillingPolicy.current()).data)
+
+    def put(self, request: Request) -> Response:
+        policy = BillingPolicy.current()
+        mode = request.data.get("mode")
+        if mode not in BillingPolicy.Mode.values:
+            raise ValidationError({"mode": f"must be one of {BillingPolicy.Mode.values}"})
+        policy.mode = mode
+        policy.set_by = request.user
+        policy.save(update_fields=["mode", "set_by", "updated_at"])
+        return Response(BillingPolicySerializer(policy).data)
 
 
 # ---------------------------------------------------------------------------

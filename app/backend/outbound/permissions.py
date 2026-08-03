@@ -84,6 +84,13 @@ CanWriteStockCount = require_section("stock_count", CAP_OPERATE)
 #: at the rung that owns the section rather than merely operates in it.
 CanFlipOwnership = require_section("stock", CAP_MANAGE)
 
+#: The partner-billing dial (informational vs. posting a receivable) is a money
+#: policy, not a transfer-operations one — Ops Head builds the Distribution grid
+#: at ``transfer: operate``, but only Owner/Accounts (``money: manage``) may
+#: change whether that billing also touches the ledger. Reading it needs only
+#: ``money: view`` (mirrors ``sell.CanReadOrManagePolicy``, #271's pattern).
+CanManageBillingPolicy = require_section("money", CAP_VIEW, write_minimum=CAP_MANAGE)
+
 
 class CanExecuteVFlip(BasePermission):
     """Live policy above the immutable Accounts/Owner value-posting floor."""

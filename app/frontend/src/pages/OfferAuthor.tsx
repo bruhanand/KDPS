@@ -365,6 +365,7 @@ export function OfferAuthorPage() {
   return (
     <div className="page-pad">
       <PageHeader
+        title={isNew ? "New offer" : "Edit offer"}
         lead={
           isNew
             ? "Write a rule the till can price with. It starts as a draft; a second person clears it before a single bill reads it."
