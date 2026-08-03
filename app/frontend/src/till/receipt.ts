@@ -14,6 +14,7 @@
 // have this bill yet.
 
 import { changeFor } from "./cart";
+import { code128Svg } from "./barcode";
 import { TENDER_WORDS } from "./tender";
 import { splitTax, taxKindFor } from "./gstin";
 import { taxLabel } from "./tax";
@@ -227,6 +228,8 @@ export function receiptHtml(
   .row { display: flex; justify-content: space-between; padding: 1px 0; }
   .due { font-weight: 700; font-size: 15px; border-top: 1px solid #000; padding-top: 4px; }
   .buyer { border: 1px solid #999; padding: 3px 4px; }
+  .receipt-barcode { display: block; width: 100%; height: 16mm; margin: 8px 0 3px; }
+  .receipt-barcode-number { color: #000; font: 700 10px/1.2 monospace; overflow-wrap: anywhere; }
   footer { padding-top: 6px; }
 </style></head>
 <body>
@@ -248,7 +251,10 @@ export function receiptHtml(
   ${tendered}${received}${changeRow}
   <footer class="mid dim">
     ${bill.origin === "offline" ? "Billed offline &middot; will reach head office when the line is back<br>" : ""}
-    Exchange within the store's policy, with this bill.<br>Thank you.
+    Exchange within the store's policy, with this bill.
+    ${code128Svg(bill.doc_number, { className: "receipt-barcode" })}
+    <div class="receipt-barcode-number">${esc(bill.doc_number)}</div>
+    Scan it to bring anything back.<br>Thank you.
   </footer>
 </body></html>`;
 }
