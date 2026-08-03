@@ -215,8 +215,8 @@ export function receiptHtml(
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${esc(bill.doc_number)}</title>
 <style>
-  @page { size: 80mm auto; }
-  body { font: 12px/1.45 "Helvetica Neue", Arial, sans-serif; width: 76mm; padding: 4mm; }
+  @page { size: 80mm auto; margin: 0; }
+  body { box-sizing: border-box; width: 80mm; margin: 0; padding: 4mm; font: 12px/1.45 "Helvetica Neue", Arial, sans-serif; }
   h1 { font-size: 15px; text-align: center; }
   .dim { color: #666; font-size: 10px; }
   .mid { text-align: center; }

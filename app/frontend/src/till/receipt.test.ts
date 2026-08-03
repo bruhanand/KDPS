@@ -135,6 +135,7 @@ describe("the customer's copy", () => {
     expect(html).toContain('aria-label="Bill 26-27/DEO/SAL/74"');
     expect(html).toContain("Scan it to bring anything back");
     expect(html).toContain("26-27/DEO/SAL/74");
+    expect(html).toContain("box-sizing: border-box; width: 80mm");
   });
 });
 
