@@ -13,6 +13,7 @@ import type { Room } from "../routes";
 import { SyncLight } from "../till/SyncLight";
 import { GlobalSearch } from "./GlobalSearch";
 import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
+import { MailButton } from "./MailButton";
 import { AlertsButton, ApprovalsButton } from "./Notifications";
 import {
   headingOwning,
@@ -732,6 +733,10 @@ export function AppShell({ children, room }: { children: ReactNode; room?: Room 
         <MobileNavContext.Provider value={mobileNavCtx}>
           <GlobalSearch />
           <div className="topbar-right">
+            {/* Mail sits before the alerts/approvals pair: both are "things
+                arriving for you", and the one people check most often should
+                be the one nearest the middle of the bar. */}
+            <MailButton />
             <AlertsButton />
             <ApprovalsButton />
             <UnitSwitcher />
