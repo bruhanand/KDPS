@@ -6,7 +6,7 @@
 // doing that N times for one arrived batch.
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Plus, Send, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Plus, RefreshCw, Send, Trash2, XCircle } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
@@ -42,6 +42,23 @@ interface GridRow {
 
 function rowTotal(row: GridRow): number {
   return Object.values(row.qtyByDest).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+/** A starting point, not a decision: split what's available as evenly as the
+ *  arithmetic allows across the stores picked so far, so the grid opens with a
+ *  sane guess instead of a wall of blanks — Ops Head edits any cell freely
+ *  from there. The remainder (available % stores) goes to the earliest-picked
+ *  stores, which is as good a tie-break as any and at least a stable one. */
+function equalSplit(available: number, destIds: string[]): Record<string, string> {
+  if (destIds.length === 0 || available <= 0) return {};
+  const base = Math.floor(available / destIds.length);
+  const remainder = available % destIds.length;
+  const out: Record<string, string> = {};
+  destIds.forEach((d, i) => {
+    const qty = base + (i < remainder ? 1 : 0);
+    if (qty > 0) out[d] = String(qty);
+  });
+  return out;
 }
 
 export function DistributionGridPage() {
@@ -99,7 +116,7 @@ export function DistributionGridPage() {
         sku_code: r.sku_code,
         label: [r.design, r.color, r.size].filter(Boolean).join(" · ") || r.brand,
         available: r.qty,
-        qtyByDest: {},
+        qtyByDest: equalSplit(r.qty, destIds),
       },
     ]);
     setResults([]);
@@ -108,6 +125,12 @@ export function DistributionGridPage() {
 
   function removeRow(sku: string) {
     setRows((rs) => rs.filter((r) => r.sku_code !== sku));
+  }
+
+  function resplitRow(sku: string) {
+    setRows((rs) =>
+      rs.map((r) => (r.sku_code === sku ? { ...r, qtyByDest: equalSplit(r.available, destIds) } : r)),
+    );
   }
 
   function setQty(sku: string, dest: string, val: string) {
@@ -277,6 +300,11 @@ export function DistributionGridPage() {
 
           {rows.length > 0 && (
             <div className="table-wrap" style={{ marginTop: 18 }}>
+              <p className="muted-cell" style={{ marginBottom: 8 }}>
+                Every row opens with an even split across the stores you picked — edit any cell, or
+                <RefreshCw size={11} style={{ verticalAlign: "-1px", margin: "0 3px" }} />
+                re-split a row back to even.
+              </p>
               <table className="data" data-testid="distribution-grid-table">
                 <thead>
                   <tr>
@@ -316,6 +344,15 @@ export function DistributionGridPage() {
                           <b style={over ? { color: "var(--red)" } : undefined}>{total}</b>
                         </td>
                         <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            title="Re-split this row evenly"
+                            onClick={() => resplitRow(row.sku_code)}
+                            data-testid={`distribution-resplit-${row.sku_code}`}
+                          >
+                            <RefreshCw size={13} />
+                          </button>
                           <button className="btn btn-sm" onClick={() => removeRow(row.sku_code)} data-testid={`distribution-remove-${row.sku_code}`}>
                             <Trash2 size={13} />
                           </button>

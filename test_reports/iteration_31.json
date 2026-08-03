@@ -1,0 +1,29 @@
+{
+  "summary": "Tested the new Distribution grid pre-fill/re-split enhancement (owner/Owner@123). Seeded warehouse stock for two SKUs at RAN-WH (LP-SLIM-WHT-38 qty=20, existing; TEST-VH-BLU-40 qty=10, added via Django shell since only one SKU existed at the only warehouse) to exercise the multi-row scenarios. All requested behaviors verified working correctly end-to-end via Playwright + console-log assertions (screenshots also captured):  (1) adding a row pre-fills qty cells with an even split summing exactly to available (20 across 3 dests -> 7/7/6); (2) manually editing a cell to 15 then clicking that row's re-split button correctly discards the edit and restores the even split (7/7/6, sum=20); (3) adding a second SKU row (available=10) opens independently pre-filled with its own even split (4/3/3); (4) changing destination selection after rows exist (unchecked HZB, checked DUM) left the existing row's old values untouched (old cells kept 7/7, new DUM cell rendered blank) -- confirming no silent auto-recompute; clicking that row's re-split button afterward correctly recomputed against the new destination set (7/7/6 across DEO/BKR/DUM); (5) end-to-end submit ('Create transfers') with a fresh pre-filled 10/10 split across 2 destinations succeeded, creating Draft #4 (DEO) and Draft #5 (BKR) with no errors -- confirming the previously-tested submit flow (iteration_29/30) still works unaffected by this change.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No action required. All 6 requested checks (pre-fill on add, manual-edit + re-split override, second-row independent pre-fill, no-auto-recompute-on-dest-change, re-split-picks-up-new-dest-set, submit still works) passed."
+  ],
+  "critical_code_review_comments": [
+    "equalSplit() in DistributionGrid.tsx is correctly pure and deterministic (floor + remainder-to-earliest-picked), matches the described spec exactly, and is reused identically for both the initial addRow fill and the resplitRow on-demand recompute -- no code duplication.",
+    "resplitRow() correctly re-reads the live destIds state at call time (not a stale closure from when the row was added), which is exactly what made the 'change destinations after adding rows, then re-split' scenario work correctly in testing.",
+    "Zero-qty destinations are omitted from qtyByDest (out[d] only set if qty>0) rather than stored as '0' -- reasonable choice, renders as an empty cell rather than a zero, consistent with the pre-existing setQty/rowTotal logic which treats blank as 0 via Number(v)||0."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per request)", "frontend": "100% (6/6 requested checks passed)"},
+  "test_credentials": "owner/Owner@123 used successfully throughout.",
+  "seed_data_creation": "Added one StockOnHand row directly via Django shell for store RAN-WH / sku_code TEST-VH-BLU-40 (qty 10, brand Van Heusen) purely to have a second SKU with warehouse stock for the multi-row test (only LP-SLIM-WHT-38, qty 20, pre-existed at the sole warehouse RAN-WH from iteration_29's seeding). Also created 2 more real draft transfers during the submit-flow retest (Draft #4 RAN-WH->DEO, Draft #5 RAN-WH->BKR, qty 10 each, reason=warehouse_allocation) -- left in DRAFT status, harmless test data, flagging for cleanup awareness only.",
+  "retest_needed": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "This closes out the pre-fill/re-split enhancement request cleanly -- no bugs found, no fixes needed. Only environment note carried forward: RAN-WH remains the only store_type=warehouse in this dataset (PAT-WH does not exist), so any future warehouse-stock-dependent testing should check /api/outbound/stock-search?store=RAN-WH&q=<term> first or seed via Django shell (stockledger.models.StockOnHand) as done here and in iteration_29.",
+  "rca of the issue": "N/A - no bugs found in this session, purely additive-feature verification."
+}
