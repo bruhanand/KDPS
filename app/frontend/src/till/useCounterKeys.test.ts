@@ -17,11 +17,19 @@ describe("the counter keyboard map", () => {
     expect(counterKeyAction("x")).toBeNull();
   });
 
+  it("uses Enter only to leave an open finish overlay", () => {
+    expect(activeCounterKeyAction("Enter", false, true)).toBe("next-bill");
+    expect(activeCounterKeyAction("F9", false, true)).toBeNull();
+    expect(activeCounterKeyAction("Escape", false, true)).toBeNull();
+    expect(activeCounterKeyAction("Enter", false, false)).toBeNull();
+  });
+
   it("leaves the counter untouched while a decision surface is open", () => {
     expect(activeCounterKeyAction("F2", true)).toBeNull();
     expect(activeCounterKeyAction("F3", true)).toBeNull();
     expect(activeCounterKeyAction("F4", true)).toBeNull();
     expect(activeCounterKeyAction("F9", true)).toBeNull();
     expect(activeCounterKeyAction("Escape", true)).toBeNull();
+    expect(activeCounterKeyAction("Enter", true, true)).toBeNull();
   });
 });

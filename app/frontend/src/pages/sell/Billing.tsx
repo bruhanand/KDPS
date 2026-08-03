@@ -58,6 +58,7 @@ import { BillBar } from "./billing/BillBar";
 import type { CounterMode } from "./billing/BillBar";
 import { ScanHero } from "./billing/ScanHero";
 import { CustomerStrip } from "./billing/CustomerStrip";
+import { FinishOverlay } from "./billing/FinishOverlay";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
 import { RailFoot } from "./billing/RailFoot";
@@ -173,7 +174,12 @@ function Counter({
   const [holding, setHolding] = useState(false);
   const [note, setNote] = useState("");
   const [printProblem, setPrintProblem] = useState("");
-  const [lastBill, setLastBill] = useState<{ bill: QueuedBill; receipt: string } | null>(null);
+  const [lastBill, setLastBill] = useState<{
+    bill: QueuedBill;
+    receipt: string;
+    cashReceivedPaise: number;
+  } | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
   const [typed, setTyped] = useState("");
   /** A barcode this counter could not place, waiting on the cashier to say
    *  whether it is a mistyped tag or a piece that arrived before its paperwork
@@ -849,6 +855,13 @@ function Counter({
     scan.focus();
   }
 
+  function nextBill() {
+    freshCounter();
+    startingANewBill();
+    setFinishOpen(false);
+    scan.focus();
+  }
+
   // --- bills on hold (#185, grill Q13) --------------------------------------
 
   const holds = till?.held ?? [];
@@ -999,11 +1012,16 @@ function Counter({
         cashReceivedPaise: cart.payment.cash_received_paise,
         describe: describeFrom(bill.lines),
       });
-      setLastBill({ bill: queued, receipt });
+      setLastBill({
+        bill: queued,
+        receipt,
+        cashReceivedPaise: cart.payment.cash_received_paise,
+      });
       freshCounter();
       await clearDraft(engine.db);
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
+        setFinishOpen(true);
         await print(receipt);
       } else {
         leavePaperMode();
@@ -1057,11 +1075,13 @@ function Counter({
 
   useCounterKeys({
     disabled: Boolean(asking || charging || showHolds || counterBlocked || saving || holding),
+    finishOpen,
     onHold: () => void holdBill(),
     onLookup: () => navigate("/sell/customers"),
     onNewBill: newBill,
     onSave: () => void save(),
     onBackToScan: dismissCounterError,
+    onNextBill: nextBill,
   });
 
   // "Did you mean" and "bill it off the tag" both hang off the scan box as one
@@ -1343,6 +1363,16 @@ function Counter({
           </>
         )}
       </div>
+
+      {finishOpen && lastBill && (
+        <FinishOverlay
+          bill={lastBill.bill}
+          cashReceivedPaise={lastBill.cashReceivedPaise}
+          printProblem={printProblem}
+          onPrint={() => void print(lastBill.receipt)}
+          onNext={nextBill}
+        />
+      )}
 
       {/* "Did you mean" and "bill it off the tag" (G-4): portaled to
           `document.body` and placed by `usePositionedPopover`, so neither can

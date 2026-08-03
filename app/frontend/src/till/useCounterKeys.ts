@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 
-export type CounterKeyAction = "hold" | "lookup" | "new-bill" | "save" | "back-to-scan";
+export type CounterKeyAction =
+  | "hold"
+  | "lookup"
+  | "new-bill"
+  | "save"
+  | "back-to-scan"
+  | "next-bill";
 
 /** The counter owns these keys. Keeping the map pure makes the browser handler
  * small and gives the operational key contract one direct test seam. */
@@ -22,30 +28,40 @@ export function counterKeyAction(key: string): CounterKeyAction | null {
 }
 
 /** A modal or decision surface owns the keyboard until it is answered. */
-export function activeCounterKeyAction(key: string, disabled: boolean): CounterKeyAction | null {
-  return disabled ? null : counterKeyAction(key);
+export function activeCounterKeyAction(
+  key: string,
+  disabled: boolean,
+  finishOpen = false,
+): CounterKeyAction | null {
+  if (disabled) return null;
+  if (finishOpen) return key === "Enter" ? "next-bill" : null;
+  return counterKeyAction(key);
 }
 
 /** Claim the counter's accelerators unless a modal is asking the cashier a
  * question. A modal owns its own Escape handling, so the bill must stay still. */
 export function useCounterKeys({
   disabled,
+  finishOpen = false,
   onHold,
   onLookup,
   onNewBill,
   onSave,
   onBackToScan,
+  onNextBill = () => undefined,
 }: {
   disabled: boolean;
+  finishOpen?: boolean;
   onHold: () => void;
   onLookup: () => void;
   onNewBill: () => void;
   onSave: () => void;
   onBackToScan: () => void;
+  onNextBill?: () => void;
 }): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const action = activeCounterKeyAction(event.key, disabled);
+      const action = activeCounterKeyAction(event.key, disabled, finishOpen);
       if (!action) return;
 
       event.preventDefault();
@@ -67,10 +83,13 @@ export function useCounterKeys({
         case "back-to-scan":
           onBackToScan();
           break;
+        case "next-bill":
+          onNextBill();
+          break;
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [disabled, onBackToScan, onHold, onLookup, onNewBill, onSave]);
+  }, [disabled, finishOpen, onBackToScan, onHold, onLookup, onNewBill, onNextBill, onSave]);
 }
