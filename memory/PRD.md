@@ -86,6 +86,19 @@ everything. If backend 500s on boot with `ModuleNotFoundError: No module named
 'django'`, that's this exact situation — check `.env` files first before
 anything else.
 
+**Follow-up (same session): Distribution grid now suggests a starting split.**
+Adding a SKU row pre-fills its qty-per-destination cells with an even split of
+the available quantity across the currently-selected destinations (remainder to
+the earliest-picked stores) instead of opening blank — `equalSplit()` helper in
+`DistributionGrid.tsx`. Every cell stays freely editable; a per-row "re-split"
+button recomputes the even split on demand (useful after a manual edit, or
+after changing which destinations are selected — existing rows never
+auto-recompute on a destination change, only on that explicit click, so a
+manual edit is never silently clobbered). `testing_agent_v4` (iteration_31):
+100% pass, all 6 scenarios (pre-fill on add, edit+re-split override, a second
+row's independent pre-fill, no-auto-recompute-on-dest-change, re-split-picks-up
+-new-dest-set, submit still creates drafts correctly).
+
 **Testing.** Backend: `pytest outbound masters core/tests tests/test_outbound_*
 tests/test_cross_store_*` all green (run in the `/opt/kdpsvenv` venv, budget
 ~90–150s per batch, the sandbox's own command timeout — not pytest — is what

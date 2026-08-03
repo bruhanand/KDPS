@@ -21,8 +21,6 @@ store flag + configurable billing) are both shipped and tested.
 ## P2
 - Value-banded countersignature on a re-ticket; tender/bank offers + payments;
   store acknowledgement of a published offer.
-- AI-assisted Distribution stock-split predictions (suggest a qty-per-store
-  split on the Distribution grid instead of a blank grid).
 - True bin/location tracking for physical warehouse storage.
 - HRMS & Attendance module.
 - Minor, non-blocking (found by testing agent, iteration_29): the login
