@@ -7,6 +7,7 @@ from vendors.views import (
     BookingDetailView,
     BookingDraftView,
     BookingListCreateView,
+    BookingSubmitView,
     VendorDetailView,
     VendorListCreateView,
 )
@@ -18,4 +19,9 @@ urlpatterns = [
     path("bookings/draft", BookingDraftView.as_view(), name="booking-draft"),
     path("bookings/<int:pk>", BookingDetailView.as_view(), name="booking-detail"),
     path("bookings/<int:pk>/close", BookingCloseView.as_view(), name="booking-close"),
+    path(
+        "bookings/<int:pk>/request-approval",
+        BookingSubmitView.as_view(),
+        name="booking-request-approval",
+    ),
 ]

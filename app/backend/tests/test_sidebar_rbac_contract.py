@@ -195,7 +195,9 @@ def test_every_seeded_role_is_a_ratified_row(db):
     """
     seeded = {spec["code"] for spec in SEED_ROLES}
     assert seeded == set(KNOWN_ROLE_CODES) == set(ROLE_PERSONA)
-    assert len(seeded) == 9
+    # Ten since 3 Aug 2026: Promo / Marketing joined the sheet (D11 R2) — the
+    # person who authors offers and publishes them to the shops.
+    assert len(seeded) == 10
 
     for code in KNOWN_ROLE_CODES:
         access = section_access_for(code)

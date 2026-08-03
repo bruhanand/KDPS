@@ -27,12 +27,14 @@ from rest_framework.views import APIView
 
 from accounts.permissions import require_section
 from accounts.sections import CAP_APPROVE, CAP_OPERATE, CAP_VIEW
+from approvals.services import AlreadyPendingError, ApprovalError
 from core.documents import VoucherSeries
 from core.textsearch import search_term, text_filter
 from files.models import StoredFile
 from masters.models import Brand, Season, Store
 from masters.permissions import IsMasterSteward
 from vendors.agents import read_booking_receipt
+from vendors.approval import ask_for_approval
 from vendors.models import Booking, BookingLine, Vendor
 from vendors.serializers import (
     BookingCreateSerializer,
@@ -200,7 +202,11 @@ class BookingListCreateView(generics.ListCreateAPIView):
             brand=brand,
             season=season,
             destination_store_id=dest_id,
-            status=Booking.Status.BOOKED,
+            # A commitment starts as a draft and reaches "booked" through the
+            # second person the access table always promised (D11 §3). It used to
+            # be created `booked` outright, which meant the Owner's `booking:
+            # approve` cell decided nothing at all.
+            status=Booking.Status.DRAFT,
             vendor_ref=data.get("vendor_ref", ""),
             notes=data.get("notes", ""),
             ownership=brand.ownership,
@@ -281,3 +287,48 @@ class BookingCloseView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=409)
         return Response(BookingSerializer(booking).data)
+
+
+class BookingSubmitView(APIView):
+    """Send a drafted booking for the Owner's signature (D11 §3).
+
+    The maker's last act on their own commitment. Approval places it - see
+    `vendors.approval` - so there is no second step for anybody to forget, and no
+    path from draft to booked that does not pass a second person.
+    """
+
+    permission_classes = [IsAuthenticated, CanPlaceBooking]
+
+    def post(self, request: Request, pk: int) -> Response:
+        booking = (
+            Booking.objects.select_related("vendor", "brand", "season", "destination_store")
+            .prefetch_related("lines", "lines__store")
+            .filter(pk=pk)
+            .first()
+        )
+        if booking is None:
+            return Response({"detail": "Booking not found."}, status=404)
+        if booking.status != Booking.Status.DRAFT:
+            return Response(
+                {
+                    "detail": (
+                        "Only a draft is sent for approval; this one is "
+                        f"{booking.get_status_display().lower()}."
+                    )
+                },
+                status=400,
+            )
+        if not booking.lines.exists():
+            return Response(
+                {"detail": "A booking with no lines commits nothing - add its styles first."},
+                status=400,
+            )
+        try:
+            ask_for_approval(booking, requested_by=request.user)
+        except AlreadyPendingError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        except ApprovalError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        booking.status = Booking.Status.SUBMITTED
+        booking.save(update_fields=["status", "updated_at"])
+        return Response(BookingSerializer(booking).data, status=201)

@@ -74,6 +74,12 @@
     "stock_count": "approve",
     "transfer": "approve"
   },
+  "promo": {
+    "home": "view",
+    "offers_price": "operate",
+    "reports": "view",
+    "stock": "view"
+  },
   "store_manager": {
     "booking": "view",
     "home": "view",

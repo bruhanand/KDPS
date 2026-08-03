@@ -42,6 +42,9 @@ class Vendor(TimeStampedModel):
 class Booking(TimeStampedModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
+        # A commitment waiting for the second person the access table always
+        # promised (D11 §3). Between draft and booked, and the only way through.
+        SUBMITTED = "submitted", "Sent for approval"
         BOOKED = "booked", "Booked"
         PARTIALLY_RECEIVED = "partially_received", "Partially received"
         RECEIVED = "received", "Received"
@@ -72,6 +75,15 @@ class Booking(TimeStampedModel):
     )
     created_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    #: Who signed the commitment. Stamped from the approval, so the document
+    #: itself answers "who allowed this" without joining the inbox.
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bookings_approved",
     )
     # How a commitment ends. Every ERP needs the short-close: the season is over,
     # 40 of 100 pieces came, and the other 60 never will. Without this the
@@ -133,7 +145,14 @@ class Booking(TimeStampedModel):
             return
         booked = sum(line.booked_qty for line in lines)
         received = sum(line.received_qty for line in lines)
+        # An unapproved commitment is never promoted by a recount of its own
+        # lines. Without this, adding a line to a draft — or any save that
+        # recomputes — would walk a booking through the gate the Owner is meant
+        # to hold (D11 §3). Goods arriving against one is a different matter and
+        # is recorded below: that has to be reported, not hidden.
         if received <= 0:
+            if self.status in (self.Status.DRAFT, self.Status.SUBMITTED):
+                return
             new = self.Status.BOOKED
         elif received < booked:
             new = self.Status.PARTIALLY_RECEIVED

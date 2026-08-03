@@ -35,7 +35,8 @@ from core.documents import VoucherSeries
 from core.gl import GLAccount, GLEntry
 from core.posting import Leg, PostingRef, cr, dr, post_entries
 from finledger.posting import post_pt_vendor_bill, reverse_pt_vendor_bills
-from masters.models import Brand, Cohort, Sku, Store
+from masters.models import Brand, Cohort, PriceChange, Sku, Store
+from masters.price_history import record_price_change
 from stockledger.models import StockLedgerEntry, StockOnHand
 
 WAREHOUSE_CODE = "RAN-WH"
@@ -313,12 +314,17 @@ def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
         obj.save()
 
 
-def _register_identity(pt, number: str) -> None:
+def _register_identity(pt, number: str, user=None) -> None:
     """Upsert the SKU master + the (barcode, season) cohort for every valued row,
     persisting the locked per-unit cost (the queryable identity spine, ADR Phase F).
     Quantities and costs were already validated by `_build_inward_entries`, so every
     row here re-parses cleanly - anything that didn't blocked the post long before
-    this point. The cohort's DB CHECK (`unit_cost ≤ mrp`) is defence-in-depth."""
+    this point. The cohort's DB CHECK (`unit_cost ≤ mrp`) is defence-in-depth.
+
+    A ticket that *moved* also writes a row in the price trail (D11 §4): the MRP
+    column used to be overwritten in place by whichever PT last touched the
+    barcode, so nobody could say what a piece was priced at on the day an older
+    bill was printed. Re-stating the same MRP writes nothing."""
     for row in pt.rows.all():
         data = row.data
         qty = _row_qty(data, row.line_no)
@@ -330,6 +336,7 @@ def _register_identity(pt, number: str) -> None:
         unit_paise = _unit_cost_paise(data, row.line_no)
         mrp = _decimal(data.get("MRP"))
         mrp_paise = _rupees_to_paise(mrp) if (mrp is not None and mrp > 0) else None
+        was_paise = Sku.objects.filter(barcode=barcode).values_list("mrp_paise", flat=True).first()
         sku, _ = Sku.objects.update_or_create(
             barcode=barcode,
             defaults={
@@ -346,6 +353,15 @@ def _register_identity(pt, number: str) -> None:
         if not sku.first_doc_number:
             sku.first_doc_number = number
             sku.save(update_fields=["first_doc_number", "updated_at"])
+        record_price_change(
+            barcode=barcode,
+            sku=sku,
+            from_paise=was_paise,
+            to_paise=mrp_paise,
+            source=PriceChange.Source.PT,
+            doc_number=number,
+            user=user,
+        )
         Cohort.objects.update_or_create(
             barcode=barcode,
             season=str(data.get("SEASON") or "")[:120],
@@ -392,7 +408,7 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     total_value = sum(e.amount for e in entries)
     _post_value_gl(pt, store, number, booking, total_value, user)
     vendor_bill = post_pt_vendor_bill(pt, booking, total_value, user)
-    _register_identity(pt, number)
+    _register_identity(pt, number, user)
     return {
         "doc_number": number,
         "entries": len(entries),

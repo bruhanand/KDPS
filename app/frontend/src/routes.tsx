@@ -33,6 +33,9 @@ import { AlertsPage } from "./pages/Alerts";
 import { MailPage } from "./pages/Mail";
 import { OffersPage } from "./pages/Offers";
 import { OffersEossPage } from "./pages/OffersEoss";
+import { OfferAuthorPage } from "./pages/OfferAuthor";
+import { PriceListPage } from "./pages/PriceList";
+import { DiscountsPage } from "./pages/Discounts";
 import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
@@ -67,10 +70,15 @@ const BUILT: Screen[] = [
   // mail belongs to a person, not to a section, so it has no menu entry and no
   // RBAC cell — every logged-in person has exactly one, and it is theirs.
   { id: "mail", path: "/mail", element: <MailPage /> },
-  // Offers & Price - the store's read-only view of the rulebook (#183). The
-  // three authoring screens beside it in the nav are still planned.
+  // Offers & Price - the store's read-only view of the rulebook (#183), the
+  // authoring workspace behind it, the price list and the discount pack (D11).
   { id: "offers", path: "/offers", element: <OffersPage /> },
   { id: "offers-eoss", path: "/offers/eoss", element: <OffersEossPage /> },
+  { id: "offers-price-list", path: "/offers/price-list", element: <PriceListPage /> },
+  { id: "offers-discounts", path: "/offers/discounts", element: <DiscountsPage /> },
+  // Before `/offers/:id`, so the word is never read as an offer id.
+  { id: "offer-new", path: "/offers/new", element: <OfferAuthorPage /> },
+  { id: "offer-detail", path: "/offers/:id", element: <OfferAuthorPage /> },
   // Booking
   { id: "booking-list", path: "/booking", element: <BookingsPage /> },
   { id: "booking-new", path: "/booking/new", element: <BookingNewPage /> },

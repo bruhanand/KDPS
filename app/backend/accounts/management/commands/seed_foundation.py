@@ -98,6 +98,13 @@ ROLES: list[dict[str, Any]] = [
         "description": "Single steward of master data — vendors/brands/SKU/season/taxonomy.",
     },
     {
+        "code": "promo",
+        "name": "Promo / Marketing",
+        "landing_page": "home",
+        "nav_groups": ["home", "intelligence"],
+        "description": "Writes the offers and publishes them to the shops; no money, no stock.",
+    },
+    {
         "code": "it_admin",
         "name": "System / IT Admin",
         "landing_page": "owner",
@@ -123,6 +130,7 @@ USERS: list[tuple[str, str, str, str, list[str], str, list[str]]] = [
     ("admin", "Admin@123", "it_admin", "all", [], "IT Admin", []),
     ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor", []),
     ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops", []),
+    ("promo1", "Promo@123", "promo", "all", [], "Marketing / Promo", []),
     ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant", []),
     (
         "brand1",

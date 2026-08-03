@@ -312,9 +312,13 @@ export const SECTIONS: NavSectionDef[] = [
     icon: Tag,
     layer: "intelligence",
     items: [
-      { label: "Price List", to: "/offers/price-list", planned: true },
+      { label: "Price List", to: "/offers/price-list" },
       { label: "Offers", to: "/offers" },
-      { label: "Discounts", to: "/offers/discounts", planned: true },
+      // Authoring, at `operate` (D11 §6). The write endpoint used to ask for
+      // `manage`, which only IT holds, so the people the access table hands
+      // offers to could not write one - the reason there was no such screen.
+      { label: "New Offer", to: "/offers/new", minCapability: "operate" },
+      { label: "Discounts", to: "/offers/discounts" },
       { label: "EOSS Planning", to: "/offers/eoss" },
     ],
   },

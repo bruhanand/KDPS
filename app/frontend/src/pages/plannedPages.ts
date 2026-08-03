@@ -163,32 +163,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   },
 
   // ---- Offers & Price -----------------------------------------------------
-  "/offers/price-list": {
-    summary: "What a piece is priced at, and what it was priced at on any past date.",
-    contains: [
-      "Prices and markdowns, date-effective",
-      "Brand-wise price lists",
-      "History — what the price was on the day a bill was made",
-    ],
-    module: PROMOTIONS,
-  },
-  "/offers/discounts": {
-    summary: "How much each role may give away, and who approves more.",
-    contains: [
-      "Discount approval limits per role",
-      "Anything beyond the limit goes for approval instead of being blocked",
-      "Every override kept with who allowed it and why",
-    ],
-    module: PROMOTIONS,
-  },
-  "/offers/eoss": {
-    summary: "Planning the season sale before it starts.",
-    contains: [
-      "Markdown planning — which stock, which stores, what price",
-      "EOSS bulk billing (stock billed and kept in the store), set up here and run at the counter",
-    ],
-    module: PROMOTIONS,
-  },
 
   // ---- Staff --------------------------------------------------------------
   "/staff/attendance": {

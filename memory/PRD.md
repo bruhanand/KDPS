@@ -1067,3 +1067,86 @@ outstanding: the full written audit report the user asked for, and the
 sequential Booking→Inbound→Outbound→Sale fix pass against the 18 open
 GitHub issues in `/app/github_issues_audit.md` (booking store-scope leak #234,
 money formatting #155/#198, RTV integrity #220, POS scan/GSTIN bugs, etc).
+
+## Consult + build — D11 Booking & Price module (3 Aug 2026) ✅
+Anand asked for a **consultant pass first**, then the build: "design the whole
+Booking and Price module for all users… be the expert." Five rulings were taken
+before anything was written and they are the spine of the module (recorded
+verbatim in the doc's §0):
+
+- **R1** "Booking" = the **vendor/brand booking** placed 6–8 months ahead (not the
+  customer-side set-aside).
+- **R2** "Advertisement user" = a **marketing/promo persona** who authors offers and
+  publishes them to shops — the digital replacement for the shutter placard.
+  Ratified as the **tenth role**.
+- **R3** No claim/loss framing. **Brand-owned stock → the brand decides the discount;
+  KDPS-owned stock → KDPS administers it.** Margin simply differs on-sale vs
+  off-sale. (Ownership already lives in the books as `cost_book`, so authority and
+  accounting read the same fact.)
+- **R4** The month-end report states sales **exactly as billed**. The date/bill-number
+  reshuffle in `docs/data-from-kdps/report-offer.md` is **not built**; the honest
+  engine is instead: *eligible discount the till never applied*, surfaced on the
+  true bill and the true date.
+- **R5** Complete the module this round, with the role-by-role process map.
+
+**Deliverable 1 — the consultation.** `docs/my-understanding/system-design/
+11-booking-price/booking-and-price.html` (D11, house two-tab style, D5's
+stylesheet reused). Tab 1: the five moments a price is decided (commit → cost →
+ticket → discount → net), the nine-rung money ladder, booking process role by
+role, the price module, the discount families, the **ten personas × two sections**
+map, the four gates, and §8's rejection of the reshuffle with the four honest
+levers. Tab 2: twelve open consultant questions with a recommendation attached to
+each, an industry benchmark table, and the five defects found by reading the
+running system.
+
+**Deliverable 2 — the build.** Six gaps closed:
+- **G1 Nobody in the business could author an offer.** The write gate asked for
+  `manage`, which only IT Admin holds — so every rule in the database had been
+  seeded by code. Gate is `operate` now; new **Promo/Marketing** persona (13 cells,
+  `offers_price: operate`, no money/stock/booking); new **authoring screen**
+  (`/offers/new`, `/offers/:id`) covering all eight patterns, pattern-first with a
+  live reading, plus `promo1 / Promo@123`.
+- **G2 An offer approved itself.** Offers joined the shared approval spine:
+  `POST /api/offers/<id>/request-approval` → inbox → a **second person** (Owner or
+  Brand Manager, from a seeded `ApprovalPolicy`) approves, **and the decision
+  publishes it live** (an `approved` rule behind its start date would never have
+  priced anything). Typing `status: approved` onto your own draft is refused.
+- **G3 A ticket had no history.** New `masters.PriceChange` (append-only, effective-
+  dated) written wherever an MRP moves — including PT postings — plus the **Price
+  List** screen (`/offers/price-list`): ticket, landed cost, margin, NOD flag,
+  as-of-a-past-day reading, per-barcode trail, and a **re-ticket** action that
+  demands a reason and refuses below landed cost *naming the cost*.
+- **G4 No discount governance.** **Discounts** screen (`/offers/discounts`, served by
+  `GET /api/sell/discounts` — the facts are bills, and the rulebook may not import
+  the counter): what came off by rule/brand/funder, what a **person** keyed in with
+  the person named, and **"owed, not given"** off the nightly `offer_mismatch` flags.
+- **G5 A booking approved itself.** `draft → submitted → booked` through the spine
+  (Owner signs); `recompute_status` no longer promotes an unapproved draft.
+- **G6 Three of four demo offers discounted nothing** (slab rules with no `slabs`,
+  a buy-x-get-y with buy/get in the wrong dict — the "buy 0 get 0 free" on screen).
+  Seed corrected; the strict serializer is now the only door in.
+
+**Verification.** 17 new tests in `tests/test_booking_price_module.py` (all pass);
+full backend suite green; `ruff check/format`, `lint-imports` (8/8 contracts,
+including the new `offers ↛ sell` fix), `mypy core config`, `tsc` and the frontend
+contract suites (navConfig/routes/plannedPages/routeAccess) all pass. New
+`manage.py seed_sell_demo` seeds 34 demo bills **through the real accept pipeline**,
+every discount taken from the engine's own answer, so the pack shows true numbers.
+Screens verified in the browser as promo1 and owner.
+
+**Environment note.** This pod needed bring-up: Postgres 15 installed + started,
+Python 3.12 venv at `/root/.venv312` (the repo uses PEP-695 generics, so the
+pod's 3.11 cannot import it) with `/root/.venv/bin/uvicorn` shimmed to it, DB
+created, `seed_foundation` + demo seeds run.
+
+**Next action items (not started, deliberately):**
+- P1 **Q1–Q4, Q7, Q8 in the doc's Tab 2 need Anand's ruling** (who owns the ticket
+  for own goods; whether a store may run a local offer; per-role vs per-store
+  counter caps; the promo user's writ; booking value at cost or MRP; booking band).
+- P1 **Open-to-buy at booking time** (G7) — needs trustworthy sell-through history first.
+- P2 **Value-banded countersignature on a re-ticket** (G8); tender/bank offers +
+  payments (Q11); store acknowledgement of a published offer (Q5).
+- Carried over from the previous entry: the written operations audit and the
+  18-issue fix pass in `/app/github_issues_audit.md`.
+- Pre-existing, untouched: 36 `src/till/*` vitest failures in this pod
+  (`navigator is not defined` — environment, not code).

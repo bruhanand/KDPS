@@ -330,6 +330,51 @@ class Cohort(TimeStampedModel):
         return f"{self.barcode}@{self.season}"
 
 
+class PriceChange(TimeStampedModel):
+    """Every movement of a ticket, kept for ever (D11 §4).
+
+    The ticket itself lives on ``Sku`` and ``Cohort``, one number each, because
+    that is what the till reads. This is the *history* beside it, and it exists
+    for the questions a column cannot answer: what was this piece priced at on the
+    day that bill was made, who moved it, and why. Append-only — a correction is
+    another row, never an edit, for the same reason no posted document in this
+    system is editable.
+
+    ``effective_from`` rather than only a timestamp, because a re-ticket is a
+    business date: head office decides a piece sells at ₹2,999 *from Monday*, and
+    a bill printed on Sunday has to keep reading Sunday's ticket.
+    """
+
+    class Source(models.TextChoices):
+        PT = "pt", "PT posting"
+        REPRICE = "reprice", "Re-ticket"
+
+    barcode = models.CharField(max_length=64, db_index=True)
+    sku = models.ForeignKey(
+        Sku, null=True, blank=True, on_delete=models.SET_NULL, related_name="price_changes"
+    )
+    #: Null on the first row a barcode ever gets — there was no ticket before it.
+    from_paise = MoneyField(null=True, blank=True)
+    to_paise = MoneyField()
+    effective_from = models.DateField()
+    source = models.CharField(max_length=12, choices=Source.choices)
+    #: The document that moved it, where one did (a PT's inward voucher number).
+    doc_number = models.CharField(max_length=32, blank=True, default="")
+    reason = models.CharField(max_length=200, blank=True, default="")
+    changed_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
+    )
+
+    class Meta:
+        ordering = ["-effective_from", "-id"]
+        indexes = [
+            models.Index(fields=["barcode", "effective_from"], name="masters_price_day_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.barcode}: {self.from_paise or 0} → {self.to_paise}"
+
+
 class Customer(TimeStampedModel):
     """One row per mobile number - the counter's first customer master (#242).
 

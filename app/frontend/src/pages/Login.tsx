@@ -16,6 +16,7 @@ const DEMO: { label: string; username: string; password: string }[] = [
   { label: "Store manager", username: "deo.manager", password: "Store@123" },
   { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
   { label: "HO Ops", username: "ops1", password: "Ops@123" },
+  { label: "Promo / marketing", username: "promo1", password: "Promo@123" },
   { label: "Data steward", username: "steward", password: "Steward@123" },
   { label: "Super admin", username: "superadmin", password: "Super@123" },
 ];

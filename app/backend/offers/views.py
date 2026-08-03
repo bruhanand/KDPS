@@ -22,16 +22,23 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_MANAGE, CAP_VIEW
+from accounts.sections import CAP_OPERATE, CAP_VIEW
+from approvals.services import AlreadyPendingError, ApprovalError
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import active_brand_names, active_store_ids, is_brand_scoped
+from offers.approval import ask_for_countersignature, pending_offer_ids
 from offers.models import Offer, OfferQuerySet
 from offers.serializers import OfferReadSerializer, OfferWriteSerializer
 
-#: `view` reads the rulebook, `manage` writes it (contract §Step 4). One view
-#: carries both because GET and POST share a path.
-CanReadOrAuthor = require_section("offers_price", CAP_VIEW, write_minimum=CAP_MANAGE)
+#: `view` reads the rulebook, `operate` writes one. It used to say `manage`,
+#: which exactly one persona holds - IT Admin - so in a system whose access table
+#: hands offers to the Owner, the Brand Manager and HO Ops, the only seat that
+#: could write a rule was IT, and every rule in the database had been seeded by
+#: code rather than authored by a person (D11 §6, F1). Authoring is `operate`;
+#: countersigning is `approve` and happens in the approvals inbox; `manage` keeps
+#: what it should always have kept, which is configuration.
+CanReadOrAuthor = require_section("offers_price", CAP_VIEW, write_minimum=CAP_OPERATE)
 
 #: Statuses whose content a bill may already have been priced under, and which
 #: are therefore not editable at all. `ended` is in here with `live` because the
@@ -102,14 +109,26 @@ class OfferListCreateView(APIView):
             # Narrows *within* what the caller may already see - it never reaches
             # past the switcher (the amended dashboard rule, contract §Step 1).
             rows = rows.filter(store_scope__stores__contains=[store])
-        return Response(OfferReadSerializer(rows.order_by("priority", "id"), many=True).data)
+        page = list(rows.order_by("priority", "id"))
+        body = OfferReadSerializer(page, many=True).data
+        # "A draft nobody has sent" and "a draft the Owner is holding" are
+        # different states to the person who wrote it, and one query for the whole
+        # page answers it (D11 §7).
+        waiting = pending_offer_ids(offer.id for offer in page)
+        for item in body:
+            item["awaiting_approval"] = item["id"] in waiting
+        return Response(body)
 
     def post(self, request: Request) -> Response:
         serializer = OfferWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return _bad_request(serializer.errors)
         offer = serializer.save(created_by=request.user, status=Offer.Status.DRAFT)
-        return Response(OfferReadSerializer(offer).data, status=201)
+        # Stated even though it is always false here, so the author screen reads
+        # one shape whether it just saved a rule or fetched one.
+        body = OfferReadSerializer(offer).data
+        body["awaiting_approval"] = False
+        return Response(body, status=201)
 
 
 class OfferDetailView(APIView):
@@ -121,7 +140,9 @@ class OfferDetailView(APIView):
         offer = _visible(request.user, include_ended=True).filter(pk=pk).first()
         if offer is None:
             return Response(refusal_body("NOT_FOUND", f"No offer {pk}."), status=404)
-        return Response(OfferReadSerializer(offer).data)
+        body = OfferReadSerializer(offer).data
+        body["awaiting_approval"] = bool(pending_offer_ids([offer.id]))
+        return Response(body)
 
     @transaction.atomic
     def put(self, request: Request, pk: int) -> Response:
@@ -144,10 +165,22 @@ class OfferDetailView(APIView):
 
         if offer.status in FROZEN_STATUSES:
             return self._frozen(offer, request)
+        if str(request.data.get("status") or "") == Offer.Status.APPROVED:
+            # The half of D5 Q9 that was deferred, now decided (D11 §7). Approving
+            # by writing "approved" onto your own draft is not a gate, so this path
+            # is closed: an offer is cleared by a second person, from the inbox.
+            return Response(
+                refusal_body(
+                    "VALIDATION",
+                    "An offer is not approved by whoever wrote it - send it for approval "
+                    "and let a second person clear it.",
+                ),
+                status=400,
+            )
         serializer = OfferWriteSerializer(offer, data=request.data, partial=True)
         if not serializer.is_valid():
             return _bad_request(serializer.errors)
-        saved = serializer.save(**_approval_stamp(offer, serializer.validated_data, request))
+        saved = serializer.save()
         return Response(OfferReadSerializer(saved).data)
 
     def _frozen(self, offer: Offer, request: Request) -> Response:
@@ -236,14 +269,44 @@ class OfferDetailView(APIView):
         return Response(body, status=201)
 
 
-def _approval_stamp(offer: Offer, data: dict[str, Any], request: Request) -> dict[str, Any]:
-    """Who approved it, recorded the moment the status says approved (D5 Q9).
+class OfferApprovalRequestView(APIView):
+    """Send a draft offer for countersignature (D11 §7).
 
-    The name is the point: "a named approver before go-live" is the gate, and a
-    row that went live with nobody's name on it is refused by the table itself.
-    Whether that name must belong to a *second* person is the half of D5 Q9 that
-    was explicitly deferred to the roles work, so it is not decided here.
+    The author's last act on their own rule. What comes back is the offer as it
+    now stands, so the screen can say "waiting for the Owner" without asking a
+    second question. The decision publishes it - see `offers.approval`.
+
+    This replaces `_approval_stamp`, which recorded whoever wrote "approved" onto
+    a draft as its approver - the half of D5 Q9 that was deferred, and a gate that
+    the author could clear alone.
     """
-    if data.get("status") == Offer.Status.APPROVED and offer.approved_by_id is None:
-        return {"approved_by": request.user}
-    return {}
+
+    permission_classes = [IsAuthenticated, CanReadOrAuthor]
+
+    def post(self, request: Request, pk: int) -> Response:
+        offer = _visible(request.user).filter(pk=pk).first()
+        if offer is None:
+            return Response(refusal_body("NOT_FOUND", f"No offer {pk}."), status=404)
+        if offer.status != Offer.Status.DRAFT:
+            return Response(
+                refusal_body(
+                    "VALIDATION",
+                    "Only a draft is sent for approval; this one is "
+                    f"{offer.get_status_display().lower()}.",
+                ),
+                status=400,
+            )
+        try:
+            approval = ask_for_countersignature(offer, requested_by=request.user)
+        except AlreadyPendingError as exc:
+            return Response(refusal_body("CONFLICT", str(exc)), status=409)
+        except ApprovalError as exc:
+            return Response(refusal_body("VALIDATION", str(exc)), status=400)
+        body = OfferReadSerializer(offer).data
+        body["awaiting_approval"] = True
+        body["approval"] = {
+            "id": approval.id,
+            "title": approval.title,
+            "approver_roles": list(approval.approver_roles),
+        }
+        return Response(body, status=201)

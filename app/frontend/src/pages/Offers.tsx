@@ -16,9 +16,13 @@
 // The authoring screens are their own tickets; this is the surface the pilot
 // store needs on day one.
 
-import { CalendarClock, Layers, Tag } from "lucide-react";
+import { CalendarClock, Layers, Plus, Tag } from "lucide-react";
+
+import { Link } from "react-router-dom";
 
 import { PageHeader } from "../components/PageHeader";
+import { useAuth } from "../auth/AuthContext";
+import { meetsCapability } from "../shell/navConfig";
 import { useList } from "../lib/hooks";
 
 interface OfferRow {
@@ -34,6 +38,7 @@ interface OfferRow {
   is_fallback: boolean;
   status: string;
   stores: string[];
+  awaiting_approval?: boolean;
 }
 
 const LAYER_LABEL: Record<string, string> = {
@@ -67,10 +72,23 @@ function fmtDay(iso: string): string {
 
 export function OffersPage() {
   const { data, loading } = useList<OfferRow>("/offers/");
+  const { user } = useAuth();
+  // The author's own entrance, shown only to the rung that can actually write
+  // one - a button that 403s is worse than no button.
+  const mayAuthor = meetsCapability(user?.capabilities?.offers_price, "operate");
 
   return (
     <div className="page-pad">
       <PageHeader lead="Every rule your counter is pricing with, and the ones on their way. The till applies these itself as each piece is scanned, offline included - nothing here needs a decision, and nothing here is edited at a store." />
+
+      {mayAuthor && (
+        <div className="toolbar">
+          <span className="spacer" />
+          <Link className="btn btn-primary" to="/offers/new" data-testid="offer-new-cta">
+            <Plus size={15} /> Write an offer
+          </Link>
+        </div>
+      )}
 
       {loading ? (
         <p className="lead">Loading…</p>
@@ -101,7 +119,13 @@ export function OffersPage() {
                       <Tag size={13} /> {row.brand || "Storewide"}
                       {row.is_fallback && " · default"}
                     </p>
-                    {row.one_liner}
+                    {mayAuthor ? (
+                      <Link className="link-cell" to={`/offers/${row.id}`}>
+                        {row.one_liner}
+                      </Link>
+                    ) : (
+                      row.one_liner
+                    )}
                     <span className="muted-cell" style={{ display: "block" }}>
                       {row.name}
                     </span>
@@ -120,7 +144,7 @@ export function OffersPage() {
                   </td>
                   <td>
                     <span className={`chip chip-${STATUS_TONE[row.status] ?? "grey"}`}>
-                      {row.status}
+                      {row.awaiting_approval ? "waiting for approval" : row.status}
                     </span>
                   </td>
                 </tr>

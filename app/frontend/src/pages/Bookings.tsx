@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileUp, Plus, Sparkles, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, FileUp, Plus, Send, Sparkles, Trash2, XCircle } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { ListSearchBar } from "../components/SearchBox";
@@ -416,12 +416,55 @@ function EndBooking({ booking, onDone }: { booking: BookingT; onDone: () => void
   );
 }
 
+/** Send a drafted booking for the Owner's signature (D11 §3).
+ *
+ *  The maker's last act on their own commitment. A booking used to be created
+ *  `booked` outright, which made the Owner's `booking: approve` cell decide
+ *  nothing; now the only road from draft to booked runs through the inbox. */
+function SendBookingForApproval({ booking, onDone }: { booking: BookingT; onDone: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    setSaving(true);
+    setError("");
+    try {
+      await api.post(`/bookings/${booking.id}/request-approval`, {});
+      onDone();
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        className="btn btn-cta"
+        disabled={saving}
+        onClick={submit}
+        data-testid="booking-send-approval"
+      >
+        <Send size={15} /> {saving ? "Sending…" : "Send for approval"}
+      </button>
+      {error && (
+        <span className="warn-note" data-testid="booking-send-error">
+          {error}
+        </span>
+      )}
+    </>
+  );
+}
+
 export function BookingDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: b, loading, reload } = useDoc<BookingT>(`/bookings/${id}`);
   // Same rung the server checks (`vendors.CanCloseBooking` = booking:approve).
   const canEnd = userCan(user, "booking", "approve");
+  // The maker's rung: whoever may place a booking may send their own for signing.
+  const canSend = userCan(user, "booking", "operate");
   if (loading || !b) return <div className="page-pad"><p className="lead">Loading…</p></div>;
   const ended = b.status === "closed" || b.status === "cancelled";
   return (
@@ -432,13 +475,29 @@ export function BookingDetailPage() {
         actions={
           <>
             <StatusPill status={b.status} label={b.status_label} />
-            {!ended && (
+            {b.status === "draft" && canSend && (
+              <SendBookingForApproval booking={b} onDone={reload} />
+            )}
+            {!ended && b.status !== "draft" && b.status !== "submitted" && (
               <Link className="btn btn-cta" to={`/receive/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
             )}
             {!ended && canEnd && <EndBooking booking={b} onDone={reload} />}
           </>
         }
       />
+
+      {b.status === "submitted" && (
+        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="booking-waiting-note">
+          <p className="eyebrow">Waiting for a signature</p>
+          <h3 className="h3">
+            {b.estimated_value_paise ? <Money paise={b.estimated_value_paise} short /> : "This booking"} is in the approvals inbox
+          </h3>
+          <p className="lead">
+            The Owner signs a commitment; the person who placed it cannot. Goods cannot be received
+            against it until it is signed.
+          </p>
+        </div>
+      )}
 
       {ended && (
         <div className="card section-card" style={{ marginBottom: 18 }} data-testid="booking-ended-note">

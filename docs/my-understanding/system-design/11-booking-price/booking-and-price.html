@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Booking &amp; Price · Consultation &amp; System Design</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4; --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:34px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:6px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  .tabbar{position:sticky; top:0; z-index:20; display:flex; gap:6px; background:var(--bg); padding:14px 0 10px; margin:6px 0 6px; border-bottom:1px solid var(--line)}
+  .tabbtn{border:1px solid var(--line); background:#fff; color:var(--navy2); font-weight:700; font-size:14.5px; padding:9px 16px; border-radius:10px 10px 0 0; cursor:pointer}
+  .tabbtn.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .tabbtn small{display:block; font-weight:500; font-size:11.5px; opacity:.8}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  section{margin:30px 0; scroll-margin-top:70px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:20px 0 8px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-park{background:var(--purple-bg); color:var(--purple)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-park{background:var(--purple-bg); border-color:#dcd3f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--grey-bg);color:#41506b;margin:1px 2px}
+  .chip.kdps{background:var(--green-bg);color:var(--green)}
+  .chip.maybe{background:var(--amber-bg);color:#7a5200}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--rust);color:#fff;font-size:12.5px;font-weight:700;margin-right:6px;flex:0 0 auto}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  .gq{border-left:4px solid var(--rust); background:#fff; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:11px 15px; margin:11px 0}
+  .gq .qh{font-weight:700; color:var(--navy)}
+  .editbox{background:#fffdf6; border:1px dashed #d8c98f; border-radius:10px; padding:12px 14px; color:#6b5a1f; font-size:13.5px; margin-top:10px}
+  .src{font-size:12.5px;color:var(--muted)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · D11 · Booking &amp; Price · The Commitment-to-Ticket Module</div>
+  <h1>Booking &amp; Price — Consultation &amp; System Design</h1>
+  <p class="sub">Two halves of one decision. <b>Booking</b> is where KDPS commits money it has not yet spent — a brand's collection ordered six to eight months before it can be sold. <b>Price</b> is where KDPS decides what that money comes back as — the ticket on the piece, the discount that comes off it, and the net the till actually collects. Everything in between (cost, GST, margin, season) is already built and is not restated here; this document is about the four moments where a <i>human decides a number</i>, who that human is, and who has to countersign. Companion to <a href="../01-vendor-management/vendor-management.html">Vendor &amp; Booking</a>, <a href="../05-offers/offers.html">Offers</a> and <a href="../03-outbound/outbound.html">Outbound</a>.</p>
+</header>
+
+<div class="tabbar">
+  <button class="tabbtn active" onclick="showTab(0)">① System Design<small>how booking &amp; price should work</small></button>
+  <button class="tabbtn" onclick="showTab(1)">② Consultation Log<small>questions, rulings, benchmarks</small></button>
+</div>
+
+<div class="tabpanel show" id="tab-design">
+
+<section class="sec">
+  <div class="eyebrow">§0 · Standing on</div>
+  <h2>What was ruled on 3 August 2026</h2>
+  <p class="lead">Five questions went to Anand before a line of this was designed. The answers are load-bearing — everything below is built on them, so they are quoted first and never re-litigated silently.</p>
+  <table>
+    <thead><tr><th style="width:6%">#</th><th style="width:32%">Question</th><th>Ruling</th></tr></thead>
+    <tbody>
+      <tr><td class="num">R1</td><td>Which "Booking"? The word is overloaded in our own glossary.</td><td><b>Vendor/brand booking</b> — the order placed with the brand six to eight months ahead. The customer-side set-aside is a different animal and is out of scope here.</td></tr>
+      <tr><td class="num">R2</td><td>Who is an "Advertisement user"? No such role exists in the nine-role table.</td><td>A <b>marketing / promo person</b> who <i>authors</i> offers and <i>publishes</i> them to stores — the digital replacement for the placard that goes up on the shutter. A tenth persona, ratified today.</td></tr>
+      <tr><td class="num">R3</td><td>Is a brand-funded discount reclaimed from the brand, or is it lost margin?</td><td>Neither framing is wanted. <b>Stock owned by the brand → the brand decides the discount</b> (the combinations are already written down). <b>Stock owned by KDPS → KDPS administers the discount.</b> Margin is simply different on-sale and off-sale. Nothing is "lost"; stop carrying that word.</td></tr>
+      <tr><td class="num">R4</td><td>Month-end: build the date/bill-number reshuffle that <span class="src">report-offer.md</span> describes?</td><td><b>No.</b> The report states sales exactly as billed. KDPS optimises <i>before</i> the sale, never after. The one thing to build is the honest finder: <b>eligible discount that the counter failed to apply</b>, surfaced on the true bill, on the true date.</td></tr>
+      <tr><td class="num">R5</td><td>Scope of this round?</td><td>Design <b>and</b> build. "I actually want to complete the module" — with the role-by-role process map for every persona.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Consultant's note on R3.</b> The ruling is the right one and it simplifies the build considerably, so it is worth saying plainly what it settles: <i>ownership decides authority</i>. The system already knows who owns a piece — <span class="src">cost_book</span> on every sale line says <code>own</code> or <code>vendor</code>, and a V-flip is the document that moves a piece from one book to the other. That single fact is now also the answer to "who is allowed to set this discount", which means the rule does not need a second, hand-maintained flag that can disagree with the books. One fact, two uses, no drift.</div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§1 · The idea</div>
+  <h2>The price of a piece is decided five times, by five different people</h2>
+  <p class="lead">Every price complaint in a retail chain — "why did the shop sell it at that?", "why is our margin down this month?", "who allowed this?" — is really a question about <i>which of these five moments</i> went wrong. The module's whole job is to make each of the five a <b>document with an owner, a date and a countersignature</b>, so the question has a one-screen answer instead of a phone call.</p>
+  <table>
+    <thead><tr><th style="width:4%">#</th><th style="width:16%">Moment</th><th style="width:18%">Who decides</th><th>What is fixed there, and what it costs to be wrong</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><b>Commit</b> — the booking</td><td>Brand Manager proposes · Owner approves</td><td>How many pieces of what, at what expected ticket, for which stores, six to eight months out. Wrong here and no discount policy on earth saves it: the season's markdown budget is decided the day the booking is signed, not the day EOSS starts.</td></tr>
+      <tr><td class="num">2</td><td><b>Cost</b> — the PT</td><td>Warehouse makes · Accounts posts</td><td>Landed cost per barcode, frozen. Already built and immutable after posting (a reversal is its own document). This is the floor every later number must respect.</td></tr>
+      <tr><td class="num">3</td><td><b>Ticket</b> — the MRP</td><td>Brand's tag (branded) · KDPS formula + HO (own goods)</td><td>The number printed on the piece and the legal ceiling for the sale. <b>This is the half of the module that does not exist yet.</b> Today it is a column that gets overwritten silently by the next PT.</td></tr>
+      <tr><td class="num">4</td><td><b>Discount</b> — the offer</td><td>Promo/Brand Manager authors · Owner or Brand Manager countersigns</td><td>What comes off the ticket, for whom, where, for how long. The engine is built and deterministic; the <i>authoring and the countersignature</i> are what this round adds.</td></tr>
+      <tr><td class="num">5</td><td><b>Net</b> — the bill</td><td>Cashier, inside a cap · Store Manager above it</td><td>What was actually collected. The only one of the five that is allowed to be a judgement call at the moment of sale — and therefore the only one that needs a hard ceiling and a named override.</td></tr>
+    </tbody>
+  </table>
+  <div class="why"><b>Why five and not one big "pricing screen".</b> Every ERP that tries to hold price in one place ends up with a screen only two people in the company are allowed to open, so the other forty ring those two. Splitting by <i>moment of decision</i> means each persona gets a small screen that answers exactly their question, and the audit trail assembles itself: the booking explains the buy, the PT explains the cost, the price history explains the ticket, the offer explains the discount, the bill explains the net. Five documents, one story per piece.</div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§2 · The ladder</div>
+  <h2>From the brand's rate to the money in the drawer</h2>
+  <p class="lead">One table, because arguments about margin are almost always two people standing on different rungs. Rungs 1–4 and 7–9 are built and tested; rungs 5–6 are what this round adds.</p>
+  <table>
+    <thead><tr><th style="width:5%">Rung</th><th style="width:22%">Number</th><th style="width:20%">Where it comes from</th><th>Status &amp; note</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>P RATE (brand's rate to KDPS)</td><td>Vendor invoice → PT file</td><td><span class="badge b-locked">built</span> the only number KDPS does not choose.</td></tr>
+      <tr><td class="num">2</td><td>+ 1.1% inward freight</td><td>PT costing sweep</td><td><span class="badge b-locked">built</span> a dial, not a constant in code.</td></tr>
+      <tr><td class="num">3</td><td>= landed unit cost</td><td>Cohort, frozen at posting</td><td><span class="badge b-locked">built</span> the price floor. A ticket below it is refused by a DB CHECK, not by a hopeful validator.</td></tr>
+      <tr><td class="num">4</td><td>+ category margin %</td><td><span class="src">masters.CategoryMargin</span></td><td><span class="badge b-locked">built</span> used for KDPS-owned goods where there is no brand tag to obey.</td></tr>
+      <tr><td class="num">5</td><td>= <b>MRP / ticket</b></td><td>Brand tag, or the formula above, rounded to a sane retail figure</td><td><span class="badge b-open">this round</span> today it is written straight onto the SKU by whichever PT last touched the barcode. No document, no approver, no history.</td></tr>
+      <tr><td class="num">6</td><td>− offer discount (up to 3 layers)</td><td>Offer rulebook → resolution engine</td><td><span class="badge b-locked">engine built</span> <span class="badge b-open">authoring this round</span></td></tr>
+      <tr><td class="num">7</td><td>− counter discount, inside the cap</td><td>Cashier, with the manager above the cap</td><td><span class="badge b-locked">cap built</span> <span class="badge b-open">the governance view this round</span></td></tr>
+      <tr><td class="num">8</td><td>= net collected (GST-inclusive)</td><td>Sale line</td><td><span class="badge b-locked">built</span></td></tr>
+      <tr><td class="num">9</td><td>− GST at the slab of the day → realised margin</td><td>GST slab table, date-effective</td><td><span class="badge b-locked">built</span> the slab is read as of the bill date, never "now".</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§3 · Booking</div>
+  <h2>The commitment — six months of margin decided in one afternoon</h2>
+  <p class="lead">A booking is the only document in this system that spends money on stock that does not exist yet. Everything downstream — how much EOSS the chain will need, how deep, on whose goods — is largely settled the moment it is signed. It therefore gets the shape every commitment document gets: a maker, a value, and a checker.</p>
+  <table>
+    <thead><tr><th style="width:5%">Step</th><th style="width:20%">Who</th><th style="width:26%">Screen</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Brand Manager (or Warehouse)</td><td><span class="src">/booking/new</span></td><td>Vendor, brand, season, destination store, lines (style · size · qty · expected MRP). A photographed or PDF order sheet can be dropped in and the agent drafts the lines — the human still owns every one.</td></tr>
+      <tr><td class="num">2</td><td>System</td><td>—</td><td>The booking's <b>committed value</b> is computed from its own lines (qty × expected MRP) as it is written — that part is already built. What was missing is anybody being <i>shown</i> it before saying yes, which is what the approval line below carries.</td></tr>
+      <tr><td class="num">3</td><td>Brand Manager</td><td><span class="src">/booking/:id</span> → <i>Send for approval</i></td><td>The draft leaves the maker's hands and appears in the approval inbox with its value, brand, season and store spread on it.</td></tr>
+      <tr><td class="num">4</td><td>Owner (or HO Ops inside the band)</td><td><span class="src">/approvals</span></td><td>Approve → the booking becomes <b>Booked</b> and starts expecting goods. Reject with a reason → back to the maker. <b>Maker may not be checker</b>, enforced by the shared approval spine, not by the screen.</td></tr>
+      <tr><td class="num">5</td><td>Warehouse</td><td>Inbound / PT</td><td>Goods arrive against the booking. Under-supply is normal: the booking is <b>short-closed</b> with a reason, which is already built.</td></tr>
+      <tr><td class="num">6</td><td>Store</td><td><span class="src">/booking</span> (view)</td><td>A store sees what is coming for it and when. Read-only, on purpose: a store does not commit the chain's money.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>The gap this closes.</b> The ratified access table already promises <code>booking: approve</code> to the Owner and <code>operate</code> to the Brand Manager — i.e. it already says "one places, another signs". The code has no such transition: a booking goes from draft straight to booked on its maker's own say-so. Either the table is wrong or the code is. The table is right; the code gets the gate.</div>
+  <div class="why"><b>What I am deliberately <i>not</i> building yet.</b> Open-to-buy — a per-brand, per-season budget the booking screen checks against — is how the industry stops over-buying, and it is the single highest-value thing to add after this round. It needs last year's sell-through by brand and season to be trustworthy first. Building the budget before the history is trustworthy produces a number people learn to override. Parked, named, and sequenced: <span class="badge b-park">after this round</span></div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§4 · Price</div>
+  <h2>The half that does not exist: a ticket with a history</h2>
+  <p class="lead">Price is not a column. It is a <b>master with a history</b>, and almost every hard question about it is a question about a <i>past</i> value, not the current one.</p>
+  <table>
+    <thead><tr><th style="width:28%">The question that gets asked</th><th>What it needs</th></tr></thead>
+    <tbody>
+      <tr><td>"What is this piece priced at?"</td><td>Current ticket per barcode, with its cost, its margin at full price, and whether it is allowed to be discounted at all. <i>A column can answer this. Only this.</i></td></tr>
+      <tr><td>"What was it priced at on 14 March, when this bill was made?"</td><td><b>Effective-dated history.</b> Without it, last month's bill cannot be explained, a brand's monthly statement cannot be reconstructed, and a customer's return three weeks later is priced by whatever the column happens to say today.</td></tr>
+      <tr><td>"Who changed it, from what, to what, and why?"</td><td>An <b>append-only price-change trail</b>: actor, timestamp, old, new, reason, and the document that caused it (a PT, or a deliberate re-ticket).</td></tr>
+      <tr><td>"May this person change it?"</td><td>A rung, not a habit. Authoring a ticket is <code>operate</code> on Offers &amp; Price; re-ticketing an already-selling piece is a <b>named act with a reason</b>, and below cost it is refused outright.</td></tr>
+    </tbody>
+  </table>
+  <h3>Two kinds of ticket, two different authorities</h3>
+  <table>
+    <thead><tr><th style="width:22%">Kind of stock</th><th style="width:26%">Who sets the ticket</th><th>Rules that follow</th></tr></thead>
+    <tbody>
+      <tr><td><b>Branded</b> (brand's tag on the piece)</td><td>The brand. KDPS transcribes it from the PT.</td><td>The tag is the ceiling and it is not KDPS's to move. A re-ticket is an exception, always deliberate, always with a reason. Selling above the printed figure is never possible in this system — the engine cannot produce a net above MRP.</td></tr>
+      <tr><td><b>KDPS-owned / non-branded</b></td><td>KDPS: landed cost → +1.1% → + category margin → rounded.</td><td>The formula proposes; a human accepts. The floor is the landed cost, enforced in the database. A change is a document, so a season's re-ticketing can be read back later.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Legal edge, flagged not decided.</b> In India the printed MRP is a ceiling under the packaged-commodities rules, and a revised retail price has to be declared without hiding the original. Our system already cannot exceed MRP, and the price-change trail is exactly the evidence a revision needs. Whether a physical re-tag needs both figures shown on the label is a question for the CA/legal, in the same way the corpus already gates other statutory choices. <span class="badge b-dep">CA to confirm</span></div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§5 · Discount</div>
+  <h2>Ownership decides authority</h2>
+  <p class="lead">Per R3, there are exactly two families of discount and the difference is <i>whose stock it is</i> — a fact the books already hold.</p>
+  <table>
+    <thead><tr><th style="width:20%">Family</th><th style="width:24%">Who decides it</th><th>How it enters the system, and what it may do</th></tr></thead>
+    <tbody>
+      <tr><td><b>Brand-decided</b><br><span class="gloss">stock owned by the brand</span></td><td>The brand's scheme, transcribed by the Brand Manager or the Promo user</td><td>Arrives as a placard, a WhatsApp image or a PDF. Transcribed into the rulebook in the brand's own words (the one-liner), scoped to that brand's barcodes, with the brand named as funder. KDPS does not deepen a brand's scheme on its own; it may decline to run it.</td></tr>
+      <tr><td><b>KDPS-decided</b><br><span class="gloss">stock owned by KDPS</span></td><td>KDPS administration — Promo authors, Owner countersigns</td><td>Anything the engine can express: flat %, slabs, buy-x-get-y, spend-and-save, gift, bundle. Bounded below by landed cost and by the category margin floor the Owner sets.</td></tr>
+    </tbody>
+  </table>
+  <h3>What is already built and must not be redesigned</h3>
+  <p>The rulebook and its engine are done, deterministic, and covered by shared golden vectors so the till and the server agree to the paisa. Restating any of it in a new screen would be the one way to break it:</p>
+  <table>
+    <thead><tr><th style="width:26%">Piece</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td>Eight patterns</td><td>flat %, flat ₹, slab %, slab ₹, buy-x-get-y-free, spend-and-save, gift-with-purchase, bundle price.</td></tr>
+      <tr><td>Three layers</td><td>Brand scheme → chain scheme → counter discretion, applied in that order, never silently stacked: stacking is a property of the offer, stated by whoever authored it.</td></tr>
+      <tr><td>No-discount stock</td><td>The NOD/AMM flag on a SKU wins over every offer, always. This is a brand contract, not a preference.</td></tr>
+      <tr><td>EOSS mode</td><td>A season moves Open → EOSS → Closed on a calendar; the markdown ladder steps down over the months of the run and the recommendation engine proposes each step from actual sell-through and cover.</td></tr>
+      <tr><td>Frozen once live</td><td>A live offer's commercial dials cannot be edited — it is stopped and a new one authored. The bill from yesterday must stay explicable by the rule that priced it.</td></tr>
+    </tbody>
+  </table>
+  <div class="why"><b>The season sale is a run, not a day.</b> "EOSS and discounts that run for months" is the reason the ladder exists: one offer object with a step-down schedule, rather than forty offers authored on forty mornings. The promo user schedules the run once; the engine picks today's rung from the calendar. This also means an approved future-dated run is safe to push to the tills early — the dates gate the pricing, so an offline till already has tomorrow's offer before the shutter goes up.</div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§6 · The people</div>
+  <h2>Ten personas, two sections, one screen each</h2>
+  <p class="lead">The access table is the contract; this is that contract in plain words for these two sections. The tenth row is new today (R2).</p>
+  <table>
+    <thead><tr><th style="width:15%">Persona</th><th style="width:12%">Booking</th><th style="width:14%">Offers &amp; Price</th><th>What they actually do here</th></tr></thead>
+    <tbody>
+      <tr><td><b>Owner</b></td><td>approve</td><td>approve</td><td>Signs bookings. Countersigns every offer before it can price a bill. Sets the margin floor the EOSS ladder may not cross. Sees discount by brand, by store, by month.</td></tr>
+      <tr><td><b>Promo / Marketing</b> <span class="badge b-open">new</span></td><td>—</td><td>operate</td><td>Authors offers — brand schemes transcribed, chain schemes designed — schedules the EOSS run, sends each for countersignature, and publishes to the stores that will run it. Sees ageing stock to know what needs pushing. <b>No money, no stock, no booking, and cannot approve its own offer.</b></td></tr>
+      <tr><td><b>Brand Manager</b></td><td>operate</td><td>approve</td><td>Places bookings for their brands. Transcribes and countersigns their brands' schemes. Answerable for a brand's margin across the run.</td></tr>
+      <tr><td><b>HO Ops</b></td><td>view</td><td>operate ("Plan")</td><td>Plans the markdown across stores — which stock, which stores, what price — and is the second pair of eyes on the season calendar.</td></tr>
+      <tr><td><b>Store Manager</b></td><td>view</td><td>view</td><td>Sees today's live offers for their store, and every counter discount their staff gave. Approves an over-cap discount at the till <i>on their own PIN</i> — the one price decision that must be made in seconds.</td></tr>
+      <tr><td><b>Store Staff / Cashier</b></td><td>view</td><td>view</td><td>Sees today's offers as a board, in the brand's words, so the customer question is answered without a phone call. Gives discount only inside the cap; beyond it, the manager's PIN, recorded.</td></tr>
+      <tr><td><b>Warehouse</b></td><td>operate (draft)</td><td>view</td><td>Drafts a booking from the order sheet. Reads the ticket while making a PT; never sets a discount.</td></tr>
+      <tr><td><b>Accounts</b></td><td>view</td><td>view</td><td>Reads the month's discount by brand and funder against the books. Writes nothing here — the discount story must be produced by the till, not by the ledger.</td></tr>
+      <tr><td><b>IT Admin</b></td><td>manage (configure)</td><td>manage (configure)</td><td>Configures the module — caps, dials, the calendar. <b>Not</b> a business approver: admin has no Money and signs no commercial decision.</td></tr>
+      <tr><td><b>Data Steward</b></td><td>—</td><td>—</td><td>Nothing here. Master-data hygiene lives in its own section.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>A defect found while reading the running system, not a design opinion.</b> The offer write endpoint is gated at <code>manage</code> on Offers &amp; Price. Exactly one persona holds <code>manage</code> there — IT Admin. So today, in a system whose access table hands offers to the Owner, the Brand Manager and HO Ops, <i>the only seat that can write an offer is IT</i>, and every rule in the running database was in fact seeded by code rather than authored by a person. That is why no authoring screen exists: nobody who would use one is allowed to. Authoring drops to <code>operate</code>, countersigning sits at <code>approve</code>, and <code>manage</code> keeps what it should have kept — configuration.</div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§7 · The two gates</div>
+  <h2>Where a second person is required, and why exactly there</h2>
+  <table>
+    <thead><tr><th style="width:16%">Gate</th><th style="width:20%">Trips on</th><th style="width:22%">Who may clear it</th><th>Why here</th></tr></thead>
+    <tbody>
+      <tr><td><b>The author gate</b></td><td>Every offer, before it may price a single bill</td><td><b>Owner or Brand Manager</b> — exactly the two seats the ratified table puts at <code>offers_price: approve</code>. HO Ops <i>plans</i> the markdown and does not sign it; IT Admin holds <code>manage</code> and is deliberately not an approver, as it is not on any other family.</td><td>An offer is a standing instruction to give money away at every till, for weeks. It is the highest-leverage document in the company per keystroke. One person authoring it alone is the definition of an unchecked commitment — and the spine that enforces maker ≠ checker already exists and is used by six other families.</td></tr>
+      <tr><td><b>The counter gate</b></td><td>A keyed-in discount above the cap</td><td>Store Manager, by PIN, at the till</td><td>This one must resolve in seconds with a customer watching, so it is a PIN at the counter rather than an inbox — but it is still <i>recorded</i>: who allowed it, how much, on which bill. Beyond a second, wider band it stops being a counter decision at all and goes to HO.</td></tr>
+      <tr><td><b>The booking gate</b></td><td>Every booking leaving draft</td><td><b>Owner</b> — the one business seat the table puts at <code>booking: approve</code></td><td>See §3. The access table already promised it.</td></tr>
+      <tr><td><b>The re-ticket gate</b></td><td>Changing the MRP of a piece already on the shelf</td><td><code>operate</code> with a written reason; below landed cost, refused outright</td><td>A silent re-ticket is how a chain loses the ability to explain last month. A value-banded countersignature on top of the reason is the natural next rung. <span class="badge b-park">next round</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§8 · Month-end</div>
+  <h2>The honest engine (R4)</h2>
+  <p class="lead">The corpus records an intention to move sale dates and bill numbers between months so that a brand's discount claim lands where it is most useful, kept under a threshold so it does not attract attention. Anand's ruling is that we do not build it. As the consultant asked to say what the industry does, here is the reasoning in full, once, so it never has to be re-argued.</p>
+  <table>
+    <thead><tr><th style="width:28%">Why not</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td><b>It is a false commercial record.</b></td><td>A statement to a counterparty, restated on a date the sale did not happen, under a bill number that belonged to something else, is not aggressive optimisation — it is a fabricated document used to draw money. It also makes the GST return and the brand statement disagree on the same sale.</td></tr>
+      <tr><td><b>It breaks the invariants everything else rests on.</b></td><td>Gap-free bill numbering per store per year, an append-only ledger, and a stock movement that matches a bill. Reshuffling dates and numbers invalidates all three at once, and every reconciliation the system performs would then be lying with confidence.</td></tr>
+      <tr><td><b>It converts a one-off favour into a permanent liability.</b></td><td>Once the mechanism exists in software, it is used by whoever holds the screen, for reasons nobody will remember, for years. There is no version of this that stays small.</td></tr>
+    </tbody>
+  </table>
+  <h3>What captures most of the same money, honestly</h3>
+  <table>
+    <thead><tr><th style="width:8%"></th><th style="width:24%">Lever</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><b>Apply it at the till</b></td><td>The engine already prices every eligible line automatically. The largest single leak is a scheme that existed on paper and never reached the counter — and that is an authoring problem, which §6 fixes by letting the business author rules at all.</td></tr>
+      <tr><td class="num">2</td><td><b>Find the misses</b> <span class="badge b-open">this round</span></td><td>The nightly check already flags every bill where the till's discount differs from the rulebook. Turned into a screen, that becomes "eligible discount not applied", by brand, by store, by month — claimed on the true bill, on the true date. This is the legitimate version of the same intent, and it is faster than a phone call.</td></tr>
+      <tr><td class="num">3</td><td><b>Design earlier</b></td><td>Discount is decided when the booking is signed and when the run is scheduled, not at month-end. The season calendar and the step-down ladder are where the months-long run is shaped.</td></tr>
+      <tr><td class="num">4</td><td><b>Move the offer window, never the sale</b></td><td>If a month needs more depth, the honest instrument is to schedule the next rung of the run a week earlier — a decision, countersigned, before the sales happen. Same effect on the month; nothing restated.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§9 · Build</div>
+  <h2>What this round ships</h2>
+  <table>
+    <thead><tr><th style="width:6%">#</th><th style="width:26%">Gap</th><th style="width:14%">State</th><th>What lands</th></tr></thead>
+    <tbody>
+      <tr><td class="num">G1</td><td>Nobody in the business can author an offer</td><td><span class="badge b-open">this round</span></td><td>Write gate drops from <code>manage</code> to <code>operate</code>; the Promo persona is created; an authoring screen covering all eight patterns, with a live one-liner preview so the author reads back what the shop will read.</td></tr>
+      <tr><td class="num">G2</td><td>An offer approves itself</td><td><span class="badge b-open">this round</span></td><td>Offers wired into the shared approval spine: <i>send for countersignature</i> → inbox → approve publishes it live, reject returns it with a reason. Maker ≠ checker enforced centrally.</td></tr>
+      <tr><td class="num">G3</td><td>No price list, no price history</td><td><span class="badge b-open">this round</span></td><td>An append-only price-change trail written wherever a ticket moves (including by a PT), a price-as-of-date read, a Price List screen with per-barcode history, and a re-ticket action with a reason and a hard floor at landed cost.</td></tr>
+      <tr><td class="num">G4</td><td>No discount governance view</td><td><span class="badge b-open">this round</span></td><td>A Discounts screen: what the chain gave away by brand, funder, store and offer; every keyed-in counter discount with who allowed it; and the eligible-but-not-applied finder from §8.</td></tr>
+      <tr><td class="num">G5</td><td>Booking has no countersignature</td><td><span class="badge b-open">this round</span></td><td>Draft → sent for approval → booked, on the same spine, with the committed value computed from the lines so the approver sees what they are signing.</td></tr>
+      <tr><td class="num">G6</td><td>Three of four demo offers are unreadable by the engine</td><td><span class="badge b-open">this round</span></td><td>The seed writes rule shapes the engine cannot parse (a slab offer with no slabs, a buy-x-get-y with no buy or get), so they silently discount nothing — visible on screen as "buy 0 get 0 free". The seed is corrected; the strict write serializer that would have refused these is now the only door in.</td></tr>
+      <tr><td class="num">G7</td><td>Open-to-buy at booking time</td><td><span class="badge b-park">next</span></td><td>Needs trustworthy sell-through history first (§3).</td></tr>
+      <tr><td class="num">G8</td><td>Value-banded countersignature on a re-ticket</td><td><span class="badge b-park">next</span></td><td>Reason + floor ship now; the band is a policy row away.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+
+<div class="tabpanel" id="tab-log">
+
+<section class="sec">
+  <div class="eyebrow">§A · Consultation</div>
+  <h2>Questions I would still ask, with my recommendation attached</h2>
+  <p class="lead">Each is a real fork where the corpus does not decide, and where guessing wrong costs a rebuild. My recommendation is stated so silence still produces a defensible system.</p>
+
+  <div class="gq"><div class="qh">Q1 · Who owns the ticket for KDPS-owned goods — the warehouse making the PT, or head office?</div>
+  <p>Today it is whoever types the MRP column while making a PT. <b>Recommendation:</b> the formula proposes it at PT time and it becomes real there (the warehouse cannot invent a number, only accept one), but any <i>later</i> change is head office with a reason. Keeps the goods moving; stops the ticket drifting. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q2 · Should a store manager be able to run a local offer?</div>
+  <p><b>Recommendation: no.</b> A cap on keyed-in discount is enough local latitude; a local <i>rule</i> is how two branches of one chain end up with different prices on the same barcode on the same day, which is the fastest way to lose a customer's trust and a brand's. Local exceptions belong in the counter gate, where they are visible one bill at a time. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q3 · Is the counter cap one number for the chain, or per role and per store?</div>
+  <p>Today: one chain-wide percentage. <b>Recommendation:</b> keep one number until there is evidence a store needs its own; make it per-<i>role</i> now (cashier tighter than manager) because that distinction is already in the access table and people expect it. Per-store is a policy row when someone asks. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q4 · How wide is the Promo user's writ — every brand and every store, or a slice?</div>
+  <p><b>Recommendation:</b> chain-wide authoring, because a promo calendar is a chain-level artefact, but every offer still needs the countersignature of someone answerable for that brand or that chain. Scope discipline through the approver, not through hiding brands from the author. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q5 · Does the store have to <i>acknowledge</i> a published offer?</div>
+  <p>The placard it replaces was physically put up by a person. <b>Recommendation:</b> not yet — the engine applies the discount whether or not anyone read the board, so an acknowledgement is a management signal, not a control. Revisit if shops start telling customers something different from what the bill does. <span class="badge b-park">parked, cheap to add</span></p></div>
+
+  <div class="gq"><div class="qh">Q6 · Gift-with-purchase: is the gift stock, and whose?</div>
+  <p>The engine can already promise a gift; the books must then lose a piece. <b>Recommendation:</b> a gift is always a real barcode leaving real stock at zero net, never a note on the bill — otherwise the shelf and the ledger part company at exactly the moment a brand's scheme is running. <span class="badge b-dep">depends on the gift's own stock treatment</span></p></div>
+
+  <div class="gq"><div class="qh">Q7 · A booking's value: at expected MRP, or at cost?</div>
+  <p><b>Recommendation:</b> show both, approve on cost. Cost is the money committed; MRP is the sales potential. An approver signing a number should be signing the one that leaves the bank. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q8 · What is the approval band for a booking?</div>
+  <p><b>Recommendation:</b> start with "every booking needs a second person", because there are tens per season, not thousands, and the value of each is large. Introduce a band only if the inbox becomes a rubber stamp — that is a real signal, and it is measurable from the data by then. <span class="badge b-open">awaiting your ruling</span></p></div>
+
+  <div class="gq"><div class="qh">Q9 · Can the EOSS ladder step itself down automatically?</div>
+  <p><b>Recommendation:</b> the engine <i>recommends</i> and a human accepts, exactly as it does today. Automatic markdown is the one place where a wrong dial compounds daily across every store before anyone notices. Recommendation plus one click is nearly as fast and cannot run away. <span class="badge b-locked">already the built behaviour</span></p></div>
+
+  <div class="gq"><div class="qh">Q10 · Re-ticketing: does a physical label need both the old and new figure?</div>
+  <p>Statutory, not architectural — the system keeps the evidence either way. <span class="badge b-dep">CA/legal</span></p></div>
+
+  <div class="gq"><div class="qh">Q11 · Payments — fold in now, or reference?</div>
+  <p><b>Recommendation:</b> reference now, build next. Bank/tender offers ("10% on HDFC credit cards") are a genuinely different animal: the trigger is the <i>tender</i>, so it resolves after the basket is priced, at the payment step, and it usually involves a settlement with the bank rather than with a brand. Bolting it onto the basket-time engine would blur a boundary the engine currently keeps clean. It is a well-understood next slice, not a gap in this one. <span class="badge b-park">next round</span></p></div>
+
+  <div class="gq"><div class="qh">Q12 · Do we need a "no offers today" state a shop can trust?</div>
+  <p><b>Recommendation:</b> yes, and it is free — the offers board should say "nothing running for this store today" in words, rather than showing an empty table that reads like a loading failure. Small thing; it is what stops the phone call. <span class="badge b-locked">building it that way</span></p></div>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§B · Benchmarks</div>
+  <h2>What the industry does, and where we deliberately differ</h2>
+  <table>
+    <thead><tr><th style="width:22%">Practice</th><th style="width:34%">Industry norm (apparel retail ERP/POS)</th><th>Us</th></tr></thead>
+    <tbody>
+      <tr><td>Price master</td><td>Effective-dated price lists per brand/site, with history retained for audit and returns.</td><td>Same shape, one list, per-barcode history. Multiple named lists only when a second one is actually needed.</td></tr>
+      <tr><td>Markdown</td><td>Season markdown cadence planned centrally, stepped over weeks, measured on sell-through and weeks-of-cover.</td><td>Same, with the step recommended from our own sell-through and accepted by a human.</td></tr>
+      <tr><td>Promotion engine</td><td>Rule engine with patterns, priorities, exclusivity and exclusion lists.</td><td>Same, plus a shared engine compiled twice (server and till) against golden vectors — stronger than the norm, because our tills must price offline.</td></tr>
+      <tr><td>Counter discretion</td><td>Cashier cap with supervisor override, logged.</td><td>Same. The gap was the governance <i>view</i>, not the control.</td></tr>
+      <tr><td>Buying</td><td>Open-to-buy budget per brand/season/category, checked at order entry.</td><td>Sequenced after this round (§3, G7).</td></tr>
+      <tr><td>Brand schemes</td><td>Modelled as either on-invoice or off-invoice/billback, with a claim ledger.</td><td>Deliberately <b>not</b> modelled as a claim (R3): ownership decides who sets the discount; margin differs on-sale and off-sale, and the books already know whose stock it is.</td></tr>
+      <tr><td>Month-end</td><td>Statements are produced from records as billed.</td><td>Same, explicitly (R4), with the eligible-but-not-applied finder as the sanctioned way to recover value.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§C · Findings</div>
+  <h2>Defects found by reading the running system</h2>
+  <table>
+    <thead><tr><th style="width:8%"></th><th style="width:28%">Finding</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td class="num">F1</td><td>Only IT can write an offer</td><td>The write gate is <code>offers_price: manage</code>; IT Admin is the sole holder of that rung. §6.</td></tr>
+      <tr><td class="num">F2</td><td>Three of the four demo offers discount nothing</td><td>Seeded shapes bypass the strict serializer: a quantity offer with <code>min_qty</code> but no <code>slabs</code>, two spend offers with <code>min_spend_paise</code> but no <code>slabs</code>, and a buy-x-get-y whose buy/get sit in the reward instead of the trigger — which is why the screen reads "buy 0 get 0 free".</td></tr>
+      <tr><td class="num">F3</td><td>An approved future-dated offer could never start</td><td>Approval left the rule at <i>approved</i> while the engine only reads <i>live</i>, and nothing promoted it on its start date. Publishing on approval fixes it: the dates gate the pricing, so live-with-future-dates is both correct and what an offline till needs.</td></tr>
+      <tr><td class="num">F4</td><td>A booking approves itself</td><td>The access table promises <code>booking: approve</code> to the Owner; the model has no such transition. §3.</td></tr>
+      <tr><td class="num">F5</td><td>A ticket has no history</td><td>MRP is overwritten in place by each PT posting; yesterday's bill cannot be re-explained. §4.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec">
+  <div class="eyebrow">§D · Reading</div>
+  <h2>What this was built from</h2>
+  <p><span class="src">docs/my-understanding/system-design/05-offers/offers.html</span> (all thirteen grilled questions) · <span class="src">.../04-payments/payments.html</span> · <span class="src">.../08-master-data/master-data.html</span> · <span class="src">.../consolidation/consolidation-source-of-truth.html</span> · <span class="src">docs/real-workflow.md</span> (§EOSS, §month-end) · <span class="src">docs/data-from-kdps/report-offer.md</span> · <span class="src">docs/meetings/2026-06-01-offers-and-reporting/</span> · <span class="src">docs/meetings/2026-06-05-deal-3-months/</span> · <span class="src">docs/meetings/2026-06-13-Q&amp;A/</span> — and the running code: <span class="src">offers/resolution.py</span>, <span class="src">offers/models.py</span>, <span class="src">offers/eoss_engine.py</span>, <span class="src">vendors/models.py</span>, <span class="src">sell/services/recompute.py</span>, <span class="src">ptmapper/pricing.py</span>, <span class="src">accounts/rbac_matrix.py</span>.</p>
+</section>
+
+</div>
+
+<footer>
+  KDPS — Booking &amp; Price · D11 · Living document · Tab 1 = system design · Tab 2 = consultation log, benchmarks and findings · Rulings of 3 Aug 2026 recorded in §0. · Created 3 Aug 2026.
+</footer>
+
+</main>
+<script>
+function showTab(n){
+  var panels=[document.getElementById('tab-design'),document.getElementById('tab-log')];
+  var btns=document.querySelectorAll('.tabbtn');
+  panels.forEach(function(p,i){p.classList.toggle('show', i===n);});
+  btns.forEach(function(b,i){b.classList.toggle('active', i===n);});
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>

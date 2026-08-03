@@ -198,6 +198,29 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
     # (#130). Setup stays at `operate` (masters only): Users & Roles admin needs
     # `setup: manage`, which only Owner and Admin hold, and a steward must not
     # gain it (issue #85 review). Reads stock; posts nothing.
+    # Promo / Marketing - the tenth row, ratified 3 Aug 2026 (D11 R2). The person
+    # who writes the offers and publishes them to the shops: the digital
+    # replacement for the placard that used to go up on the shutter. Authoring is
+    # `operate`, deliberately not `approve` - an offer is a standing instruction
+    # to give money away at every till, so somebody answerable for the brand or
+    # the chain countersigns it (D11 §7). Reads stock because you cannot plan a
+    # markdown without seeing what is ageing; touches no money, no stock document
+    # and no booking.
+    "promo": {
+        "home": (CAP_VIEW, "All (network)"),
+        "sell": (CAP_NONE, "No"),
+        "booking": (CAP_NONE, "No"),
+        "receive_goods": (CAP_NONE, "No"),
+        "transfer": (CAP_NONE, "No"),
+        "stock_count": (CAP_NONE, "No"),
+        "return_to_brand": (CAP_NONE, "No"),
+        "stock": (CAP_VIEW, "All locations"),
+        "money": (CAP_NONE, "No"),
+        "offers_price": (CAP_OPERATE, "Author & publish"),
+        "hrms": (CAP_NONE, "No"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_NONE, "No"),
+    },
     "data_steward": {
         "home": (CAP_VIEW, "All (network)"),
         "sell": (CAP_NONE, "No"),
@@ -215,7 +238,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
     },
 }
 
-# The nine seeded role *codes* map onto the eight persona rows. "Store Person"
+# The ten seeded role *codes* map onto the nine persona rows. "Store Person"
 # covers both store roles - the one place two codes share a row; "Admin" is the
 # it_admin role. Every canonical role must resolve to a persona, so the contract
 # test can assert every one of them against the table.
@@ -229,6 +252,7 @@ ROLE_PERSONA = {
     "it_admin": "admin",
     "ho_ops": "ho_ops",
     "data_steward": "data_steward",
+    "promo": "promo",
 }
 
 # Sections the SIDEBAR RBAC sheet never covered. Only these may be overridden

@@ -533,7 +533,9 @@ class ApprovalPolicy(TimeStampedModel):
     #: and it stays a plain dict so this module still imports nothing (ADR-0002).
     FAMILY_LABELS: ClassVar[dict[str, str]] = {
         "adjustment": "Stock adjustment",
+        "booking": "Booking",
         "damage": "Damage flag",
+        "offer": "Offer",
         "gap_closure": "Transfer gap closure",
         "pt_reverse": "PT reversal",
         "return_to_brand": "Return to brand",

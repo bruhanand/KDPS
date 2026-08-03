@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from django.urls import path
 
+from sell.discount_views import DiscountReportView
 from sell.views import (
     DatasetView,
     HeldBillsView,
@@ -32,6 +33,10 @@ urlpatterns = [
     path("flags/<int:pk>", StoreFlagView.as_view(), name="sell-flag"),
     path("irn-queue", IrnQueueView.as_view(), name="sell-irn-queue"),
     path("irn-queue/<int:pk>", IrnQueueItemView.as_view(), name="sell-irn-queue-item"),
+    # What the chain gave away, and what it forgot to give (D11 §5, §8). Read
+    # off bills, so it lives here; gated on `offers_price`, because that is the
+    # screen it answers.
+    path("discounts", DiscountReportView.as_view(), name="discount-report"),
     path("sales", SaleListCreateView.as_view(), name="sale-list"),
     path("sales/<path:doc_number>", SaleDetailView.as_view(), name="sale-detail"),
 ]

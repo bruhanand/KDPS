@@ -9,6 +9,7 @@ Login at the app root; API at `/api/auth/login`.
 | admin | Admin@123 | it_admin | all |
 | owner | Owner@123 | owner | all |
 | ops1 | Ops@123 | ho_ops | all |
+| promo1 | Promo@123 | promo | all |
 | accounts1 | Acct@123 | accounts | all |
 | brand1 | Brand@123 | brand_manager | brand (louis-philippe,van-heusen,allen-solly,peter-england) |
 | wh.patna | Wh@123 | warehouse | all |
