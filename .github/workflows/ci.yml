@@ -5,14 +5,106 @@ name: CI
 # on every push / PR. The kernel invariants are meaningless on SQLite, so this
 # wires the gate the constitution requires (ADR-0005) instead of it being green
 # only inside the build container.
+#
+# Jobs run in parallel:
+#   lint          — ruff + mypy + import-linter (~60 s, fast failure signal)
+#   backend-kernel — migrate + pytest core/tests (~3 min, no seeding needed)
+#   backend-live   — migrate + seed + uvicorn + pytest tests/ (~12 min)
+#   frontend       — yarn install + tsc + vitest (~3 min)
 
 on:
   push:
     branches: ["**"]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "**.txt"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "**.txt"
 
 jobs:
-  backend:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "app/backend/uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Type check (mypy)
+        run: uv run mypy core config
+
+      - name: Architecture boundaries (lint-imports)
+        run: uv run lint-imports
+
+  backend-kernel:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: kdps
+          POSTGRES_PASSWORD: kdps
+          POSTGRES_DB: kdps_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kdps"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
+      DJANGO_SECRET_KEY: ci-secret-not-for-production
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      EMERGENT_LLM_KEY: "ci-placeholder"
+      GEMINI_MODEL: "gemini-2.5-flash"
+      JWT_COOKIE_SECURE: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "app/backend/uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Migrate
+        run: uv run python manage.py migrate --noinput
+
+      - name: Kernel anti-cheat suites (append-only, FSM, idempotency, money, vouchers)
+        run: uv run pytest core/tests -q
+
+  backend-live:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,19 +150,14 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          # Disable the uv cache: on the hosted runner its post-job "Prune cache"
-          # step hangs ~5 min and is killed with exit 2, failing the whole job even
-          # though every test step passed. `uv sync` is fast enough without it.
-          enable-cache: false
+          enable-cache: true
+          cache-dependency-glob: "app/backend/uv.lock"
 
       - name: Sync dependencies
         run: uv sync
 
       - name: Migrate
         run: uv run python manage.py migrate --noinput
-
-      - name: Kernel anti-cheat suites (append-only, FSM, idempotency, money, vouchers)
-        run: uv run pytest core/tests -q
 
       - name: Seed foundation (roles, masters, demo users)
         run: uv run python manage.py seed_foundation
@@ -103,10 +190,15 @@ jobs:
       REACT_APP_BACKEND_URL: http://localhost:8001
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: app/frontend/yarn.lock
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+
       - name: Type-check & build
         run: yarn build
