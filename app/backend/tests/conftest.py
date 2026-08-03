@@ -13,6 +13,19 @@ Otherwise they are *skipped* with the reason below, keeping the local gate
 green and honest. In cloud CI (``CI`` env var set) the gate is disabled — a
 broken server there must fail loudly, never skip.
 
+**A server that answers is not a server that is current (issue #93).** For weeks
+a container on :8001 served pre-#85 code against a database this repo had since
+migrated. It passed the login probe above with no trouble: it was running, it was
+seeded, it just was not the code anybody was editing. Tests then failed on
+assertions nobody could explain, and the failures were waved through each run as
+"environmental". So the probe now also asks the server *which code it is* -
+``/api/health`` reports the set of migration files its process carries - and
+compares that against this checkout. Disagreement **skips, with the mismatched
+migrations named**; it never silently passes, and it never fails locally, because
+a stale server is an environment problem and not a defect in the tree. Cloud CI
+boots the server from the very checkout under test, so there a disagreement is a
+real fault and fails the run outright.
+
 **Remote-target safety (issue #41).** Every live suite *writes* to the target
 DB — masters rows, documents, and append-only ledger/GL posts that no API can
 delete. During 2 Jul QA these suites were run against the shared Render demo
@@ -34,11 +47,15 @@ unaffected.
 from __future__ import annotations
 
 import os
+from importlib import import_module
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
+from _live_gate import mismatch_reason
+from django.apps import apps as django_apps
 
 _BACKEND_URL_ENV = "REACT_APP_BACKEND_URL"
 _DEFAULT_BASE_URL = "http://localhost:8001"
@@ -79,12 +96,42 @@ if not os.environ.get(_BACKEND_URL_ENV, "").strip():
 IS_LOCAL_TARGET = (urlsplit(BASE_URL).hostname or "") in ("localhost", "127.0.0.1")
 
 
+@pytest.fixture(autouse=True)
+def _restore_migration_seeded_policy_rows(
+    request: pytest.FixtureRequest,
+    django_db_setup,
+    django_db_blocker,
+):
+    """Transaction tests flush rows; restore policy data each migrated DB starts with."""
+    if request.node.get_closest_marker("django_db") is None:
+        yield
+        return
+    with django_db_blocker.unblock():
+        import_module("accounts.migrations.0009_actor_policy").seed_actor_policies(
+            django_apps, None
+        )
+        import_module("accounts.migrations.0012_return_to_brand_actor_policy").seed(
+            django_apps, None
+        )
+        import_module("approvals.migrations.0004_seed_approval_policies").seed_policies(
+            django_apps, None
+        )
+        import_module("approvals.migrations.0005_seed_stock_request_policy").seed_policy(
+            django_apps, None
+        )
+        import_module("approvals.migrations.0008_seed_stock_request_route").seed_route(
+            django_apps, None
+        )
+        import_module("alerts.migrations.0002_seed_alert_policies").seed_policies(django_apps, None)
+    yield
+
+
 def _live_api_unready_reason() -> str | None:
     """Return None when a seeded API server answers at BASE_URL, else why not."""
     try:
         response = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json={"username": "owner", "password": "Owner@123"},
+            json={"username": "owner", "password": SEED_OWNER_PASSWORD},
             timeout=5,
         )
     except requests.RequestException as exc:
@@ -95,6 +142,34 @@ def _live_api_unready_reason() -> str | None:
             f"(demo login -> {response.status_code})"
         )
     return None
+
+
+def _version_mismatch_reason() -> str | None:
+    """Return None when the target runs this checkout's code, else what differs.
+
+    Deliberately silent on network trouble: an unreachable or unparseable server
+    is the readiness probe's business, not this one's. This speaks only when it
+    has a real answer from the server and that answer disagrees.
+    """
+    # Imported here, not at module scope: conftest is loaded before pytest-django
+    # calls django.setup(), and reading the migration graph needs a populated app
+    # registry.
+    from core.identity import migration_digest, migration_names
+
+    try:
+        response = requests.get(f"{BASE_URL}/api/health", timeout=5)
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    if response.status_code != 200 or not isinstance(payload, dict):
+        return None
+
+    return mismatch_reason(
+        payload.get("migrations"),
+        target=BASE_URL,
+        our_names=migration_names(),
+        our_digest=migration_digest(),
+    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -136,17 +211,26 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             if item.get_closest_marker("local_backend"):
                 item.add_marker(local_only_skip)
 
-    # Live-probe gate: skip when no seeded server answers. Disabled in cloud CI —
-    # a broken server there must fail loudly, never skip.
+    # Live-probe gate: skip when no seeded server answers, or when the one that
+    # answers is not running this checkout's code. Cloud CI boots the server from
+    # the checkout under test, so there a version mismatch is a genuine fault and
+    # must stop the run rather than quietly shrink it.
     if os.environ.get("CI"):
+        mismatch = _version_mismatch_reason()
+        if mismatch:
+            raise pytest.UsageError(f"live-API target is not the code under test: {mismatch}")
         return
     reason = _live_api_unready_reason()
+    if reason is not None:
+        reason = (
+            f"{reason} - boot one (migrate + seed_foundation + seed_ptmapper + "
+            "seed_outbound_demo + uvicorn server:app, or just `npm run dev`) and set "
+            "REACT_APP_BACKEND_URL, or rely on cloud CI"
+        )
+    else:
+        reason = _version_mismatch_reason()
     if reason is None:
         return
-    marker = pytest.mark.skip(
-        reason=f"{reason} — boot one (migrate + seed_foundation + seed_ptmapper + "
-        "uvicorn server:app, see .github/workflows/ci.yml) and set "
-        "REACT_APP_BACKEND_URL, or rely on cloud CI"
-    )
+    marker = pytest.mark.skip(reason=reason)
     for item in live_items:
         item.add_marker(marker)

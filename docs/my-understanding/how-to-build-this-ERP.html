@@ -121,7 +121,7 @@
     <tr><td>Buying / booking / open-to-buy</td><td>D1 Vendor mgmt</td><td><span class="badge b-done">designed</span></td></tr>
     <tr><td>Inbound — GRN, quality, priced stock-in (PT)</td><td>D2 Inbound</td><td><span class="badge b-done">designed</span></td></tr>
     <tr><td>Inventory &amp; warehouse — multi-location SOH, transfers, stocktake</td><td>D2 + D3</td><td><span class="badge b-done">designed</span></td></tr>
-    <tr><td>Store operations &amp; POS billing</td><td>D3 + POS edge (Ten Software)</td><td><span class="badge b-done">designed</span> · integrate, don't rebuild</td></tr>
+    <tr><td>Store operations &amp; POS billing</td><td>D3 + POS edge (KDPS-built counter)</td><td><span class="badge b-done">designed</span> · ours to build (26 Jul 2026)</td></tr>
     <tr><td>Allocation &amp; replenishment (size/color curves)</td><td>D2 store-split + D7 forecast</td><td><span class="badge b-done">designed</span> · AI refinement later</td></tr>
     <tr><td>Pricing / markdown / EOSS / offers</td><td>D5 Offers</td><td><span class="badge b-done">designed</span></td></tr>
     <tr><td>Returns &amp; exchange (incl. SOR/vendor returns)</td><td>D3 Outbound</td><td><span class="badge b-done">designed</span></td></tr>
@@ -198,7 +198,7 @@
     </div>
     <div class="card"><h4 style="color:var(--blue)">✓ Buy / keep / integrate (commodity)</h4>
       <ul>
-        <li><b>POS</b> — keep Ten Software; rebuilding POS is high-risk, low-reward</li>
+        <li><b>POS</b> — build our own (reversed 26 Jul 2026; the earlier call was to keep the incumbent counter software)</li>
         <li><b>Accounting</b> — Tally stays the statutory book</li>
         <li><b>e-Invoice / e-Way bill</b> — a GSP provider (formats change yearly)</li>
         <li><b>WMS</b> — only if DC volume demands; integrate, don't build</li>
@@ -362,12 +362,11 @@
     <span class="pill buy">D6 · Tally sync — next discussion</span>
     <span class="pill buy">D8 · master-data consolidation</span>
     <span class="pill buy">D9 · migration &amp; rollout</span>
-    <span class="pill buy">Confirm POS endpoints with Ten Software</span>
   </div>
   <h3>Then, before code</h3>
   <ol class="steps">
     <li><b>Consolidation pass:</b> one unified data model + posting catalog + <b>feature inventory</b> (the master PRD as a pass/fail checklist, not a book).</li>
-    <li><b>Spike the three externals:</b> Ten Software POS API, Tally import, the barcode tool — working tests before the stack is locked.</li>
+    <li><b>Spike the two externals:</b> Tally import and the barcode tool — working tests before the stack is locked. (The POS API was a third until 26 Jul 2026, when KDPS decided to build its own counter.)</li>
     <li><b>Pick the boring stack</b> (modular monolith, one relational DB, PWA). Then build slice #1.</li>
   </ol>
 

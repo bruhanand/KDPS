@@ -13,6 +13,11 @@
 # Deploy: push to GitHub, then Render Dashboard → New → Blueprint → pick this
 # repo. Render reads this file and creates all three. See DEPLOY.md.
 #
+# BRANCH MODEL (23 Jul 2026): `main` is Anand's development line and does NOT
+# deploy. The alpha the client tests on is built from `client-testing` — every
+# service below pins `branch: client-testing`. To ship work to the client:
+# merge main → client-testing and push; Render auto-deploys that branch only.
+#
 # IMPORTANT (one manual step): the two cross-URLs below assume the service
 # subdomains `kdps-erp-api` and `kdps-erp-web` are free on onrender.com. If
 # Render assigns different hostnames, update REACT_APP_BACKEND_URL,
@@ -70,14 +75,14 @@ services:
       - key: JWT_COOKIE_SAMESITE
         value: "None"           # API and web are different onrender.com sites
 
-  # --- PT-mapper self-improvement cron — NOT on this branch ------------------
-  # Render cron jobs have no free tier (cheapest is `starter`, paid), so the
-  # `kdps-ptmap-learn` job is deliberately absent here: this blueprint must
-  # provision on the free plan with no payment method. The daily mine is run by
-  # hand instead, from a shell against the API service (see DEPLOY.md):
-  #   uv run python manage.py ptmap_mine && uv run python manage.py ptmap_learning_report
-  # Both are idempotent and safe to re-run. The cron definition still lives on
-  # `main`; add it back here only if this stack moves to a paid plan.
+  # --- Crons — NOT on this branch ----------------------------------------------
+  # Render cron jobs have no free tier (cheapest is `starter`, paid), so the cron
+  # jobs (kdps-ptmap-learn, kdps-alerts-check, kdps-sell-daily-check) are
+  # deliberately absent here: this blueprint must provision on the free plan with
+  # no payment method. The daily tasks can be run by hand from a shell against the
+  # API service (see DEPLOY.md). All are idempotent and safe to re-run.
+  # The cron definitions live on `main`; add them back here only if this stack
+  # moves to a paid plan.
 
   # --- React PWA (static) ----------------------------------------------------
   - type: web
@@ -95,3 +100,4 @@ services:
       - type: rewrite                # SPA: let React Router handle deep links
         source: /*
         destination: /index.html
+

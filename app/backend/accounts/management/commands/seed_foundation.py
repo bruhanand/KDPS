@@ -1,8 +1,8 @@
 """Idempotent foundation seed: roles, the masters spine, and demo users.
 
 Run: `python manage.py seed_foundation`. Safe to re-run — it upserts. It also
-(re)writes `/app/memory/test_credentials.md` so the testing/fork agents always
-have current logins.
+(re)writes `memory/test_credentials.md` in the checkout (override with
+`SEED_CREDENTIALS_PATH`) so the testing/fork agents always have current logins.
 """
 
 from __future__ import annotations
@@ -12,12 +12,20 @@ import os
 from pathlib import Path
 from typing import Any
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from accounts.models import NAV_GROUPS, Role, User
+from accounts.rbac_matrix import section_access_for
+from core.documents import VoucherSeries
+from core.fiscal import financial_year, next_financial_year
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
+
+#: The selling document types, seeded per store per FY: the sale (till-assigned),
+#: the credit note it can issue, and the plain return that issues one.
+SELL_DOC_TYPES = ("SAL", "CRN", "SRT")
 
 # Demo logins (documented credentials) must NOT be (re)created on a production
 # deploy. Gate them behind SEED_DEMO (default on, so preview/CI keep working);
@@ -36,35 +44,50 @@ ROLES: list[dict[str, Any]] = [
         "code": "store_manager",
         "name": "Store Manager",
         "landing_page": "store",
-        "nav_groups": ["home", "store_ops", "documents", "ledgers", "controls"],
+        "nav_groups": ["home", "store_ops", "documents", "ledgers", "controls", "outbound"],
         "description": "Owns one store's floor; selling, receiving, approvals within tier.",
     },
     {
         "code": "store_staff",
         "name": "Store Staff / Cashier",
         "landing_page": "store",
-        "nav_groups": ["home", "store_ops", "documents"],
+        "nav_groups": ["home", "store_ops", "documents", "outbound"],
         "description": "Runs the till in one store; bills, exchanges, receives, counts.",
     },
     {
         "code": "warehouse",
         "name": "Warehouse / Inward Operator",
         "landing_page": "warehouse",
-        "nav_groups": ["home", "documents", "ledgers", "store_ops"],
+        "nav_groups": ["home", "documents", "ledgers", "store_ops", "outbound"],
         "description": "Receives goods, builds PTs, fills barcodes, proposes splits.",
     },
     {
         "code": "accounts",
         "name": "Accounts / Finance",
         "landing_page": "finance",
-        "nav_groups": ["home", "documents", "ledgers", "controls", "intelligence"],
+        "nav_groups": ["home", "documents", "ledgers", "controls", "intelligence", "outbound"],
         "description": "Owns money — payables, payments, collection & bank audit, Tally.",
+    },
+    {
+        "code": "brand_manager",
+        "name": "Brand Manager",
+        "landing_page": "home",
+        "nav_groups": ["home", "documents", "intelligence"],
+        "description": "Owns assigned brands across stores — bookings, offers, brand reports.",
     },
     {
         "code": "ho_ops",
         "name": "HO Operations / Buyer",
         "landing_page": "ops",
-        "nav_groups": ["home", "master_data", "documents", "ledgers", "controls", "intelligence"],
+        "nav_groups": [
+            "home",
+            "master_data",
+            "documents",
+            "ledgers",
+            "controls",
+            "intelligence",
+            "outbound",
+        ],
         "description": "HO operating core — bookings, transfers, offers, intelligence.",
     },
     {
@@ -83,16 +106,44 @@ ROLES: list[dict[str, Any]] = [
     },
 ]
 
-# (username, password, role_code, scope_type, store_codes, full_name)
-USERS: list[tuple[str, str, str, str, list[str], str]] = [
-    ("admin", "Admin@123", "it_admin", "all", [], "System Admin"),
-    ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor"),
-    ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops"),
-    ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant"),
-    ("wh.patna", "Wh@123", "warehouse", "all", [], "Patna Warehouse"),
-    ("steward", "Steward@123", "data_steward", "all", [], "Data Steward"),
-    ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager"),
-    ("deo.cashier", "Store@123", "store_staff", "store", ["DEO"], "Deoghar Cashier"),
+# Usernames granted Django-superuser break-glass. A superuser bypasses the whole
+# RBAC matrix (manage on every section) and reaches Django `/admin`, so it is
+# kept as its own account, separate from every business persona — including
+# Owner. That way the matrix is genuinely enforced for real people (Owner sees
+# only what the sheet grants, Admin has no Money) and stays auditable; god-mode
+# lives in one clearly-labelled break-glass login instead of a daily persona.
+SUPERUSERS = {"superadmin"}
+
+# (username, password, role_code, scope_type, store_codes, full_name, brand_codes)
+# `brand_codes` only applies to the `brand` scope — a brand manager works across
+# every store but only inside their own brands, so the top bar gives them a brand
+# filter instead of a unit list (#88).
+USERS: list[tuple[str, str, str, str, list[str], str, list[str]]] = [
+    ("superadmin", "Super@123", "it_admin", "all", [], "System Superadmin (break-glass)", []),
+    ("admin", "Admin@123", "it_admin", "all", [], "IT Admin", []),
+    ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor", []),
+    ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops", []),
+    ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant", []),
+    (
+        "brand1",
+        "Brand@123",
+        "brand_manager",
+        "brand",
+        [],
+        "Madura Brand Manager",
+        ["louis-philippe", "van-heusen", "allen-solly", "peter-england"],
+    ),
+    ("wh.patna", "Wh@123", "warehouse", "all", [], "Patna Warehouse", []),
+    ("steward", "Steward@123", "data_steward", "all", [], "Data Steward", []),
+    ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager", []),
+    ("deo.cashier", "Store@123", "store_staff", "store", ["DEO"], "Deoghar Cashier", []),
+    ("bkr.manager", "Store@123", "store_manager", "store", ["BKR"], "Bokaro Manager", []),
+    ("bkr.cashier", "Store@123", "store_staff", "store", ["BKR"], "Bokaro Cashier", []),
+    ("hzb.manager", "Store@123", "store_manager", "store", ["HZB"], "Hazaribagh Manager", []),
+    ("dum.manager", "Store@123", "store_manager", "store", ["DUM"], "Dumka Manager", []),
+    ("banka.manager", "Store@123", "store_manager", "store", ["BANKA"], "Banka Manager", []),
+    ("banka.cashier", "Store@123", "store_staff", "store", ["BANKA"], "Banka Cashier", []),
+    ("wh.ranchi", "Wh@123", "warehouse", "store", ["RAN-WH"], "Ranchi Warehouse", []),
 ]
 
 
@@ -104,6 +155,8 @@ class Command(BaseCommand):
         self._seed_roles()
         entity, gstins = self._seed_entity_gstins()
         stores = self._seed_stores(gstins)
+        self._seed_sell_series(stores)
+        self._seed_salesmen(stores)
         self._seed_seasons()
         self._seed_brands()
         self._seed_gst_slab()
@@ -126,6 +179,10 @@ class Command(BaseCommand):
                     "name": r["name"],
                     "landing_page": r["landing_page"],
                     "nav_groups": r["nav_groups"],
+                    # The SIDEBAR RBAC contract (#85). Re-seeding overwrites it back
+                    # to the sheet default; a live admin's retune is a deliberate
+                    # data edit they'd re-apply, same as nav_groups here.
+                    "section_access": section_access_for(r["code"]),
                     "description": r["description"],
                     "is_system": True,
                     "is_active": True,
@@ -169,6 +226,50 @@ class Command(BaseCommand):
             )
             out[code] = store
         return out
+
+    def _seed_salesmen(self, stores: dict[str, Store]) -> None:
+        """Two named sellers per selling store.
+
+        Every sold line carries the name of who sold it (Rule 10, and D10 puts the
+        picker on the line), so the counter refuses a bill that names nobody. A
+        store seeded without a single salesman therefore cannot sell at all - the
+        first bill of a fresh install would be refused for a reason that reads
+        like a defect and is a missing row. Warehouses get none: they do not sell.
+        """
+        from sell.models import Salesman
+
+        for store in stores.values():
+            if store.store_type != Store.StoreType.STORE:
+                continue
+            for code, name in (("S1", "Counter One"), ("S2", "Counter Two")):
+                Salesman.objects.get_or_create(
+                    store=store, code=code, defaults={"name": f"{name} ({store.code})"}
+                )
+
+    def _seed_sell_series(self, stores: dict[str, Store]) -> None:
+        """The selling counters: a sale, credit-note and return series per store.
+
+        These are seeded rather than created on first use like the other document
+        types, because the sale's counter is not the server's to create lazily —
+        the till already holds a number when it calls, and a missing series row
+        would turn a printed bill into a sync failure the store cannot fix. The
+        credit-note and return series are ordinary server-allocated counters and
+        ride along so the whole selling set exists together.
+
+        Next year's rows are seeded alongside this year's, because the failure
+        this is here to prevent lands precisely at midnight on 1 April: the till
+        rolls its own financial year on its own clock and starts at bill 1, and
+        nobody is deploying at that moment to create the row it needs.
+
+        Idempotent, and only ever creates: `get_or_create` never touches
+        `next_seq` on a series that is already counting.
+        """
+        for fy in (financial_year(), next_financial_year()):
+            for store in stores.values():
+                for doc_type in SELL_DOC_TYPES:
+                    VoucherSeries.objects.get_or_create(
+                        fy=fy, store_code=store.code, doc_type=doc_type
+                    )
 
     def _seed_seasons(self) -> None:
         for code, name, status, order in [
@@ -329,9 +430,13 @@ class Command(BaseCommand):
             booking.save(update_fields=["estimated_value_paise"])
 
     def _seed_users(self, entity: LegalEntity, stores: dict[str, Store]) -> None:
-        for username, password, role_code, scope, store_codes, full_name in USERS:
+        for username, password, role_code, scope, store_codes, full_name, brand_codes in USERS:
             role = Role.objects.filter(code=role_code).first()
-            is_admin = username == "admin"
+            # Only the dedicated break-glass account is a Django superuser (see
+            # SUPERUSERS). Every business persona — `admin`/it_admin and `owner`
+            # included — is a normal user enforced by `Role.section_access`, so
+            # the ratified matrix (e.g. Admin = no Money) actually applies.
+            is_super = username in SUPERUSERS
             user, created = User.objects.update_or_create(
                 username=username,
                 defaults={
@@ -340,8 +445,8 @@ class Command(BaseCommand):
                     "scope_type": scope,
                     "entity": entity if scope != "all" else None,
                     "is_active": True,
-                    "is_staff": is_admin,
-                    "is_superuser": is_admin,
+                    "is_staff": is_super,
+                    "is_superuser": is_super,
                 },
             )
             # Set the password only when the user is first created — never overwrite
@@ -350,6 +455,7 @@ class Command(BaseCommand):
                 user.set_password(password)
                 user.save(update_fields=["password"])
             user.stores.set([stores[c] for c in store_codes if c in stores])
+            user.brands.set(Brand.objects.filter(code__in=brand_codes))
 
     def _write_credentials(self) -> None:
         lines = [
@@ -361,18 +467,26 @@ class Command(BaseCommand):
             "| Username | Password | Role | Scope |",
             "|---|---|---|---|",
         ]
-        for username, password, role_code, scope, store_codes, _ in USERS:
-            scope_txt = f"{scope} ({','.join(store_codes)})" if store_codes else scope
+        for username, password, role_code, scope, store_codes, _, brand_codes in USERS:
+            units = store_codes or brand_codes
+            scope_txt = f"{scope} ({','.join(units)})" if units else scope
             lines.append(f"| {username} | {password} | {role_code} | {scope_txt} |")
         lines += [
             "",
-            "`admin` is the Django superuser (also reaches `/admin`).",
+            "`superadmin` is the only Django superuser (break-glass: bypasses the RBAC "
+            "matrix, reaches `/admin`). Every other login — including `admin` (it_admin) "
+            "and `owner` — is a normal user enforced by the section-access matrix.",
             "",
         ]
         # Best-effort convenience dump of the demo logins. The data is already in
         # the DB, so never let a read-only or absent filesystem (e.g. Render's
-        # build container, where /app does not exist) fail the seed.
-        path = Path(os.environ.get("SEED_CREDENTIALS_PATH", "/app/memory/test_credentials.md"))
+        # build container) fail the seed.
+        #
+        # Resolved from the checkout, not hardcoded: the old "/app/memory/..."
+        # default was the Emergent container's layout, so on a dev machine every
+        # seed skipped the write against read-only "/app".
+        default_path = Path(settings.BASE_DIR).parent.parent / "memory" / "test_credentials.md"
+        path = Path(os.environ.get("SEED_CREDENTIALS_PATH", str(default_path)))
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("\n".join(lines), encoding="utf-8")

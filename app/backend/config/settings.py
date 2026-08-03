@@ -13,17 +13,31 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env (DATABASE_URL, secrets, seed admin creds) — the served process and
 # local manage.py commands both read it. Protected vars never go in code.
-load_dotenv(BASE_DIR / ".env")
+#
+# override=True: this file is the authority on which local stack we are part of.
+# .env is gitignored and only ever written by scripts/dev.sh, which stamps it
+# with THIS worktree's DATABASE_URL — each Conductor workspace runs its own
+# Postgres on its own port (scripts/workspace-env.sh). Default dotenv behaviour
+# is the opposite, letting an inherited environment variable win, and that is a
+# silent wrong-database bug: a shell that exported another workspace's URL, or a
+# Conductor [environment_variables] entry, would migrate and seed a database
+# belonging to somebody else's branch with nothing on screen to say so.
+#
+# Inert everywhere it must be. Render (render.yaml) and GitHub CI supply
+# DATABASE_URL as real environment variables and never have a .env file to read,
+# so there is nothing for override to override.
+load_dotenv(BASE_DIR / ".env", override=True)
 
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
-DEBUG = os.environ["DJANGO_DEBUG"] == "1"
-ALLOWED_HOSTS = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "ci-secret-not-for-production")
+DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -48,6 +62,17 @@ INSTALLED_APPS = [
     "ptmapper.apps.PtmapperConfig",
     "stockledger.apps.StockledgerConfig",
     "finledger.apps.FinledgerConfig",
+    "approvals.apps.ApprovalsConfig",
+    "outbound.apps.OutboundConfig",
+    "sell.apps.SellConfig",
+    "alerts.apps.AlertsConfig",
+    "offers.apps.OffersConfig",
+    # Per-person Google Workspace inbox in the top bar. Reads no other app and
+    # is read by none — mail writes no ledger and no document.
+    "mail.apps.MailConfig",
+    # Composition roots: read across the domain apps, imported by none of them.
+    "search.apps.SearchConfig",
+    "storefront.apps.StorefrontConfig",
 ]
 
 MIDDLEWARE = [
@@ -63,6 +88,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # The business unit / brand the caller picked in the top-bar switcher (#88).
+    # Narrows what the scoping helpers answer; it can never widen it.
+    "masters.unit_context.ActiveContextMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -141,6 +169,9 @@ SPECTACULAR_SETTINGS = {
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+# Cross-origin dev (PWA on :3000 → API on :8000) must be allowed to send the
+# switcher's context headers, or every call silently falls back to network view.
+CORS_ALLOW_HEADERS = (*default_headers, "x-kdps-unit", "x-kdps-brand")
 # The broad Emergent-preview + localhost regexes are a credentialed wildcard on a
 # *shared* preview domain (any `<x>.emergentagent.com` could ride the cookie), so
 # they are gated to DEBUG (preview/dev) only. In production (DEBUG=0) CORS is driven

@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerReset, Users, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { FINANCE_ROLES } from "../auth/routeAccess";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface BalanceT {
   vendor_id: number;
@@ -50,7 +52,9 @@ type Mode = "bill" | "payment" | null;
 
 export default function VendorLedger() {
   const { user } = useAuth();
-  const isFinance = FINANCE_ROLES.includes(user?.role?.code ?? "");
+  // Mirrors the server gate exactly (`finledger.IsBooksKeeper` = money:manage),
+  // read from the same section payload rather than a role list of our own.
+  const isFinance = userCan(user, "money", "manage");
 
   const [balances, setBalances] = useState<{ total_payable_rupees: string; vendors_with_dues: number; rows: BalanceT[] }>();
   const [ageing, setAgeing] = useState<AgeingT>();
@@ -61,6 +65,8 @@ export default function VendorLedger() {
   const [hasNext, setHasNext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [q, setQ] = useState("");
 
   const [mode, setMode] = useState<Mode>(null);
   const [form, setForm] = useState({ vendor_id: "", amount: "", description: "", reference: "", payMode: "cash" });
@@ -69,14 +75,17 @@ export default function VendorLedger() {
   function loadAll() {
     api.get("/finledger/vendor/balances").then((r) => setBalances(r.data));
     api.get("/finledger/vendor/ageing").then((r) => setAgeing(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/vendor/entries?${q}`).then((r) => {
+    setEntriesLoading(true);
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (q.trim()) params.set("q", q.trim());
+    api.get(`/finledger/vendor/entries?${params}`).then((r) => {
       setEntries(r.data.results);
       setCount(r.data.count);
       setHasNext(Boolean(r.data.next));
-    });
+    }).finally(() => setEntriesLoading(false));
   }
-  useEffect(loadAll, [page]);
+  useEffect(loadAll, [page, q]);
+  useEffect(() => setPage(1), [q]);
   useEffect(() => { if (isFinance) api.get("/vendors").then((r) => setVendors(r.data)).catch(() => {}); }, [isFinance]);
 
   async function submit() {
@@ -116,19 +125,17 @@ export default function VendorLedger() {
 
   return (
     <div className="page-pad" data-testid="vendor-ledger-page">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · accounts payable · append-only</p>
-          <h1 className="h1 h2-rust">Vendor Ledger</h1>
-        </div>
-        <div className="spacer" />
-        {isFinance && (
-          <>
-            <button className="btn" onClick={() => { setMode("bill"); setError(""); }} data-testid="vl-record-bill-btn"><ReceiptText size={15} /> Record Bill</button>
-            <button className="btn btn-cta" onClick={() => { setMode("payment"); setError(""); }} data-testid="vl-record-payment-btn"><Send size={15} /> Record Payment</button>
-          </>
-        )}
-      </div>
+      <PageHeader
+        lead="Accounts payable, brand by brand. Append-only: a correction is a reversing entry."
+        actions={
+          isFinance && (
+            <>
+              <button className="btn" onClick={() => { setMode("bill"); setError(""); }} data-testid="vl-record-bill-btn"><ReceiptText size={15} /> Record Bill</button>
+              <button className="btn btn-cta" onClick={() => { setMode("payment"); setError(""); }} data-testid="vl-record-payment-btn"><Send size={15} /> Record Payment</button>
+            </>
+          )
+        }
+      />
 
       <div className="stat-grid">
         <div className="card stat-card"><IndianRupee size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono">{balances?.total_payable_rupees ?? "0.00"}</div><div className="stat-label">Total payable (₹)</div></div>
@@ -217,8 +224,20 @@ export default function VendorLedger() {
       )}
 
       <h3 className="h3" style={{ margin: "22px 0 8px" }}>All entries</h3>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search entries — doc number, party"
+        label="Search vendor ledger entries"
+        testId="vl-entries-search"
+        noun="posting"
+        count={count}
+        loading={entriesLoading}
+      />
       {entries.length === 0 ? (
-        <div className="card section-card" data-testid="vl-entries-empty">No vendor ledger entries yet.</div>
+        <div className="card section-card" data-testid="vl-entries-empty">
+          {q ? `No entry matches “${q}”.` : "No vendor ledger entries yet."}
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="data" data-testid="vl-entries-table">
@@ -247,7 +266,7 @@ export default function VendorLedger() {
           </div>
         </div>
       )}
-      <Link to="/ledgers/cash" className="btn" style={{ marginTop: 18 }}>Cash Ledger →</Link>
+      <Link to="/money/cash" className="btn" style={{ marginTop: 18 }}>Cash Ledger →</Link>
     </div>
   );
 }

@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS Design Language — Atelier v0.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Instrument+Serif:ital@0;1&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ATELIER — the KDPS design language, v0.1
+   Frosted chrome · white sheet · fabric-swatch pastels
+   ============================================================ */
+:root{
+  /* ink (text) */
+  --ink:#1B2436;            /* primary text — deep navy-ink, KDPS heritage */
+  --ink-2:#55607A;          /* secondary text */
+  --faint:#8A93A8;          /* captions, placeholders */
+
+  /* surfaces */
+  --paper:#FFFFFF;          /* the white sheet — all content lives here */
+  --mist:#F3F5FA;           /* inner wells, table headers, inputs */
+  --line:#E7EAF1;           /* hairlines */
+  --glass:rgba(255,255,255,.5);        /* frosted chrome — 50% frost (locked, round 1) */
+  --glass-border:rgba(255,255,255,.75);
+  --glass-ink:rgba(27,36,54,.06);      /* frosted dark tint (hover) */
+  --glass-soft:rgba(255,255,255,.6);   /* nav hover, user chip */
+  --glass-strong:rgba(255,255,255,.85);/* frost hover */
+
+  /* brand accent — KDPS red, softened to coral */
+  --coral:#E4574B;
+  --coral-deep:#C43D33;
+  --coral-soft:#FDEAE7;
+
+  /* action ink — primary buttons, selected states */
+  --action:#26365B;
+  --action-hov:#1D2A49;
+  --action-ink:#26365B;                /* text on frost fills */
+  --action-frost:#EAEFFA;
+  --action-frost-bd:#D4DDF1;
+  --action-frost-hov:#DFE7F8;
+  --action-frost-hov-bd:#C3CFEA;
+
+  /* fabric swatches — pastel status hues (bg / border / deep) */
+  --mint:#E1F5EA;    --mint-bd:#C4E8D4;    --mint-deep:#1E7A4F;
+  --butter:#FBF3D9;  --butter-bd:#EFE0AC;  --butter-deep:#8A6A00;
+  --sky:#E3F0FC;     --sky-bd:#CBE2F7;     --sky-deep:#2268A9;
+  --lavender:#ECEAFD;--lavender-bd:#D9D5F8;--lavender-deep:#5A4FB8;
+  --blush:#FBE5E4;   --blush-bd:#F3CCC9;   --blush-deep:#B03A34;
+  --peach:#FDEBDD;   --peach-bd:#F6D7BC;   --peach-deep:#B05A21;
+  --greige:#EFF1F5;  --greige-bd:#E1E5EC;  --greige-deep:#5B6474;
+  --mint-hov:#D2EFDF; --blush-hov:#F8D8D6;
+  --lavender-fade:#F4F2FE;
+
+  /* backdrop & misc */
+  --wash:#F0F2F8;
+  --glow-1:rgba(228,87,75,.08); --glow-2:rgba(90,79,184,.09); --glow-3:rgba(34,104,169,.07);
+  --frame-wash:#EDEFF7;
+  --fglow-1:rgba(228,87,75,.13); --fglow-2:rgba(90,79,184,.14); --fglow-3:rgba(34,104,169,.12);
+  --frame-bd:rgba(255,255,255,.7);
+  --page-bd:rgba(255,255,255,.9);
+  --row-hover:#F8FAFD;
+  --line-strong:#DCE1EC;
+  --err-well:#FDF1F0;
+  --skel-hi:#ECEFF6;
+  --toast-bg:#1B2436;
+  --scrim-1:#E9ECF5; --scrim-2:#E4E0F2;
+  --stitch:rgba(27,36,54,.18);
+  --panel:#1B2436;                     /* login brand panel — dark in both themes */
+  --logo-bg:#1B2436; --logo-ink:#FFFFFF;
+  --avatar-ink:#FFFFFF;
+
+  /* geometry */
+  --r-sheet:24px;   /* the white sheet, modals, phone frames */
+  --r-card:16px;    /* cards, table wraps */
+  --r-el:12px;      /* buttons, inputs, chips-lg */
+  --r-pill:999px;   /* chips, pills, avatars */
+
+  /* elevation */
+  --sh-rest:0 2px 10px rgba(27,36,54,.05);
+  --sh-float:0 10px 30px rgba(27,36,54,.10);
+  --sh-modal:0 24px 60px rgba(27,36,54,.18);
+
+  /* type */
+  --sans:"Instrument Sans", system-ui, -apple-system, sans-serif;
+  --serif:"Instrument Serif", Georgia, serif;
+  --mono:"Spline Sans Mono", ui-monospace, Menlo, monospace;
+}
+html{color-scheme:light;}
+
+/* ============================================================
+   DARK — one token-override block, same rule as the app:
+   no component rule changes, only token re-values.
+   ============================================================ */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#E8ECF5; --ink-2:#A9B2C7; --faint:#6E7890;
+  --paper:#161C2A; --mist:#1D2434; --line:#2A3346;
+  --glass:rgba(23,29,44,.5); --glass-border:rgba(255,255,255,.09); --glass-ink:rgba(232,236,245,.06);
+  --glass-soft:rgba(255,255,255,.06); --glass-strong:rgba(255,255,255,.12);
+  --coral:#F0685C; --coral-deep:#E4574B; --coral-soft:rgba(228,87,75,.16);
+  --action:#4C63A8; --action-hov:#5B73BC; --action-ink:#A9BCF0;
+  --action-frost:rgba(120,148,230,.14); --action-frost-bd:rgba(120,148,230,.30);
+  --action-frost-hov:rgba(120,148,230,.22); --action-frost-hov-bd:rgba(120,148,230,.40);
+  --mint:rgba(64,180,120,.14);     --mint-bd:rgba(64,180,120,.32);     --mint-deep:#74D6A4;
+  --butter:rgba(222,184,66,.13);   --butter-bd:rgba(222,184,66,.32);   --butter-deep:#E6C55E;
+  --sky:rgba(80,160,230,.14);      --sky-bd:rgba(80,160,230,.32);      --sky-deep:#7DBBF2;
+  --lavender:rgba(140,126,240,.16);--lavender-bd:rgba(140,126,240,.34);--lavender-deep:#ADA2F5;
+  --blush:rgba(235,100,92,.14);    --blush-bd:rgba(235,100,92,.32);    --blush-deep:#F09189;
+  --peach:rgba(235,140,70,.14);    --peach-bd:rgba(235,140,70,.32);    --peach-deep:#F0A46E;
+  --greige:rgba(150,160,180,.12);  --greige-bd:rgba(150,160,180,.28);  --greige-deep:#A6AFC2;
+  --mint-hov:rgba(64,180,120,.24); --blush-hov:rgba(235,100,92,.24);
+  --lavender-fade:rgba(140,126,240,.05);
+  --sh-rest:0 2px 10px rgba(0,0,0,.3);
+  --sh-float:0 10px 30px rgba(0,0,0,.42);
+  --sh-modal:0 24px 60px rgba(0,0,0,.55);
+  --wash:#0C111E;
+  --glow-1:rgba(228,87,75,.10); --glow-2:rgba(122,110,228,.12); --glow-3:rgba(56,130,200,.09);
+  --frame-wash:#101726;
+  --fglow-1:rgba(228,87,75,.16); --fglow-2:rgba(122,110,228,.18); --fglow-3:rgba(56,130,200,.14);
+  --frame-bd:rgba(255,255,255,.10);
+  --page-bd:rgba(255,255,255,.06);
+  --row-hover:#1A2132;
+  --line-strong:#36415A;
+  --err-well:rgba(235,100,92,.10);
+  --skel-hi:#242C3F;
+  --toast-bg:#242E44;
+  --scrim-1:#131A2A; --scrim-2:#171427;
+  --stitch:rgba(232,236,245,.2);
+  --panel:#10151F;
+  --logo-bg:#E8ECF5; --logo-ink:#1B2436;
+  --avatar-ink:#0F1420;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  font-size:15px; line-height:1.55;
+  background:var(--wash);
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,  var(--glow-1), transparent 60%),
+    radial-gradient(1100px 700px at 95% 12%, var(--glow-2), transparent 60%),
+    radial-gradient(900px 700px at 45% 110%, var(--glow-3), transparent 60%);
+  background-attachment:fixed;
+}
+
+/* ---------- kit chrome (the document itself) ---------- */
+.kit{max-width:1160px; margin:0 auto; padding:48px 28px 120px;}
+.kit-head{margin-bottom:40px;}
+.kit-eyebrow{
+  font-size:11px; font-weight:700; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--coral-deep); margin-bottom:10px;
+}
+.kit-title{font-size:44px; line-height:1.1; font-weight:700; letter-spacing:-.02em;}
+.kit-title em{font-family:var(--serif); font-style:italic; font-weight:400; color:var(--coral);}
+.kit-lead{margin-top:14px; max-width:70ch; color:var(--ink-2); font-size:16px;}
+.kit-toc{display:flex; flex-wrap:wrap; gap:8px; margin-top:22px;}
+.kit-toc a{
+  text-decoration:none; color:var(--ink); font-size:13px; font-weight:600;
+  background:var(--glass); border:1px solid var(--glass-border);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  padding:7px 14px; border-radius:var(--r-pill);
+}
+.kit-toc a:hover{background:var(--glass-strong);}
+
+.sect{margin-top:64px;}
+.sect-head{display:flex; align-items:baseline; gap:14px; margin-bottom:6px;}
+.sect-no{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--coral);}
+.sect-title{font-size:26px; font-weight:700; letter-spacing:-.01em;}
+.sect-note{color:var(--ink-2); max-width:78ch; margin-bottom:20px;}
+.sheet{
+  background:var(--paper); border:1px solid var(--line);
+  border-radius:var(--r-sheet); padding:28px; box-shadow:var(--sh-rest);
+}
+.sheet + .sheet{margin-top:16px;}
+.sub{font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin:26px 0 12px;}
+.sub:first-child{margin-top:0;}
+.spec{font-family:var(--mono); font-size:11.5px; color:var(--faint);}
+.row{display:flex; flex-wrap:wrap; gap:12px; align-items:center;}
+.row + .row{margin-top:12px;}
+
+/* ============================================================
+   FOUNDATIONS
+   ============================================================ */
+.swatches{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:14px;}
+.swatch{
+  border-radius:var(--r-card); border:1px solid var(--line); overflow:hidden; background:var(--paper);
+}
+.swatch-chip{height:74px; position:relative;}
+.swatch-chip::after{ /* the stitch — fabric-swatch signature */
+  content:""; position:absolute; inset:7px; border:1.5px dashed var(--stitch); border-radius:9px;
+}
+.swatch-meta{padding:10px 12px;}
+.swatch-name{font-weight:700; font-size:13.5px;}
+.swatch-role{font-size:12px; color:var(--ink-2);}
+
+.type-scale > div{padding:14px 0; border-bottom:1px dashed var(--line); display:flex; align-items:baseline; gap:24px;}
+.type-scale > div:last-child{border-bottom:none;}
+.type-scale .spec{width:220px; flex-shrink:0;}
+.t-display{font-size:34px; font-weight:700; letter-spacing:-.02em;}
+.t-display em{font-family:var(--serif); font-style:italic; font-weight:400; color:var(--coral);}
+.t-h2{font-size:22px; font-weight:700; letter-spacing:-.01em;}
+.t-h3{font-size:16px; font-weight:600;}
+.t-body{font-size:15px;}
+.t-small{font-size:13px; color:var(--ink-2);}
+.t-eyebrow{font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);}
+.t-mono{font-family:var(--mono); font-size:13.5px; font-weight:500;}
+.t-money{font-family:var(--mono); font-size:15px; font-weight:600; font-variant-numeric:tabular-nums;}
+
+.geo{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px;}
+.geo-tile{border:1px solid var(--line); border-radius:var(--r-card); padding:16px; background:var(--mist);}
+.geo-demo{background:var(--paper); border:1px solid var(--line); height:64px; margin-bottom:10px;}
+
+/* ============================================================
+   COMPONENTS — the real design system classes
+   ============================================================ */
+
+/* ---------- buttons ---------- */
+.btn{
+  font-family:var(--sans); font-size:14px; font-weight:600; letter-spacing:.005em;
+  border-radius:var(--r-el); border:1px solid transparent;
+  padding:9px 18px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+  transition:background .15s, border-color .15s, box-shadow .15s, transform .05s;
+}
+.btn:active{transform:translateY(1px);}
+.btn svg{width:15px; height:15px;}
+
+.btn-primary{ /* quiet primary — navy frost */
+  background:var(--action-frost); border-color:var(--action-frost-bd); color:var(--action-ink);
+}
+.btn-primary:hover{background:var(--action-frost-hov); border-color:var(--action-frost-hov-bd);}
+
+.btn-post{ /* strong — reserved for posting money / final confirms */
+  background:var(--action); color:#fff; box-shadow:0 4px 14px rgba(38,54,91,.25);
+}
+.btn-post:hover{background:var(--action-hov);}
+
+.btn-cta{ /* coral — the one loud brand action per screen */
+  background:var(--coral); color:#fff; box-shadow:0 4px 14px rgba(228,87,75,.28);
+}
+.btn-cta:hover{background:var(--coral-deep);}
+
+.btn-approve{background:var(--mint); border-color:var(--mint-bd); color:var(--mint-deep);}
+.btn-approve:hover{background:var(--mint-hov);}
+.btn-reject{background:var(--blush); border-color:var(--blush-bd); color:var(--blush-deep);}
+.btn-reject:hover{background:var(--blush-hov);}
+
+.btn-ghost{background:transparent; border-color:var(--line); color:var(--ink);}
+.btn-ghost:hover{background:var(--mist);}
+
+.btn-frost{ /* lives on the glass chrome */
+  background:var(--glass); border-color:var(--glass-border); color:var(--ink);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+}
+.btn-frost:hover{background:var(--glass-strong);}
+
+.btn-sm{font-size:13px; padding:6px 13px; border-radius:10px;}
+.btn-lg{font-size:15px; padding:12px 24px; border-radius:14px;}
+.btn-block{width:100%; justify-content:center;}
+.btn[disabled]{opacity:.45; cursor:not-allowed;}
+
+/* ---------- chips ---------- */
+.chip{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:12.5px; font-weight:600; letter-spacing:.01em;
+  padding:4px 11px; border-radius:var(--r-pill); border:1px solid;
+}
+.chip .dot{width:6px; height:6px; border-radius:50%; background:currentColor;}
+.chip-mint{background:var(--mint); border-color:var(--mint-bd); color:var(--mint-deep);}
+.chip-butter{background:var(--butter); border-color:var(--butter-bd); color:var(--butter-deep);}
+.chip-sky{background:var(--sky); border-color:var(--sky-bd); color:var(--sky-deep);}
+.chip-lavender{background:var(--lavender); border-color:var(--lavender-bd); color:var(--lavender-deep);}
+.chip-blush{background:var(--blush); border-color:var(--blush-bd); color:var(--blush-deep);}
+.chip-peach{background:var(--peach); border-color:var(--peach-bd); color:var(--peach-deep);}
+.chip-greige{background:var(--greige); border-color:var(--greige-bd); color:var(--greige-deep);}
+.chip-ink{background:var(--action-frost); border-color:var(--action-frost-bd); color:var(--action-ink);}
+
+/* event chip — pastel card with icon well, from the reference boards */
+.event-chip{
+  display:inline-flex; align-items:center; gap:10px;
+  padding:8px 14px 8px 8px; border-radius:14px; border:1px solid;
+}
+.event-chip .well{
+  width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,.85);
+  display:flex; align-items:center; justify-content:center;
+}
+.event-chip .well svg{width:16px; height:16px;}
+.event-chip b{font-size:13.5px; font-weight:600; display:block; line-height:1.25;}
+.event-chip span{font-size:12px; opacity:.75; line-height:1.2;}
+.ec-mint{background:var(--mint); border-color:var(--mint-bd); color:var(--mint-deep);}
+.ec-butter{background:var(--butter); border-color:var(--butter-bd); color:var(--butter-deep);}
+.ec-sky{background:var(--sky); border-color:var(--sky-bd); color:var(--sky-deep);}
+.ec-lavender{background:var(--lavender); border-color:var(--lavender-bd); color:var(--lavender-deep);}
+.ec-blush{background:var(--blush); border-color:var(--blush-bd); color:var(--blush-deep);}
+.ec-peach{background:var(--peach); border-color:var(--peach-bd); color:var(--peach-deep);}
+
+/* ---------- inputs ---------- */
+.field{display:flex; flex-direction:column; gap:6px; max-width:320px;}
+.field label{font-size:13px; font-weight:600;}
+.field .hint{font-size:12px; color:var(--faint);}
+.input{
+  font-family:var(--sans); font-size:14.5px; color:var(--ink);
+  background:var(--mist); border:1px solid transparent; border-radius:var(--r-el);
+  padding:10px 14px; width:100%; outline:none;
+  transition:background .15s, border-color .15s, box-shadow .15s;
+}
+.input::placeholder{color:var(--faint);}
+.input:focus{background:var(--paper); border-color:var(--action-frost-bd); box-shadow:0 0 0 3px var(--action-frost);}
+.input.is-error{background:var(--err-well); border-color:var(--blush-bd); box-shadow:0 0 0 3px var(--blush);}
+.err-text{font-size:12.5px; color:var(--blush-deep); font-weight:600;}
+
+.searchpill{
+  display:flex; align-items:center; gap:10px; background:var(--mist);
+  border:1px solid transparent; border-radius:var(--r-pill); padding:9px 16px; max-width:340px;
+}
+.searchpill svg{width:15px; height:15px; color:var(--faint); flex-shrink:0;}
+.searchpill input{border:none; background:none; outline:none; font-family:var(--sans); font-size:14px; width:100%; color:var(--ink);}
+.searchpill kbd{
+  font-family:var(--mono); font-size:11px; color:var(--faint);
+  background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:2px 7px;
+}
+
+.cbx{max-width:320px; position:relative;}
+.cbx-list{
+  margin-top:6px; background:var(--paper); border:1px solid var(--line); border-radius:14px;
+  box-shadow:var(--sh-float); overflow:hidden;
+}
+.cbx-item{padding:9px 14px; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;}
+.cbx-item:hover{background:var(--mist);}
+.cbx-item.is-active{background:var(--action-frost); color:var(--action-ink); font-weight:600;}
+.cbx-item .star{color:var(--butter-deep); font-size:12px;}
+.cbx-empty{padding:14px; font-size:13px; color:var(--faint); text-align:center;}
+
+.seg{
+  display:inline-flex; background:var(--mist); border-radius:var(--r-pill); padding:3px; gap:2px;
+}
+.seg button{
+  font-family:var(--sans); font-size:13px; font-weight:600; color:var(--ink-2);
+  border:none; background:none; padding:6px 16px; border-radius:var(--r-pill); cursor:pointer;
+}
+.seg button.is-on{background:var(--paper); color:var(--ink); box-shadow:var(--sh-rest);}
+
+.toggle{width:42px; height:24px; border-radius:var(--r-pill); background:var(--line); position:relative; cursor:pointer; border:none; transition:background .15s;}
+.toggle::after{content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:var(--sh-rest); transition:left .15s;}
+.toggle.is-on{background:var(--mint-deep);}
+.toggle.is-on::after{left:21px;}
+
+/* ---------- cards ---------- */
+.kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;}
+.kpi{
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--r-card);
+  padding:18px 20px; box-shadow:var(--sh-rest); position:relative; transition:box-shadow .2s, border-color .2s;
+}
+.kpi:hover{box-shadow:var(--sh-float); border-color:var(--line-strong);}
+.kpi .k-label{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);}
+.kpi .k-value{font-family:var(--mono); font-size:26px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
+.kpi .k-foot{margin-top:10px; display:flex; align-items:center; gap:8px;}
+.kpi .k-accent{position:absolute; top:16px; right:16px; width:10px; height:10px; border-radius:3px;}
+.kpi.is-unbuilt .k-value{color:var(--faint);}
+.sample-tag{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); background:var(--mist); padding:2px 8px; border-radius:var(--r-pill);}
+
+.band{
+  border-radius:var(--r-card); border:1px solid; padding:18px 20px;
+}
+.band-ai{background:linear-gradient(135deg, var(--lavender), var(--lavender-fade) 65%); border-color:var(--lavender-bd);}
+.band-ai .fence{font-size:12px; color:var(--lavender-deep); opacity:.8; margin-top:10px;}
+
+.queue-card{
+  background:var(--paper); border:1px solid var(--line); border-radius:var(--r-card);
+  padding:16px 18px; box-shadow:var(--sh-rest); display:flex; align-items:center; gap:16px; justify-content:space-between; flex-wrap:wrap;
+}
+.queue-card .q-main b{display:block; font-size:15px;}
+.queue-card .q-main span{font-size:13px; color:var(--ink-2);}
+
+/* ---------- table ---------- */
+.table-wrap{border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; background:var(--paper);}
+table.data{width:100%; border-collapse:collapse; font-size:14px;}
+table.data th{
+  text-align:left; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--faint); background:var(--mist); padding:11px 16px; border-bottom:1px solid var(--line);
+}
+table.data td{padding:12px 16px; border-bottom:1px solid var(--line);}
+table.data tr:last-child td{border-bottom:none;}
+table.data tbody tr:hover td{background:var(--row-hover);}
+td.num, th.num{text-align:right; font-family:var(--mono); font-weight:500; font-variant-numeric:tabular-nums;}
+.voucher{font-family:var(--mono); font-size:12.5px; font-weight:500; color:var(--ink-2);}
+
+/* ---------- approvals ---------- */
+.trail{
+  border:1px solid var(--line); border-radius:var(--r-card); background:var(--paper); overflow:hidden; max-width:560px;
+}
+.trail-row{display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px dashed var(--line);}
+.trail-row:last-child{border-bottom:none;}
+.trail-row .who{font-weight:600; font-size:14px;}
+.trail-row .when{font-size:12px; color:var(--faint); margin-left:auto; font-family:var(--mono);}
+.avatar{
+  width:30px; height:30px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11.5px; font-weight:700; color:var(--avatar-ink);
+}
+
+/* ---------- scan screen ---------- */
+.phone{
+  width:340px; border-radius:36px; border:1px solid var(--line); background:var(--paper);
+  box-shadow:var(--sh-float); overflow:hidden; flex-shrink:0;
+}
+.phone-head{padding:16px 20px 0; display:flex; justify-content:space-between; align-items:center;}
+.scan-count{text-align:center; padding:26px 20px 8px;}
+.scan-count .big{font-family:var(--mono); font-size:64px; font-weight:600; line-height:1; letter-spacing:-.03em;}
+.scan-count .big small{font-size:26px; color:var(--faint); font-weight:400;}
+.scan-count .lbl{font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin-top:8px;}
+.scan-flash{margin:14px 16px; border-radius:14px; padding:10px 14px; display:flex; align-items:center; gap:10px; font-size:13.5px; font-weight:600;}
+.scan-tally{padding:4px 16px 16px;}
+.scan-tally .t-row{display:flex; justify-content:space-between; padding:9px 4px; border-bottom:1px dashed var(--line); font-size:13.5px;}
+.scan-tally .t-row:last-child{border-bottom:none;}
+.scan-foot{padding:14px 16px 22px; border-top:1px solid var(--line); background:var(--mist);}
+
+/* ---------- modal / notes ---------- */
+.modal-demo{
+  background:linear-gradient(160deg, var(--scrim-1), var(--scrim-2)); border-radius:var(--r-card);
+  padding:40px; display:flex; justify-content:center;
+}
+.modal{
+  background:var(--paper); border-radius:20px; box-shadow:var(--sh-modal);
+  width:420px; max-width:100%; padding:24px;
+}
+.modal h3{font-size:18px; font-weight:700;}
+.modal p{font-size:14px; color:var(--ink-2); margin-top:8px;}
+.modal .m-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:22px;}
+
+.note{border-radius:var(--r-el); border:1px solid; padding:11px 15px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start; max-width:560px;}
+.note b{font-weight:700;}
+.note-ok{background:var(--mint); border-color:var(--mint-bd); color:var(--mint-deep);}
+.note-warn{background:var(--butter); border-color:var(--butter-bd); color:var(--butter-deep);}
+.note-err{background:var(--blush); border-color:var(--blush-bd); color:var(--blush-deep);}
+.note-ai{background:var(--lavender); border-color:var(--lavender-bd); color:var(--lavender-deep);}
+
+.toast{
+  display:inline-flex; align-items:center; gap:10px; background:var(--toast-bg); color:#fff;
+  border-radius:14px; padding:11px 18px; font-size:13.5px; font-weight:600; box-shadow:var(--sh-float);
+}
+.toast .chip{background:rgba(255,255,255,.16); border-color:transparent; color:#fff;}
+
+/* ---------- empty / loading ---------- */
+.empty{
+  border:1.5px dashed var(--line); border-radius:var(--r-card); padding:36px; text-align:center; max-width:520px;
+}
+.empty .e-well{
+  width:52px; height:52px; border-radius:16px; background:var(--mist); margin:0 auto 14px;
+  display:flex; align-items:center; justify-content:center; color:var(--faint);
+}
+.empty b{font-size:15.5px;}
+.empty p{font-size:13.5px; color:var(--ink-2); margin:6px 0 16px;}
+
+.skel{border-radius:8px; background:linear-gradient(90deg, var(--mist) 25%, var(--skel-hi) 50%, var(--mist) 75%); background-size:200% 100%; animation:shimmer 1.4s infinite;}
+@keyframes shimmer{0%{background-position:200% 0;} 100%{background-position:-200% 0;}}
+@media (prefers-reduced-motion:reduce){ .skel{animation:none;} }
+
+/* ============================================================
+   THE SHELL DEMO — frosted sidebar + white sheet
+   ============================================================ */
+.shell-frame{
+  border-radius:var(--r-sheet); overflow:hidden; border:1px solid var(--frame-bd);
+  box-shadow:var(--sh-float);
+  background:
+    radial-gradient(600px 400px at 0% 0%,   var(--fglow-1), transparent 55%),
+    radial-gradient(700px 500px at 100% 20%, var(--fglow-2), transparent 55%),
+    radial-gradient(700px 500px at 50% 120%, var(--fglow-3), transparent 55%),
+    var(--frame-wash);
+}
+.shell{display:flex; min-height:640px;}
+.side{
+  width:236px; flex-shrink:0; padding:18px 14px;
+  background:var(--glass); border-right:1px solid var(--glass-border);
+  backdrop-filter:blur(24px) saturate(1.4); -webkit-backdrop-filter:blur(24px) saturate(1.4);
+  display:flex; flex-direction:column;
+}
+.side-brand{display:flex; align-items:center; gap:10px; padding:4px 8px 16px;}
+.side-brand .logo{
+  width:32px; height:32px; border-radius:10px; background:var(--logo-bg); color:var(--logo-ink);
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; letter-spacing:.02em;
+}
+.side-brand b{font-size:15px; letter-spacing:-.01em;}
+.side-brand span{display:block; font-size:10px; color:var(--ink-2); font-weight:600; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;}
+.side-sect{font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); padding:14px 10px 6px;}
+.nav-item{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px;
+  font-size:13.5px; font-weight:600; color:var(--ink-2); cursor:pointer; text-decoration:none;
+}
+.nav-item svg{width:16px; height:16px; flex-shrink:0;}
+.nav-item:hover{background:var(--glass-soft); color:var(--ink);}
+.nav-item.is-on{background:var(--paper); color:var(--ink); box-shadow:var(--sh-rest);}
+.nav-item .n-count{
+  margin-left:auto; font-size:11px; font-weight:700; font-family:var(--mono);
+  background:var(--coral); color:#fff; border-radius:var(--r-pill); padding:1px 7px;
+}
+.nav-ico{width:24px; height:24px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.nav-ico svg{width:14px; height:14px;}
+.side-foot{margin-top:auto; padding-top:14px;}
+.userchip{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:14px;
+  background:var(--glass-soft); border:1px solid var(--glass-border);
+}
+.userchip b{font-size:13px; display:block; line-height:1.2;}
+.userchip span{font-size:11.5px; color:var(--ink-2);}
+
+.main{flex:1; display:flex; flex-direction:column; min-width:0; padding:14px 14px 14px 0;}
+.topbar{display:flex; align-items:center; gap:12px; padding:2px 6px 12px 20px;}
+.crumb{font-size:12.5px; color:var(--ink-2); font-weight:600; display:flex; gap:6px; align-items:center;}
+.crumb .sep{color:var(--faint);}
+.topbar .searchpill{margin-left:auto; background:var(--glass); border:1px solid var(--glass-border); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); max-width:280px; padding:7px 14px;}
+.icon-btn{
+  width:36px; height:36px; border-radius:var(--r-pill); border:1px solid var(--glass-border);
+  background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; color:var(--ink);
+}
+.icon-btn svg{width:16px; height:16px;}
+.icon-btn .bubble{
+  position:absolute; top:-4px; right:-4px; background:var(--coral); color:#fff;
+  font-size:10px; font-weight:700; font-family:var(--mono); border-radius:var(--r-pill); padding:1px 5px;
+}
+.unitpill{
+  display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600;
+  background:var(--glass); border:1px solid var(--glass-border); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-radius:var(--r-pill); padding:7px 14px; cursor:pointer;
+}
+.unitpill .u-dot{width:8px; height:8px; border-radius:50%; background:var(--mint-deep);}
+
+.page{
+  flex:1; background:var(--paper); border-radius:20px; border:1px solid var(--page-bd);
+  box-shadow:var(--sh-rest); padding:26px 28px; min-width:0; overflow:hidden;
+}
+.page-head{display:flex; align-items:flex-start; gap:16px; margin-bottom:22px;}
+.page-head .ph-title{font-size:27px; font-weight:700; letter-spacing:-.02em; line-height:1.15;}
+.page-head .ph-title em{font-family:var(--serif); font-style:italic; font-weight:400; color:var(--coral);}
+.page-head .ph-lead{font-size:13.5px; color:var(--ink-2); margin-top:4px;}
+.page-head .ph-actions{margin-left:auto; display:flex; gap:10px; flex-shrink:0;}
+
+@media (max-width:900px){
+  .shell{flex-direction:column;}
+  .side{width:100%; flex-direction:row; align-items:center; overflow-x:auto; padding:10px;}
+  .side-foot,.side-sect{display:none;}
+  .main{padding:10px;}
+  .kit-title{font-size:32px;}
+}
+
+/* comparison strip */
+.compare{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+@media (max-width:760px){ .compare{grid-template-columns:1fr;} }
+.compare .pane{border:1px solid var(--line); border-radius:var(--r-card); padding:18px; background:var(--paper);}
+.pane-old{background:#faf7f2;}
+.pane h4{font-size:13px; font-weight:700; margin-bottom:12px; color:var(--ink-2);}
+
+/* floating theme switch — preview the whole kit in either theme */
+.theme-fab{position:fixed; top:16px; right:16px; z-index:60; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh-float);}
+
+/* open questions */
+.qs{counter-reset:q; max-width:760px;}
+.q{
+  display:flex; gap:14px; padding:16px 0; border-bottom:1px dashed var(--line);
+}
+.q::before{
+  counter-increment:q; content:counter(q,decimal-leading-zero);
+  font-family:var(--mono); font-size:13px; font-weight:600; color:var(--coral); padding-top:2px;
+}
+.q b{display:block; font-size:15px;}
+.q p{font-size:13.5px; color:var(--ink-2); margin-top:3px;}
+</style>
+</head>
+<body>
+
+<div class="seg theme-fab" id="themeSeg" role="group" aria-label="Theme">
+  <button data-mode="light" class="is-on">Light</button>
+  <button data-mode="dark">Dark</button>
+</div>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></symbol>
+  <symbol id="i-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 6l2 4 2-1v12h8V9l2 1 2-4-4-3a4 4 0 0 1-8 0Z"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 9-4 9 4v10l-9 4-9-4Z"/><path d="m3 7 9 4 9-4"/><path d="M12 11v10"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5h14v11H1z"/><path d="M15 9h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-count" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.5 11 13l4-4"/><rect x="3" y="4" width="18" height="16" rx="3"/></symbol>
+  <symbol id="i-rupee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 8h12M14.5 21 6 13h3a5 5 0 0 0 0-10"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-8"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 12l10 10 10-10V2Z" transform="rotate(45 12 12)"/><circle cx="14" cy="10" r="1.5"/></symbol>
+</svg>
+
+<div class="kit">
+
+  <!-- ======================= HEADER ======================= -->
+  <header class="kit-head">
+    <div class="kit-eyebrow">KDPS Operating System · Design Language · v0.2 · round two</div>
+    <h1 class="kit-title">Atelier — <em>the look of our stores, on screen</em></h1>
+    <p class="kit-lead">
+      One page holding every piece of the new look: frosted glass chrome around a clean white sheet,
+      fabric-swatch pastels for status, coral as the single loud brand note, and a serif-italic accent
+      that gives page titles a fashion-editorial voice. Every component below maps 1-to-1 to a component
+      that exists in the app today, filled with real KDPS content.
+      <b>New in v0.2:</b> the sidebar frost is locked at 50%, and dark mode is in — flip the switch at the
+      top-right to see every component in either theme. Dark is one token-override block, no component changes,
+      exactly the rule the app already follows.
+    </p>
+    <nav class="kit-toc">
+      <a href="#foundations">01 Foundations</a>
+      <a href="#shell">02 App shell</a>
+      <a href="#buttons">03 Buttons</a>
+      <a href="#inputs">04 Inputs</a>
+      <a href="#chips">05 Chips &amp; badges</a>
+      <a href="#cards">06 Cards</a>
+      <a href="#table">07 Tables</a>
+      <a href="#approvals">08 Approvals</a>
+      <a href="#scan">09 Scan screen</a>
+      <a href="#overlays">10 Modals &amp; notes</a>
+      <a href="#login">11 Login</a>
+      <a href="#states">12 Empty &amp; loading</a>
+      <a href="#questions">13 Round two</a>
+    </nav>
+  </header>
+
+  <!-- ======================= 01 FOUNDATIONS ======================= -->
+  <section class="sect" id="foundations">
+    <div class="sect-head"><span class="sect-no">01</span><h2 class="sect-title">Foundations</h2></div>
+    <p class="sect-note">
+      The idea in one line: <b>the chrome is glass, the work is on paper, the status is fabric.</b>
+      Sidebar and topbar are frosted glass floating over a soft ambient wash. All actual work happens on a
+      plain white sheet. Statuses come from a rack of six pastel "fabric swatches" — each swatch card below
+      even carries a stitched border, the one decorative signature of this language.
+    </p>
+
+    <div class="sheet">
+      <div class="sub">Ink &amp; surfaces</div>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-chip" style="background:#1B2436"></div><div class="swatch-meta"><div class="swatch-name">Ink</div><div class="swatch-role">text, strong fills</div><div class="spec">#1B2436</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:#55607A"></div><div class="swatch-meta"><div class="swatch-name">Ink 2</div><div class="swatch-role">secondary text</div><div class="spec">#55607A</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:#FFFFFF"></div><div class="swatch-meta"><div class="swatch-name">Paper</div><div class="swatch-role">the white sheet</div><div class="spec">#FFFFFF</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:#F3F5FA"></div><div class="swatch-meta"><div class="swatch-name">Mist</div><div class="swatch-role">wells, inputs, th</div><div class="spec">#F3F5FA</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--glass); backdrop-filter:blur(10px)"></div><div class="swatch-meta"><div class="swatch-name">Glass</div><div class="swatch-role">chrome · 50% frost</div><div class="spec">white 50% + blur 24</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:#E4574B"></div><div class="swatch-meta"><div class="swatch-name">Coral</div><div class="swatch-role">the brand note</div><div class="spec">#E4574B</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:#26365B"></div><div class="swatch-meta"><div class="swatch-name">Action</div><div class="swatch-role">post-money fills</div><div class="spec">#26365B</div></div></div>
+      </div>
+
+      <div class="sub">The fabric rack — six status pastels</div>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-chip" style="background:var(--mint)"></div><div class="swatch-meta"><div class="swatch-name">Mint</div><div class="swatch-role">ok · matched · approved</div><div class="spec">#E1F5EA / #1E7A4F</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--butter)"></div><div class="swatch-meta"><div class="swatch-name">Butter</div><div class="swatch-role">waiting · SOR · EOSS</div><div class="spec">#FBF3D9 / #8A6A00</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--sky)"></div><div class="swatch-meta"><div class="swatch-name">Sky</div><div class="swatch-role">in-transit · info</div><div class="spec">#E3F0FC / #2268A9</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--lavender)"></div><div class="swatch-meta"><div class="swatch-name">Lavender</div><div class="swatch-role">AI · intelligence</div><div class="spec">#ECEAFD / #5A4FB8</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--blush)"></div><div class="swatch-meta"><div class="swatch-name">Blush</div><div class="swatch-role">blocked · rejected</div><div class="spec">#FBE5E4 / #B03A34</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--peach)"></div><div class="swatch-meta"><div class="swatch-name">Peach</div><div class="swatch-role">damage · attention</div><div class="spec">#FDEBDD / #B05A21</div></div></div>
+        <div class="swatch"><div class="swatch-chip" style="background:var(--greige)"></div><div class="swatch-meta"><div class="swatch-name">Greige</div><div class="swatch-role">neutral · not required</div><div class="spec">#EFF1F5 / #5B6474</div></div></div>
+      </div>
+
+      <div class="sub">Type — Instrument Sans · Instrument Serif (accent only) · Spline Sans Mono</div>
+      <div class="type-scale">
+        <div><span class="spec">Display 34/700 + serif accent</span><span class="t-display">Receive <em>goods</em></span></div>
+        <div><span class="spec">H2 · 22/700</span><span class="t-h2">GRNs waiting for a PT file</span></div>
+        <div><span class="spec">H3 · 16/600</span><span class="t-h3">Mufti · Autumn-Winter 25</span></div>
+        <div><span class="spec">Body · 15/400</span><span class="t-body">Stock moves only when a document says so — the ledger is written by the voucher, never by hand.</span></div>
+        <div><span class="spec">Small · 13/400</span><span class="t-small">Received at RAN-WH · checked by Patna office</span></div>
+        <div><span class="spec">Eyebrow · 11/700 · tracked</span><span class="t-eyebrow">Receive Goods · GRN</span></div>
+        <div><span class="spec">Mono · vouchers &amp; IDs</span><span class="t-mono">26-27/DEO/SAL/74</span></div>
+        <div><span class="spec">Mono · money, tabular</span><span class="t-money">₹28,50,000.00</span></div>
+      </div>
+
+      <div class="sub">Geometry &amp; elevation</div>
+      <div class="geo">
+        <div class="geo-tile"><div class="geo-demo" style="border-radius:24px"></div><b>Sheet · 24</b><div class="spec">page sheet, modals, phones</div></div>
+        <div class="geo-tile"><div class="geo-demo" style="border-radius:16px"></div><b>Card · 16</b><div class="spec">cards, tables, bands</div></div>
+        <div class="geo-tile"><div class="geo-demo" style="border-radius:12px"></div><b>Element · 12</b><div class="spec">buttons, inputs</div></div>
+        <div class="geo-tile"><div class="geo-demo" style="border-radius:999px; height:40px; margin-top:12px; margin-bottom:22px;"></div><b>Pill · full</b><div class="spec">chips, search, nav counts</div></div>
+        <div class="geo-tile"><div class="geo-demo" style="border:none; box-shadow:var(--sh-rest); border-radius:16px"></div><b>Rest</b><div class="spec">0 2 10 · ink 5%</div></div>
+        <div class="geo-tile"><div class="geo-demo" style="border:none; box-shadow:var(--sh-float); border-radius:16px"></div><b>Float</b><div class="spec">0 10 30 · ink 10%</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 02 APP SHELL ======================= -->
+  <section class="sect" id="shell">
+    <div class="sect-head"><span class="sect-no">02</span><h2 class="sect-title">App shell — frosted chrome, white sheet</h2></div>
+    <p class="sect-note">
+      The whole chrome (sidebar, topbar pills, bell, unit switcher) is frosted glass over the ambient wash;
+      the page itself is a rounded white sheet. Sidebar sections keep today's 13-section structure and RBAC —
+      only the skin changes. Below: the Home dashboard as a store manager at JSL would see it.
+    </p>
+
+    <div class="shell-frame">
+      <div class="shell">
+        <aside class="side">
+          <div class="side-brand">
+            <div class="logo">K</div>
+            <div><b>KDPS OS</b><span>Retail operating system</span></div>
+          </div>
+
+          <div class="side-sect">Operations</div>
+          <a class="nav-item is-on"><span class="nav-ico" style="background:var(--coral-soft); color:var(--coral-deep)"><svg><use href="#i-home"/></svg></span>Home</a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--mint); color:var(--mint-deep)"><svg><use href="#i-shirt"/></svg></span>Sell</a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--sky); color:var(--sky-deep)"><svg><use href="#i-box"/></svg></span>Receive goods</a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--peach); color:var(--peach-deep)"><svg><use href="#i-truck"/></svg></span>Transfer</a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--lavender); color:var(--lavender-deep)"><svg><use href="#i-count"/></svg></span>Stock count</a>
+
+          <div class="side-sect">Books</div>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--butter); color:var(--butter-deep)"><svg><use href="#i-rupee"/></svg></span>Money<span class="n-count">3</span></a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--greige); color:var(--greige-deep)"><svg><use href="#i-chart"/></svg></span>Reports</a>
+          <a class="nav-item"><span class="nav-ico" style="background:var(--greige); color:var(--greige-deep)"><svg><use href="#i-gear"/></svg></span>Setup</a>
+
+          <div class="side-foot">
+            <div class="userchip">
+              <div class="avatar" style="background:var(--action)">RS</div>
+              <div><b>Rakesh Singh</b><span>Store manager · JSL</span></div>
+            </div>
+          </div>
+        </aside>
+
+        <div class="main">
+          <div class="topbar">
+            <div class="crumb">Home <span class="sep">/</span> Today</div>
+            <div class="searchpill"><svg><use href="#i-search"/></svg><input placeholder="Search or scan anything…"><kbd>⌘K</kbd></div>
+            <div class="unitpill"><span class="u-dot"></span>JSL Store ▾</div>
+            <button class="icon-btn"><svg><use href="#i-bell"/></svg><span class="bubble">4</span></button>
+          </div>
+
+          <div class="page">
+            <div class="page-head">
+              <div>
+                <div class="t-eyebrow" style="margin-bottom:4px">Home · Tuesday 28 July</div>
+                <div class="ph-title">Good morning, <em>Rakesh</em></div>
+                <div class="ph-lead">4 approvals are waiting for you. Yesterday closed clean.</div>
+              </div>
+              <div class="ph-actions">
+                <button class="btn btn-frost btn-sm"><svg><use href="#i-scan"/></svg>Scan</button>
+                <button class="btn btn-primary btn-sm">Start day</button>
+              </div>
+            </div>
+
+            <div class="kpi-row">
+              <div class="kpi"><span class="k-accent" style="background:var(--mint-deep)"></span>
+                <div class="k-label">Yesterday's sale</div>
+                <div class="k-value">₹1,84,300</div>
+                <div class="k-foot"><span class="chip chip-mint"><span class="dot"></span>+12% vs last Tue</span></div>
+              </div>
+              <div class="kpi"><span class="k-accent" style="background:var(--sky-deep)"></span>
+                <div class="k-label">Stock on hand</div>
+                <div class="k-value">12,482 pcs</div>
+                <div class="k-foot"><span class="chip chip-sky"><span class="dot"></span>2 counts due</span></div>
+              </div>
+              <div class="kpi is-unbuilt"><span class="k-accent" style="background:var(--greige-deep)"></span>
+                <div class="k-label">Gross margin</div>
+                <div class="k-value">—</div>
+                <div class="k-foot"><span class="sample-tag">Not built yet</span></div>
+              </div>
+            </div>
+
+            <div class="band band-ai" style="margin-top:16px">
+              <div class="row" style="justify-content:space-between">
+                <div>
+                  <span class="chip chip-lavender" style="margin-bottom:8px"><svg width="12" height="12"><use href="#i-spark"/></svg>Morning brief · AI</span>
+                  <div style="font-size:14.5px; margin-top:8px; color:var(--ink)">
+                    Mufti AW-25 shirts are selling 2× faster than last week — 9 sizes will break within 6 days.
+                    A transfer of 40 pcs from RAN-WH would cover it.
+                  </div>
+                </div>
+                <button class="btn btn-primary btn-sm">Review suggestion</button>
+              </div>
+              <div class="fence">AI reads the ledgers; it never writes them. Every suggestion becomes a document you approve.</div>
+            </div>
+
+            <div class="sub" style="margin-top:20px">Waiting on you</div>
+            <div class="queue-card">
+              <div class="q-main">
+                <b>GRN <span class="voucher">26-27/JSL/GRN/112</span> — Killer, 96 pcs</b>
+                <span>Received yesterday · waiting for its PT file</span>
+              </div>
+              <div class="row">
+                <span class="chip chip-butter"><span class="dot"></span>Waiting · PT</span>
+                <button class="btn btn-primary btn-sm">Make PT file</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 03 BUTTONS ======================= -->
+  <section class="sect" id="buttons">
+    <div class="sect-head"><span class="sect-no">03</span><h2 class="sect-title">Buttons</h2></div>
+    <p class="sect-note">
+      No solid black pills. The everyday primary is a <b>navy frost</b> — quiet, but clearly the main action.
+      Solid fills exist for exactly two jobs: <b>Action ink</b> when money or stock is about to post
+      (the visual weight tells you "this writes a ledger"), and <b>Coral</b> for the single brand-loud CTA
+      a screen is allowed. Approve/Reject wear their fabric colours.
+    </p>
+    <div class="sheet">
+      <div class="sub">The set</div>
+      <div class="row">
+        <button class="btn btn-primary">Make PT file</button>
+        <button class="btn btn-post"><svg><use href="#i-check"/></svg>Post to ledger</button>
+        <button class="btn btn-cta">Start selling</button>
+        <button class="btn btn-approve"><svg><use href="#i-check"/></svg>Approve</button>
+        <button class="btn btn-reject"><svg><use href="#i-x"/></svg>Reject</button>
+        <button class="btn btn-ghost">Cancel</button>
+      </div>
+      <div class="sub">On glass (toolbar / chrome)</div>
+      <div class="row" style="background:linear-gradient(120deg,var(--scrim-1),var(--scrim-2)); padding:18px; border-radius:14px;">
+        <button class="btn btn-frost"><svg><use href="#i-scan"/></svg>Scan</button>
+        <button class="btn btn-frost">Export</button>
+        <button class="btn btn-frost btn-sm">Filter</button>
+      </div>
+      <div class="sub">Sizes &amp; states</div>
+      <div class="row">
+        <button class="btn btn-primary btn-lg">Save booking</button>
+        <button class="btn btn-primary">Save booking</button>
+        <button class="btn btn-primary btn-sm">Save</button>
+        <button class="btn btn-primary" disabled>Save booking</button>
+      </div>
+      <div class="row" style="max-width:340px"><button class="btn btn-post btn-block btn-lg">Confirm count — 482 pcs</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= 04 INPUTS ======================= -->
+  <section class="sect" id="inputs">
+    <div class="sect-head"><span class="sect-no">04</span><h2 class="sect-title">Inputs</h2></div>
+    <p class="sect-note">
+      Fields sit in a mist well and lift to white on focus — no heavy borders at rest. The combobox keeps the
+      "Excel data-validation" behaviour (select-only, searchable, ★ suggested). The search pill is the global
+      scan-or-type entry, always pill-shaped.
+    </p>
+    <div class="sheet">
+      <div class="row" style="align-items:flex-start; gap:28px;">
+        <div class="field">
+          <label>Vendor bill number</label>
+          <input class="input" placeholder="As printed on the bill">
+          <span class="hint">From the paper bill that came with the goods</span>
+        </div>
+        <div class="field">
+          <label>Pieces received</label>
+          <input class="input is-error" value="0">
+          <span class="err-text">Can't be zero — count the cartons first</span>
+        </div>
+        <div class="field">
+          <label>Global search</label>
+          <div class="searchpill"><svg><use href="#i-search"/></svg><input placeholder="Search or scan anything…"><kbd>⌘K</kbd></div>
+        </div>
+      </div>
+
+      <div class="row" style="align-items:flex-start; gap:28px; margin-top:26px;">
+        <div class="cbx">
+          <div class="field"><label>Brand</label><input class="input" value="mu"></div>
+          <div class="cbx-list">
+            <div class="cbx-item is-active">Mufti <span class="star">★ suggested</span></div>
+            <div class="cbx-item">Murano</div>
+            <div class="cbx-item">Mustard</div>
+          </div>
+        </div>
+        <div>
+          <div class="sub" style="margin-top:0">Segmented (theme toggle)</div>
+          <div class="seg"><button>Light</button><button class="is-on">System</button><button>Dark</button></div>
+          <div class="sub">Toggle &amp; empty match</div>
+          <div class="row"><button class="toggle is-on" aria-label="on"></button><button class="toggle" aria-label="off"></button></div>
+          <div class="cbx-list" style="max-width:260px; margin-top:12px;"><div class="cbx-empty">No match in the Master Sheet</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 05 CHIPS ======================= -->
+  <section class="sect" id="chips">
+    <div class="sect-head"><span class="sect-no">05</span><h2 class="sect-title">Chips &amp; badges</h2></div>
+    <p class="sect-note">
+      Every status in the app today, re-cut in fabric. Meanings don't move: green stays "good", amber stays
+      "waiting", red stays "stop". The larger event chips (icon in a white well) are for timelines and queues —
+      straight from the reference boards you liked.
+    </p>
+    <div class="sheet">
+      <div class="sub">Document &amp; ledger status</div>
+      <div class="row">
+        <span class="chip chip-mint"><span class="dot"></span>Matched</span>
+        <span class="chip chip-mint"><span class="dot"></span>Open</span>
+        <span class="chip chip-butter"><span class="dot"></span>Waiting</span>
+        <span class="chip chip-butter"><span class="dot"></span>EOSS</span>
+        <span class="chip chip-sky"><span class="dot"></span>In transit</span>
+        <span class="chip chip-blush"><span class="dot"></span>Blocked</span>
+        <span class="chip chip-blush"><span class="dot"></span>Overdue</span>
+        <span class="chip chip-lavender"><svg width="12" height="12"><use href="#i-spark"/></svg>AI</span>
+        <span class="chip chip-ink"><span class="dot"></span>Closed</span>
+        <span class="chip chip-greige"><span class="dot"></span>Draft</span>
+      </div>
+      <div class="sub">Approvals (maker-checker)</div>
+      <div class="row">
+        <span class="chip chip-butter"><span class="dot"></span>Waiting for approval</span>
+        <span class="chip chip-mint"><svg width="12" height="12"><use href="#i-check"/></svg>Approved</span>
+        <span class="chip chip-blush"><svg width="12" height="12"><use href="#i-x"/></svg>Rejected</span>
+        <span class="chip chip-greige"><span class="dot"></span>Not required</span>
+      </div>
+      <div class="sub">Commercial model &amp; PT stages</div>
+      <div class="row">
+        <span class="chip chip-ink">Outright</span>
+        <span class="chip chip-butter">SOR</span>
+        <span class="chip chip-sky">Correction</span>
+        <span class="chip chip-lavender">Hybrid</span>
+        <span class="chip chip-mint">PT ready</span>
+        <span class="chip chip-butter">Needs review</span>
+        <span class="chip chip-blush">Failed</span>
+      </div>
+      <div class="sub">Event chips — timelines, activity, queues</div>
+      <div class="row">
+        <span class="event-chip ec-mint"><span class="well"><svg><use href="#i-check"/></svg></span><span><b>Count confirmed</b><span>RAN-WH · 9:14 am</span></span></span>
+        <span class="event-chip ec-sky"><span class="well"><svg><use href="#i-truck"/></svg></span><span><b>Transfer dispatched</b><span>40 pcs → JSL</span></span></span>
+        <span class="event-chip ec-butter"><span class="well"><svg><use href="#i-doc"/></svg></span><span><b>PT file pending</b><span>Killer · 96 pcs</span></span></span>
+        <span class="event-chip ec-blush"><span class="well"><svg><use href="#i-x"/></svg></span><span><b>Adjustment rejected</b><span>reason required</span></span></span>
+        <span class="event-chip ec-lavender"><span class="well"><svg><use href="#i-spark"/></svg></span><span><b>AI proposal</b><span>size-break transfer</span></span></span>
+        <span class="event-chip ec-peach"><span class="well"><svg><use href="#i-tag"/></svg></span><span><b>Damage flagged</b><span>2 pcs · awaiting confirm</span></span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 06 CARDS ======================= -->
+  <section class="sect" id="cards">
+    <div class="sect-head"><span class="sect-no">06</span><h2 class="sect-title">Cards</h2></div>
+    <p class="sect-note">
+      KPI cards carry a tiny corner accent (its section's fabric colour), mono numbers, and a delta chip.
+      Unbuilt metrics say so honestly — em-dash value plus a "Not built yet" tag, never a fake number.
+      The AI band is always lavender and always carries its fence line.
+    </p>
+    <div class="sheet">
+      <div class="kpi-row">
+        <div class="kpi"><span class="k-accent" style="background:var(--mint-deep)"></span>
+          <div class="k-label">This month's sale</div>
+          <div class="k-value">₹42,18,650</div>
+          <div class="k-foot"><span class="chip chip-mint"><span class="dot"></span>+8% vs June</span></div>
+        </div>
+        <div class="kpi"><span class="k-accent" style="background:var(--butter-deep)"></span>
+          <div class="k-label">Vendor dues</div>
+          <div class="k-value">₹9,74,210</div>
+          <div class="k-foot"><span class="chip chip-butter"><span class="dot"></span>3 bills due this week</span></div>
+        </div>
+        <div class="kpi"><span class="k-accent" style="background:var(--peach-deep)"></span>
+          <div class="k-label">SOR return deadline</div>
+          <div class="k-value">18 days</div>
+          <div class="k-foot"><span class="chip chip-peach"><span class="dot"></span>Blackberrys · 210 pcs</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 07 TABLE ======================= -->
+  <section class="sect" id="table">
+    <div class="sect-head"><span class="sect-no">07</span><h2 class="sect-title">Tables — the ledger view</h2></div>
+    <p class="sect-note">
+      Ledgers are the heart of the system, so tables stay disciplined: mist header in tracked caps, hairline rows,
+      vouchers and money in mono with tabular figures, amounts right-aligned. Colour appears only in the status chip.
+    </p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Date</th><th>Voucher</th><th>Particulars</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>26 Jul</td><td class="voucher">26-27/DEO/SAL/74</td><td>Counter sale — Vaishnavi Deoghar</td><td class="num">6</td><td class="num">₹11,940.00</td><td><span class="chip chip-mint"><span class="dot"></span>Posted</span></td></tr>
+          <tr><td>26 Jul</td><td class="voucher">26-27/RAN/PT/218</td><td>PT inward — Mufti AW-25</td><td class="num">240</td><td class="num">₹4,08,000.00</td><td><span class="chip chip-mint"><span class="dot"></span>Posted</span></td></tr>
+          <tr><td>27 Jul</td><td class="voucher">26-27/RAN/TRF/64</td><td>Transfer out — RAN-WH → JSL (IGST)</td><td class="num">40</td><td class="num">₹68,000.00</td><td><span class="chip chip-sky"><span class="dot"></span>In transit</span></td></tr>
+          <tr><td>27 Jul</td><td class="voucher">26-27/JSL/ADJ/09</td><td>Stock adjustment — count variance</td><td class="num">−3</td><td class="num">₹5,097.00</td><td><span class="chip chip-butter"><span class="dot"></span>Waiting</span></td></tr>
+          <tr><td>28 Jul</td><td class="voucher">26-27/JSL/RTV/12</td><td>Return to brand — Killer, damaged</td><td class="num">−2</td><td class="num">₹3,398.00</td><td><span class="chip chip-blush"><span class="dot"></span>Blocked</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======================= 08 APPROVALS ======================= -->
+  <section class="sect" id="approvals">
+    <div class="sect-head"><span class="sect-no">08</span><h2 class="sect-title">Approvals — maker-checker</h2></div>
+    <p class="sect-note">
+      The inbox row keeps Approve/Reject as fabric-coloured buttons, side by side, reject always asking for a reason.
+      The trail reads like a stitched receipt: who made it, who decided, when — in mono.
+    </p>
+    <div class="sheet">
+      <div class="sub">Inbox row</div>
+      <div class="queue-card">
+        <div class="q-main">
+          <b>Stock adjustment <span class="voucher">26-27/JSL/ADJ/09</span> · −3 pcs · ₹5,097</b>
+          <span>Made by Priya Kumari · count variance after blind count</span>
+        </div>
+        <div class="row">
+          <button class="btn btn-approve btn-sm"><svg><use href="#i-check"/></svg>Approve</button>
+          <button class="btn btn-reject btn-sm"><svg><use href="#i-x"/></svg>Reject…</button>
+        </div>
+      </div>
+      <div class="sub">Approval trail</div>
+      <div class="trail">
+        <div class="trail-row">
+          <div class="avatar" style="background:var(--sky-deep)">PK</div>
+          <div><span class="who">Priya Kumari</span> <span class="t-small">made this</span></div>
+          <span class="when">27 Jul · 6:12 pm</span>
+        </div>
+        <div class="trail-row">
+          <div class="avatar" style="background:var(--blush-deep)">RS</div>
+          <div><span class="who">Rakesh Singh</span> <span class="t-small">rejected — "recount rack 4 first"</span></div>
+          <span class="when">27 Jul · 7:02 pm</span>
+        </div>
+        <div class="trail-row">
+          <div class="avatar" style="background:var(--sky-deep)">PK</div>
+          <div><span class="who">Priya Kumari</span> <span class="t-small">asked again after recount</span></div>
+          <span class="when">28 Jul · 10:15 am</span>
+        </div>
+        <div class="trail-row" style="background:var(--mint)">
+          <div class="avatar" style="background:var(--mint-deep)">RS</div>
+          <div><span class="who" style="color:var(--mint-deep)">Approved</span> <span class="t-small" style="color:var(--mint-deep)">by Rakesh Singh</span></div>
+          <span class="when" style="color:var(--mint-deep)">28 Jul · 10:40 am</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 09 SCAN ======================= -->
+  <section class="sect" id="scan">
+    <div class="sect-head"><span class="sect-no">09</span><h2 class="sect-title">Scan screen — phone first</h2></div>
+    <p class="sect-note">
+      The scan surface stays what it is — a huge running count you can read from two metres — dressed in the new
+      language. Good/Damaged is the segmented control; each accepted scan flashes a mint bar (blush for wrong-item,
+      peach for damage), matching the beep it already plays.
+    </p>
+    <div class="row" style="align-items:flex-start; gap:20px;">
+      <div class="phone">
+        <div class="phone-head">
+          <span class="t-eyebrow">Count · JSL · Rack 4</span>
+          <span class="chip chip-sky"><span class="dot"></span>Blind</span>
+        </div>
+        <div class="scan-count">
+          <div class="big">128<small> pcs</small></div>
+          <div class="lbl">Scanned so far</div>
+        </div>
+        <div class="scan-flash" style="background:var(--mint); color:var(--mint-deep)">
+          <svg width="16" height="16"><use href="#i-check"/></svg> MUF-SH-42-NVY · accepted
+        </div>
+        <div style="display:flex; justify-content:center; padding-bottom:6px;">
+          <div class="seg"><button class="is-on">Good</button><button>Damaged</button></div>
+        </div>
+        <div class="scan-tally">
+          <div class="t-row"><span>Mufti shirts · 42 · Navy</span><b class="t-mono">36</b></div>
+          <div class="t-row"><span>Killer jeans · 32 · Indigo</span><b class="t-mono">58</b></div>
+          <div class="t-row"><span>Blackberrys trousers · 34</span><b class="t-mono">34</b></div>
+        </div>
+        <div class="scan-foot">
+          <button class="btn btn-post btn-block">Confirm count — 128 pcs</button>
+        </div>
+      </div>
+      <div class="phone" style="width:300px">
+        <div class="phone-head"><span class="t-eyebrow">Flash states</span></div>
+        <div class="scan-flash" style="background:var(--mint); color:var(--mint-deep)"><svg width="16" height="16"><use href="#i-check"/></svg> Accepted · ping</div>
+        <div class="scan-flash" style="background:var(--blush); color:var(--blush-deep)"><svg width="16" height="16"><use href="#i-x"/></svg> Not on this list · buzz</div>
+        <div class="scan-flash" style="background:var(--peach); color:var(--peach-deep)"><svg width="16" height="16"><use href="#i-tag"/></svg> Damaged · flagged</div>
+        <div style="padding:8px 16px 20px;"><button class="btn btn-ghost btn-block btn-sm">Type barcode instead</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 10 OVERLAYS ======================= -->
+  <section class="sect" id="overlays">
+    <div class="sect-head"><span class="sect-no">10</span><h2 class="sect-title">Modals, notes &amp; toasts</h2></div>
+    <p class="sect-note">
+      Modals float on a soft scrim at sheet radius. Inline notes wear fabric colours; the toast is the one
+      dark element in the language — it appears, confirms in past tense ("Posted"), and leaves.
+    </p>
+    <div class="modal-demo">
+      <div class="modal">
+        <h3>Reject this adjustment?</h3>
+        <p>Priya will see your reason and can ask again after fixing it. Nothing posts to the ledger.</p>
+        <div class="field" style="max-width:100%; margin-top:14px;">
+          <label>Reason (required)</label>
+          <input class="input" placeholder="e.g. recount rack 4 first">
+        </div>
+        <div class="m-actions">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-reject">Reject adjustment</button>
+        </div>
+      </div>
+    </div>
+    <div class="sheet" style="margin-top:16px">
+      <div class="row" style="flex-direction:column; align-items:flex-start;">
+        <div class="note note-ok"><b>Posted.</b> Voucher 26-27/JSL/ADJ/09 wrote 2 ledger entries.</div>
+        <div class="note note-warn"><b>Heads up:</b> this GRN has no booking behind it — direct receipt will be flagged, not blocked.</div>
+        <div class="note note-err"><b>Can't post:</b> quantity cell R14 is unreadable in the PT file. Fix the cell, then try again.</div>
+        <div class="note note-ai"><b>AI suggestion.</b> Two sizes look swapped in this PT. Review before accepting — AI never posts.</div>
+        <div class="toast"><svg width="15" height="15"><use href="#i-check"/></svg>Count confirmed <span class="chip">482 pcs</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 11 LOGIN ======================= -->
+  <section class="sect" id="login">
+    <div class="sect-head"><span class="sect-no">11</span><h2 class="sect-title">Login</h2></div>
+    <p class="sect-note">
+      First screen of every shift, so it carries the brand hardest: ink panel with the serif voice and the
+      fabric rack as a motif, frosted form on the wash.
+    </p>
+    <div class="shell-frame">
+      <div style="display:flex; min-height:420px; flex-wrap:wrap;">
+        <div style="flex:1.1; min-width:280px; background:var(--panel); color:#fff; padding:40px; display:flex; flex-direction:column; justify-content:space-between; position:relative; overflow:hidden;">
+          <div style="position:absolute; right:-40px; top:-40px; width:220px; height:220px; border-radius:50%; background:rgba(228,87,75,.25); filter:blur(60px);"></div>
+          <div>
+            <div class="side-brand" style="padding:0 0 20px;"><div class="logo" style="background:#fff; color:#1B2436">K</div><div><b style="color:#fff">KDPS OS</b><span style="color:rgba(255,255,255,.6)">Retail operating system</span></div></div>
+            <div style="font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.2; max-width:16ch;">Every piece, every rupee, <em style="font-family:var(--serif); font-style:italic; font-weight:400; color:#F2988F;">accounted for.</em></div>
+          </div>
+          <div class="row"><!-- rack sits on the fixed-dark panel in both themes, so it keeps the light pastels -->
+            <span style="width:34px; height:22px; border-radius:6px; background:#E1F5EA"></span>
+            <span style="width:34px; height:22px; border-radius:6px; background:#FBF3D9"></span>
+            <span style="width:34px; height:22px; border-radius:6px; background:#E3F0FC"></span>
+            <span style="width:34px; height:22px; border-radius:6px; background:#ECEAFD"></span>
+            <span style="width:34px; height:22px; border-radius:6px; background:#FBE5E4"></span>
+            <span style="width:34px; height:22px; border-radius:6px; background:#FDEBDD"></span>
+          </div>
+        </div>
+        <div style="flex:1; min-width:280px; padding:40px; display:flex; align-items:center;">
+          <div style="width:100%; max-width:320px; margin:0 auto;">
+            <div class="t-h2" style="margin-bottom:4px;">Sign in</div>
+            <div class="t-small" style="margin-bottom:20px;">Use your store login.</div>
+            <div class="field" style="max-width:100%; margin-bottom:12px;"><label>Username</label><input class="input" placeholder="e.g. rakesh.jsl"></div>
+            <div class="field" style="max-width:100%; margin-bottom:18px;"><label>Password</label><input class="input" type="password" value="········"></div>
+            <button class="btn btn-post btn-block">Sign in</button>
+            <div class="t-small" style="margin-top:14px; text-align:center;">Locked out? Ask your manager — no self-reset.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 12 STATES ======================= -->
+  <section class="sect" id="states">
+    <div class="sect-head"><span class="sect-no">12</span><h2 class="sect-title">Empty &amp; loading</h2></div>
+    <p class="sect-note">
+      Empty states invite the next action; the dashed border echoes the swatch stitch. Loading is a quiet shimmer,
+      never a spinner farm; values that aren't loaded yet show "…" and unbuilt ones show "—".
+    </p>
+    <div class="sheet">
+      <div class="row" style="align-items:flex-start; gap:24px;">
+        <div class="empty">
+          <div class="e-well"><svg width="22" height="22"><use href="#i-box"/></svg></div>
+          <b>No goods waiting</b>
+          <p>Every GRN has its PT file. New arrivals will appear here the moment the gate entry is made.</p>
+          <button class="btn btn-primary btn-sm">Receive goods</button>
+        </div>
+        <div style="flex:1; min-width:240px;">
+          <div class="sub" style="margin-top:0">Skeleton</div>
+          <div class="skel" style="height:22px; width:60%; margin-bottom:10px;"></div>
+          <div class="skel" style="height:14px; width:90%; margin-bottom:8px;"></div>
+          <div class="skel" style="height:14px; width:82%; margin-bottom:8px;"></div>
+          <div class="skel" style="height:14px; width:88%;"></div>
+          <div class="sub">Queue empty (ok-note form)</div>
+          <div class="note note-ok"><b>Queue is empty.</b> Nothing needs review.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 13 QUESTIONS ======================= -->
+  <section class="sect" id="questions">
+    <div class="sect-head"><span class="sect-no">13</span><h2 class="sect-title">Round two — what's locked, what's open</h2></div>
+    <p class="sect-note">
+      Round one locked almost everything: <b>50% frost</b> on the chrome, <b>coral</b> as the brand note,
+      the <b>money-button rule</b>, <b>pastel icon wells</b> in the sidebar, and the <b>ambient wash</b> as shown.
+      Dark mode is now built in — these are the open points left.
+    </p>
+    <div class="sheet">
+      <div class="qs">
+        <div class="q"><div><b>The serif-italic accent — confirm it</b><p>"Receive <i>goods</i>" — the one question round one skipped. I've kept it; one word from you drops it everywhere.</p></div></div>
+        <div class="q"><div><b>Dark: how dark is the backdrop?</b><p>Right now it's a deep navy night with the same coral–lavender glows. Darker (near-black, more contrast) or softer (more grey-blue, gentler)?</p></div></div>
+        <div class="q"><div><b>Dark: the money button</b><p>Solid navy reads as "just another dark box" on a dark page, so "Post to ledger" becomes a solid indigo there. Happy, or should it stay near-black with a brighter border?</p></div></div>
+        <div class="q"><div><b>Dark: chip strength</b><p>Statuses become translucent tints of the same fabric colours — quiet, ledger-like. Want them punchier (more saturated) instead?</p></div></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var seg=document.getElementById('themeSeg');
+  function apply(m){
+    document.documentElement.dataset.theme=m;
+    seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('is-on',b.dataset.mode===m);});
+    try{localStorage.setItem('atelier-theme',m);}catch(e){}
+  }
+  seg.addEventListener('click',function(e){var b=e.target.closest('button'); if(b)apply(b.dataset.mode);});
+  var saved='light';
+  try{saved=localStorage.getItem('atelier-theme')||'light';}catch(e){}
+  apply(saved);
+})();
+</script>
+</body>
+</html>

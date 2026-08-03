@@ -42,7 +42,10 @@ DEFAULTS = {
 }
 SALES_COLS = {"Bill Date", "Bill No", "Item", "Brand", "Size", "Gender", "Qty",
               "Gross Amt", "Disc Amt", "Net Amount", "Barcode", "SalesMan", "season"}
-SOH_COLS = {"Item Name", "Brand", "Size", "Barcode", "Gender", "Season", "Sale", "Tqty", "Mrp", "Rate"}
+SOH_COLS = {"Item Name", "Brand", "Size", "Barcode", "Gender", "Tqty", "Mrp", "Rate"}
+# "Season" and "Sale" are optional: "Sale" is never used in the metrics, and when the
+# stock export has no "Season" column the age is backfilled per barcode from the sales
+# export (never-sold items land in the "No season tag" ageing bucket).
 
 # ---- helpers ----------------------------------------------------------------
 def deep_merge(base, over):
@@ -124,6 +127,7 @@ def load_sales(sales_files, cfg):
     s["Bill Date"] = pd.to_datetime(s["Bill Date"], errors="coerce")
     s = s[s["Bill Date"].notna()].copy()
     s["ym"] = s["Bill Date"].dt.to_period("M").astype(str)
+    s = s[~s["Item"].isin(cfg["carry_bag_labels"])].copy()   # exclude packaging, same as SOH
     s["Item"] = s["Item"].replace(cfg["category_merges"])
     s["Size"] = s["Size"].astype(str)                      # sizes mix numbers & text; keep one type
     s["brand_n"] = s["Brand"].apply(lambda x: cfg["brand_aliases"].get(str(x).upper().strip(), str(x).upper().strip()))
@@ -156,6 +160,8 @@ def load_soh(soh_files, cfg):
     df = df[~df["Item Name"].isin(cfg["carry_bag_labels"])].copy()   # exclude packaging
     df["brand_n"] = df["Brand"].apply(lambda x: cfg["brand_aliases"].get(str(x).upper().strip(), str(x).upper().strip()))
     df["dept"] = df["Gender"].replace({"FEAMAL": "FEMALE"}).map(_dept)
+    if "Season" not in df.columns:
+        df["Season"] = pd.to_numeric(df["Barcode"], errors="coerce").map(cfg.get("_season_by_barcode", {}))
     ps = df["Season"].apply(parse_season)
     df["seas_yr"] = [p[2] for p in ps]; df["seas_mo"] = [p[1] for p in ps]
     ref = cfg.get("_ref_period")
@@ -627,6 +633,9 @@ def main(argv):
 
     sales_files, soh_files = discover(store_dir)
     s = load_sales(sales_files, cfg)
+    # season per barcode, for stock exports that carry no Season column
+    _sb = s.assign(_bc=pd.to_numeric(s["Barcode"], errors="coerce")).dropna(subset=["_bc"])
+    cfg["_season_by_barcode"] = _sb.groupby("_bc")["season"].first().to_dict()
     # reference month for stock age
     if cfg.get("soh_as_on"):
         d = datetime.date.fromisoformat(cfg["soh_as_on"]); cfg["_ref_period"] = d.year*12 + d.month

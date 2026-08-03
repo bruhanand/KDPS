@@ -201,7 +201,7 @@
     <div class="band edge">
       <div class="bname">Outside systems</div>
       <div class="boxes">
-        <div class="bx">POS (Ten Software)<small>send items/prices · receive sales/stock/cash</small></div>
+        <div class="bx">Barcode tool<small>print &amp; scan aliases for stock</small></div>
         <div class="bx">Tally<small>official GST/accounting book</small></div>
         <div class="bx">Banks<small>statements for daily checks</small></div>
         <div class="bx">WhatsApp<small>digests &amp; alerts out</small></div>
@@ -254,8 +254,10 @@
       <li>If there is a mismatch, create a clear problem item for the right owner.</li>
       <li>Do not stop store staff from billing or receiving goods unless it is truly dangerous.</li>
       <li>The flow should continue, and the problem should be visible.</li>
+      <li><strong>"Truly dangerous" is defined for money: a stock movement whose value the books cannot work out is refused, not flagged.</strong> A flag is an approximation everyone can see; a zero-value posting is a wrong number wearing the clothes of a right one. The pieces leave, the rupees stay, and every quantity-based check — including a physical count — passes over it. Refusing is the only thing that stays visible.</li>
+      <li><strong>The same holds for the quantity, not just the value: a line whose quantity the system cannot read is refused too</strong> (ruled 27 Jul 2026, issue #122). An unreadable quantity that quietly becomes zero drops the line out of stock entirely, which is worse than valuing it wrong - nothing on screen, in a report or in a ledger says the goods were ever there, and the only thing that ever disagrees is a physical count months later. A quantity that is genuinely blank is different: it is skipped, and the count of skipped lines is reported when the document posts.</li>
     </ul>
-    <div class="seen">Used in: GRN mismatch flags, unmapped PT files, POS stock mismatch, and Tally failures.</div></div>
+    <div class="seen">Used in: GRN mismatch flags, unmapped PT files, POS stock mismatch, and Tally failures. Refused instead: valuing an outbound line the books cannot price, and posting a PT line whose quantity cannot be read.</div></div>
 
   <div class="card"><div class="rule-head"><span class="rule-num">6</span><h4>Calculated numbers are not typed by hand</h4></div>
     <ul>
@@ -382,14 +384,14 @@
   <p>These are the systems KDPS talks to. For each one, we must know what KDPS sends, what KDPS receives, how records are matched, and what happens if something fails.</p>
   <table>
     <tr><th>System</th><th>KDPS sends</th><th>KDPS receives</th><th>Match by</th><th>Status</th></tr>
-    <tr><td>POS (Ten Software)</td><td>Items, MRP, tax, HSN, pending inward, EOSS price rules</td><td>Sales lines, store stock, daily collection</td><td>Barcode + season</td><td><span class="badge b-open">deferred — last module (26 Jun 2026)</span></td></tr>
+    <tr><td>Barcode tool</td><td>Item, size, colour, MRP</td><td>Printed and scannable aliases</td><td>Barcode</td><td><span class="badge b-open">spike early — has lead time</span></td></tr>
     <tr><td>Tally</td><td>GST-ready vouchers for purchase, sales, receipts, payments, debit notes, credit notes, and settlements</td><td>Import result / logs</td><td>Voucher number</td><td><span class="badge b-open">deferred — not in current build (26 Jun 2026)</span></td></tr>
     <tr><td>Bank</td><td>—</td><td>Statements (CSV/PDF to start)</td><td>Date + amount + store ref</td><td><span class="badge b-locked">designed (D4)</span></td></tr>
     <tr><td>WhatsApp</td><td>Daily digest, deadline alarms, unusual activity alerts</td><td>—</td><td>Phone per role</td><td><span class="badge b-locked">designed (D7)</span></td></tr>
     <tr><td>Vendor paper</td><td>—</td><td>Invoices and brand PT files</td><td>Per-brand mapping</td><td><span class="badge b-locked">designed</span></td></tr>
   </table>
   <p>Rule 7 applies to every row: write the rules, make retries safe, check daily, and put failures in a queue. Tally remains the official accounting and GST book. KDPS feeds Tally; it does not replace Tally.</p>
-  <div class="callout co-note"><strong>POS and Tally are deferred (26 Jun 2026).</strong> The Tally/accounting sync and the POS integration are designed but are <strong>not in the current build</strong>. POS is the last module: Ten Software will sell API access at a cost plus lead time, so we use their API if it is ready by then, else KDPS builds its own POS — decided at that point.</div>
+  <div class="callout co-note"><strong>Selling and Tally are deferred; the POS is ours (26 Jul 2026).</strong> The Tally/accounting sync is designed but is <strong>not in the current build</strong>. Selling is the last module, and <strong>KDPS builds its own POS</strong> — the earlier plan to integrate the incumbent third-party POS behind an adapter is dropped, so selling no longer waits on anyone else's API and there is no external sales feed to ingest. The Sale document stays source-agnostic regardless.</div>
 </section>
 
 <section id="deal">
@@ -461,8 +463,7 @@
 
   <div class="card"><h4>5 · Test outside systems early</h4>
     <ul>
-      <li>Test Ten Software POS before relying on its API.</li>
-      <li>Test Tally or TaxOne import before finalizing voucher export.</li>
+            <li>Test Tally or TaxOne import before finalizing voucher export.</li>
       <li>Test the barcode tool before building around it.</li>
     </ul></div>
 
@@ -498,7 +499,7 @@
     <tr><td>Invoice → PT code</td><td><span class="badge b-open">paused until D9 / rollout clarity</span></td><td><code>code/pdf-to-pt</code></td></tr>
     <tr><td>Monthly brand reports</td><td><span class="badge b-locked">live duty, 1st week monthly</span></td><td><code>06-monthly-reports/</code></td></tr>
   </table>
-  <p>Open items still tracked: Ten Software endpoints, season/SKU reuse, colour P/M/E edge case, sales-data cleanup, store-split AI stages, and D6 Tally/GST client questions.</p>
+  <p>Open items still tracked: season/SKU reuse, colour P/M/E edge case, sales-data cleanup, store-split AI stages, and D6 Tally/GST client questions.</p>
 </section>
 
 <section id="glossary">

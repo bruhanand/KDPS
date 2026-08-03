@@ -1,0 +1,108 @@
+{
+  "name": "greedy-second-round",
+  "note": "The 60% on shirts wins the shirt outright; the 20% is beaten there but is still the best thing left for the trouser.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 90,
+      "name": "Mufti shirts 60",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "60.00"
+      },
+      "item_scope": {
+        "categories": [
+          "Shirt"
+        ]
+      },
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 91,
+      "name": "Mufti everything 20",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "20.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 200000,
+      "no_discount": false
+    },
+    {
+      "line_no": 2,
+      "brand": "MUFTI",
+      "item": "Trouser",
+      "design": "M4",
+      "barcode": "8924",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 300000,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 120000,
+        "offer_id": 90,
+        "evidence": {
+          "offer_id": 90,
+          "offer_name": "Mufti shirts 60",
+          "layer": "brand",
+          "saved_paise": 120000,
+          "beat": [
+            {
+              "offer_id": 91,
+              "offer_name": "Mufti everything 20",
+              "saved_paise": 40000
+            }
+          ],
+          "stack": []
+        }
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 60000,
+        "offer_id": 91,
+        "evidence": {
+          "offer_id": 91,
+          "offer_name": "Mufti everything 20",
+          "layer": "brand",
+          "saved_paise": 60000,
+          "beat": [],
+          "stack": []
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 180000
+  }
+}

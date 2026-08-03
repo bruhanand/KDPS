@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS ERP — Build Status · July 2026</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:15px; line-height:1.5;}
+  main{max-width:var(--maxw); margin:0 auto; padding:36px 24px 56px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:26px; margin:6px 0 4px; color:var(--navy)}
+  .stamp{font-size:12.5px; color:var(--muted)}
+
+  .seq{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:18px 0 6px; font-size:13px}
+  .seq .step{background:var(--card); border:1px solid var(--line); border-radius:99px; padding:5px 14px; font-weight:600; color:var(--navy2)}
+  .seq .step b{font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; display:block; margin-bottom:1px}
+  .seq .done b{color:var(--green)} .seq .now b{color:var(--amber)} .seq .next b{color:var(--blue)} .seq .later b{color:var(--muted)}
+  .seq .arr{color:var(--muted)}
+
+  .tblwrap{overflow-x:auto; margin-top:18px}
+  table{width:100%; min-width:840px; border-collapse:collapse; background:var(--card); border:1px solid var(--line); box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  th{background:var(--navy); color:#fff; text-align:left; font-size:11.5px; letter-spacing:.07em; text-transform:uppercase; padding:9px 13px}
+  td{padding:9px 13px; border-top:1px solid var(--line); font-size:13.6px; vertical-align:top; color:#3c4353}
+  td.mod{font-weight:700; color:var(--navy2); white-space:nowrap}
+  td.st{white-space:nowrap}
+  td .dim{color:#c2c7d1}
+  td ul{margin:0; padding-left:16px}
+  td li{margin:2px 0}
+  .badge{display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 9px; border-radius:99px}
+  .b-done{background:var(--green-bg); color:var(--green)}
+  .b-prog{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-later{background:var(--grey-bg); color:var(--muted)}
+  .b-part{background:var(--green-bg); color:var(--green); outline:1px dashed var(--green)}
+
+  .note{background:var(--blue-bg); border:1px solid #cfe0f5; border-radius:12px; padding:12px 16px; margin:22px 0 0; font-size:14px; color:#243b57}
+  .foot{margin-top:32px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:12px}
+
+  @page{size:A4 landscape; margin:10mm 12mm}
+  @media print{
+    body{background:#fff; font-size:12.5px; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+    main{max-width:none; padding:0}
+    .tblwrap{overflow:visible; margin-top:12px}
+    table{min-width:0; box-shadow:none}
+    td{font-size:11px; padding:5px 9px}
+    td li{margin:1px 0}
+    th{font-size:10px; padding:5px 9px}
+    tr{break-inside:avoid}
+    .seq{font-size:11.5px}
+    .note{break-inside:avoid; margin-top:12px}
+    .foot{margin-top:10px; padding-top:8px}
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">KDPS Lifestyle · ERP System</div>
+  <h1>Build Status Report — Module-wise</h1>
+  <div class="stamp">26 July 2026 · Anand Kumar</div>
+
+  <div class="seq">
+    <span class="step done"><b>Done</b>Core Platform · Goods Receipt · Transfers &amp; Returns</span><span class="arr">→</span>
+    <span class="step now"><b>Now</b>Purchase Orders · Stock Count</span><span class="arr">→</span>
+    <span class="step next"><b>Next</b>POS &amp; Billing</span><span class="arr">→</span>
+    <span class="step next"><b>Then</b>Accounts &amp; Payments</span><span class="arr">→</span>
+    <span class="step later"><b>Later</b>HRMS · Promotions · Analytics</span>
+  </div>
+
+  <div class="tblwrap">
+  <table>
+    <tr>
+      <th style="width:16%">Module</th>
+      <th style="width:11%">Status</th>
+      <th style="width:25%">Live now</th>
+      <th style="width:22%">In build / test</th>
+      <th style="width:26%">Planned</th>
+    </tr>
+
+    <tr><td class="mod">Core Platform</td>
+      <td class="st"><span class="badge b-done">Done</span></td>
+      <td><ul>
+        <li>User login &amp; role-based access</li>
+        <li>Document numbering &amp; audit trail</li>
+        <li>Item-level stock ledger (size × colour)</li>
+        <li>GST setup — Bihar &amp; Jharkhand</li>
+        <li>Web app, runs on any device</li>
+        <li>Search — one search bar everywhere, works with the barcode scanner</li>
+      </ul></td>
+      <td><span class="dim">—</span></td>
+      <td><span class="dim">—</span></td></tr>
+
+    <tr><td class="mod">Purchase Orders</td>
+      <td class="st"><span class="badge b-prog">~50%</span></td>
+      <td><ul>
+        <li>PO creation &amp; confirmation</li>
+        <li>Auto-fill from vendor documents</li>
+      </ul></td>
+      <td><ul>
+        <li>PO-to-receipt linking</li>
+        <li>Edge cases</li>
+      </ul></td>
+      <td><span class="dim">—</span></td></tr>
+
+    <tr><td class="mod">Goods Receipt (GRN)</td>
+      <td class="st"><span class="badge b-prog">Working</span></td>
+      <td><ul>
+        <li>GRN against PO or direct receipt</li>
+        <li>Branded &amp; non-branded items</li>
+        <li>Brand PT-file import with auto-mapping (9 brands, review queue, improves with use)</li>
+      </ul></td>
+      <td><ul>
+        <li>Edge cases — tagged / non-tagged arrivals</li>
+      </ul></td>
+      <td><span class="dim">—</span></td></tr>
+
+    <tr><td class="mod">Inventory Management</td>
+      <td class="st"><span class="badge b-part">Partly live</span></td>
+      <td><ul>
+        <li>Stock ledger</li>
+        <li>Stock on hand</li>
+      </ul></td>
+      <td><ul>
+        <li>Physical stock count — blind counting with a variance report (counters can't see book stock)</li>
+      </ul></td>
+      <td><ul>
+        <li>Stock aging &amp; dead-stock alerts</li>
+        <li>Return-deadline tracking (SOR brands)</li>
+        <li>Demand forecasting &amp; auto-replenishment</li>
+        <li>Inter-store size rebalancing</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">Transfers &amp; Returns</td>
+      <td class="st"><span class="badge b-done">Working</span></td>
+      <td><ul>
+        <li>Scan-based transfer — scan out at dispatch, scan in at receive, goods tracked in transit</li>
+        <li>Short / extra / damaged receipts flagged automatically, with a gaps list for follow-up</li>
+        <li>Damage: store reports, warehouse confirms — nothing written off by one person alone</li>
+        <li>Every transfer prints its own PT document</li>
+        <li>Senior approval required — no one approves their own transfer</li>
+        <li>Stock always moves at its correct book value</li>
+      </ul></td>
+      <td><ul>
+        <li>Return to vendor (RTV)</li>
+        <li>Stock adjustments</li>
+      </ul></td>
+      <td><span class="dim">—</span></td></tr>
+
+    <tr><td class="mod">POS &amp; Billing</td>
+      <td class="st"><span class="badge b-next">Next</span></td>
+      <td><span class="dim">—</span></td>
+      <td><span class="dim">—</span></td>
+      <td><ul>
+        <li>Barcode billing &amp; GST invoice</li>
+        <li>Returns &amp; exchange</li>
+        <li>Discounts at counter</li>
+        <li>Real-time stock deduction</li>
+        <li>3-way matching — invoice, GRN, PT</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">Accounts &amp; Payments</td>
+      <td class="st"><span class="badge b-part">Ledgers live</span></td>
+      <td><ul>
+        <li>Vendor ledger</li>
+        <li>Cash book</li>
+        <li>Trial balance check</li>
+      </ul></td>
+      <td><span class="dim">—</span></td>
+      <td><ul>
+        <li>Vendor payments with approval workflow</li>
+        <li>Bank reconciliation</li>
+        <li>Collections</li>
+        <li>Tally integration</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">Promotions &amp; EOSS</td>
+      <td class="st"><span class="badge b-later">Later</span></td>
+      <td><span class="dim">—</span></td>
+      <td><span class="dim">—</span></td>
+      <td><ul>
+        <li>Scheme management — slabs, buy-2-get-1, gifts</li>
+        <li>Discount approval limits</li>
+        <li>EOSS bulk billing (stock billed, kept in store)</li>
+        <li>Markdown planning</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">HRMS &amp; Payroll</td>
+      <td class="st"><span class="badge b-later">Later</span></td>
+      <td><span class="dim">—</span></td>
+      <td><span class="dim">—</span></td>
+      <td><ul>
+        <li>Attendance — face check-in / check-out</li>
+        <li>Employee records &amp; documents</li>
+        <li>Payroll inputs</li>
+        <li>Sales incentive calculation</li>
+        <li>Employee self-service</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">Reports &amp; Analytics</td>
+      <td class="st"><span class="badge b-later">Later</span></td>
+      <td><span class="dim">—</span></td>
+      <td><span class="dim">—</span></td>
+      <td><ul>
+        <li>Brand-wise &amp; store-wise P&amp;L</li>
+        <li>Daily business summary on WhatsApp</li>
+        <li>Exception &amp; fraud alerts</li>
+        <li>MIS dashboards</li>
+      </ul></td></tr>
+
+    <tr><td class="mod">Administration</td>
+      <td class="st"><span class="badge b-part">Partly live</span></td>
+      <td><ul>
+        <li>Master data — stores, brands, seasons, tax</li>
+        <li>User rights &amp; permissions matrix — nine roles, each screen and action gated; store staff see only their own store</li>
+        <li>Each person switches only between the units they are allowed</li>
+      </ul></td>
+      <td><ul>
+        <li>Remaining permission fine-tuning (approval limits by value)</li>
+      </ul></td>
+      <td><ul>
+        <li>Store opening / closure workflows</li>
+        <li>Data migration &amp; store-wise rollout</li>
+      </ul></td></tr>
+  </table>
+  </div>
+
+  <div class="note"><b>In short:</b> operations modules first — core platform, goods receipt and transfers &amp; returns are working; stock counting and user permissions went live this week. POS &amp; billing is next — KDPS will have its <b>own POS built into the system</b> (no third-party POS software). Accounts &amp; payments after that; HRMS, promotions and analytics follow.</div>
+
+  <div class="foot">KDPS ERP · 26 July 2026 · Confidential — for KDPS management</div>
+</main>
+</body>
+</html>

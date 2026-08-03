@@ -8,8 +8,135 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
-## Current state — 5 July 2026 (read this first)
+## Review pass 2 — 26 July 2026, night (static-analysis report, verified before applied)
+A tool-generated code-quality report was handed over. Three of its six findings were wrong in ways that would
+have broken the build, so each was checked against the code before anything was changed.
+
+**Applied:**
+- **The `outbound` import cycle is really gone (was held apart by deferred imports).** `posting` imports
+  `maker_checker` at module level; `maker_checker` imported `posting` back inside four functions. The two names it
+  needed (`OutboundPostingError`, `book_unit_cost`) depend on nothing in the posting engine and now live in a new
+  **`outbound/costing.py`** below both. All five deferred imports deleted; `posting` re-exports both names so no
+  caller or test changed. New **4th import-linter contract** — `posting → maker_checker → costing, never back` —
+  and it was proven to bite by adding the bad edge and watching the build fail.
+- **Test credentials centralised.** 22 × `password="Test@123"` (ten hermetic suites) → `TEST_PASSWORD`;
+  29 × `"Owner@123"` (eleven live suites + `tests/conftest.py`) → new `SEED_OWNER_PASSWORD`. Both env-backed
+  (`KDPS_TEST_PASSWORD`, `KDPS_SEED_OWNER_PASSWORD`), defaults unchanged.
+- **Five functions split, no behaviour change:** `core/posting.py::post_entries` (+ `_refuse_unpostable`,
+  `_posting_context`), `finledger/health.py::get` (89 → 20 lines, + three helpers), `outbound/counting.py::
+  apply_variance` (+ `_variance_to_apply`, `_build_adjustment`), `accounts/rbac_matrix.py::_validate` (→ four
+  named checks), `outbound/posting.py::post_gap_closure` (+ `_lock_and_read_gap_lines`, `_refuse_stale_gap`).
+- **A complexity gate, so it cannot regress:** ruff `C901` at max-complexity 10 with a documented per-file
+  baseline (management commands, ptmapper views/engine, the collection hook) that may only shrink.
+- **The dev environment can build itself again:** `scripts/dev-bootstrap.sh` was pip-installing a hand-written
+  package list into the container's Python **3.11** venv, where this codebase cannot even import (PEP 695
+  generics in `core/textsearch.py`). It now runs `uv sync` against `pyproject.toml`, and **`.python-version`
+  pins 3.12** so uv stops silently building the env on 3.14 while ruff/mypy target 3.12.
+
+**Refused, with evidence (do not re-apply these):**
+- *"Syntax error, missing `(` at core/textsearch.py:41"* — line 41 is `def text_filter[QS: QuerySet[Any]](...)`,
+  a valid **PEP 695** generic. Adding the character would create the error being reported. The analyser was a
+  3.11-era parser.
+- *"31 possibly-undefined variables"* — ruff's `F` set (pyflakes, incl. **F821 undefined-name**) is enabled
+  repo-wide and reports **zero** across 283 files; it caught a real undefined `Any` of mine during this pass. The
+  31 are unparsed-file noise from the same 3.11 parser.
+- *"Add `tests/_creds.py` to .gitignore"* — imported by ~20 suites; removing it from git breaks CI and every
+  fresh clone. It holds no secret, only two `os.environ.get` calls with dev defaults.
+- *"Refactor `masters/migrations/0002_phasef_identity::backfill_identity` (complexity 22)"* — an applied
+  migration is frozen history; rewriting it changes nothing running, cannot be tested, and risks divergence.
+  (Ruff excludes `migrations/` for this reason.)
+- *"Split `outbound/posting.py` (40 imports) / `ptmapper/views.py` (33)"* — not refused, **not done blind**: that
+  is a design change (one module per document family over a shared kernel) needing its own ticket and tests
+  first, not a change made to move a number. The cycle fix removed the coupling that actually hurt.
+
+**Verified:** full suite green on 3.12 (0 failures/errors), ruff + C901 + format + 4/4 import contracts + mypy
+green, and testing agent **iteration_24: 0 defects** — books-health payload identical key-for-key, backward-
+compatible `outbound.posting` imports intact, section access unchanged for all 8 roles, every outbound flow and
+every count-variance refusal path passing. Note: the pod was reprovisioned mid-pass (Postgres binaries vanish
+with `/usr`; only `/app` persists) — `bash scripts/dev-bootstrap.sh` rebuilds everything, and the platform
+rewrote `frontend/.env` to the canonical preview host, which is correct and was left alone.
+
+## Review pass — 26 July 2026, evening (independent code/UI/ERP review, no issue overlap)
+Full stack brought up in the Emergent container (Postgres 15 · `kdps_dev`, uvicorn on 8001 via a shim at
+`/root/.venv/bin/uvicorn` → `/opt/kdpsvenv` py3.12 venv, Vite on 3000), clicked as owner / store manager /
+store staff at 1920, 1440 and 390 px. All 31 open GitHub issues were read first; nothing here touches them.
+Report: **`docs/my-understanding/system-design/consolidation/code-review-2026-07-26.html`**.
+
+**Five findings implemented (all green: 697 backend tests, 102 frontend tests, ruff/format/import-linter/tsc):**
+1. **P0 — the dashboard was inventing numbers.** Every KPI in `pages/Home.tsx` was a literal ("Net sales today
+   ₹18.42 L", "Owed to brands ₹42.60 L", store "Items to receive — 3 shipments", two of them labelled *live*)
+   while the trial balance was ₹0 / 0 vouchers and one booking was pending. Rewritten: each tile is either a
+   figure an endpoint owns (`/finledger/vendor/ageing`, `/stockledger/on-hand`, `/approvals/inbox`,
+   `/inbound/queue`, `/inbound/pending`) or an explicit "Not built" with `—`; unloaded reads show `…`, never `0`;
+   the payable tile is only requested at `money: manage`; tiles now open the screen that owns the number; the
+   invented sparkline is deleted.
+2. **P1 — screens were captioned in the vocabulary #87 retired.** Eleven pages still said Documents / Store Ops /
+   Ledgers / Controls / Master data / Outbound, and titles had drifted from menu entries. New
+   `components/PageHeader.tsx` derives the caption from the nav manifest (section + breadcrumb link for detail
+   screens); 15 screens adopted it; new `pages/pageVocabulary.test.ts` (21 tests) fails the build if a retired
+   group name is typed into a caption again.
+3. **P1 — sidebar folds, and the bell means something.** 13 always-open sections put ~45 links in one column;
+   sections now collapse (persisted `kdps-nav-collapsed`, `aria-expanded`, auto-unfold on the active route,
+   single-item sections unchanged). The dead bell with a permanent red dot is now a link to the approvals inbox
+   showing the real waiting count, and nothing when nothing waits.
+4. **P1 — vendor master: no screen, and an open write gate.** `POST /api/vendors` sat on bare `IsAuthenticated`
+   (a cashier could mint the supplier every booking/GRN/payable hangs off) and there was no detail route, so a
+   vendor could never be corrected. Gate moved to `masters/permissions.py` and applied; added
+   `GET/PATCH /api/vendors/<id>`, `?include_inactive=1`, search; new **Setup → Vendors** screen (create /
+   correct / retire, payment terms, brands chip picker). `VendorListCreateView` struck off `UNGATED_VIEWS`.
+5. **P1 — a booking had no ending, and `booking: approve` gated nothing.** `Status.CLOSED/CANCELLED` were
+   unreachable, so a short-shipped season stayed "Partially received" for ever. Added `Booking.end()` +
+   `POST /api/bookings/<id>/close` (`{action: close|cancel, reason}`) at `booking: approve` — reason mandatory,
+   actor + timestamp recorded, cancel refused once anything is received, double-close 409, and receiving against
+   an ended booking 409s quoting the reason. UI panel + written-off count on the booking. Migration
+   `vendors/0004_booking_close`. Tests: `tests/test_review_vendor_master_and_booking_close.py` (9).
+
+**ERP-process gaps recorded, NOT built** (each a candidate ticket, none overlapping the 31 issues): no audit-log
+table (the planned `/setup/audit` page currently overstates it; prerequisite for #135) · no period lock /
+month-end close despite ADR-0006 · no three-way match (vendor invoice is never matched to the GRN) · vendor
+payments post with no maker-checker or payment run · no open-order report · GST slab/HSN masters have no screen ·
+no replenishment/reorder logic · cycle counts have no schedule or coverage measure · no SOR brand-settlement
+statement · no landed cost · documents don't require their evidence file. Smaller: demo logins are printed on the
+login screen (needs an env flag before external eyes), zero React component tests, `mypy --strict` covers only
+`core`+`config`, the six outbound screens are copy-descended, `PtMapper.tsx` is 1,352 lines.
+
+**Verification note:** the testing agent (iteration_23) independently verified all five findings — 0 defects,
+100% backend + frontend. Its scratch live-API file `tests/test_iteration23_review.py` was deleted afterwards: it
+hardcoded this pod's URL, escaped the repo's live-suite gate (no module-level `BASE_URL`) and wrote TEST_ vendors
+to the target DB. The hermetic 9-test suite covers the same rules.
+
+## Current state — 26 July 2026 (read this first)
+Ten days of parallel agent delivery (18–26 Jul) landed **~28 PRs on `main`**: the outbound D3 rebuild, the sidebar/RBAC redesign, search, and the `/deliver` pipeline that produced most of them. The 17-Jul snapshot below is superseded where it conflicts.
+
+**Outbound / D3 — rebuilt under Claude Code; the Sprint-1 P0s are closed:**
+- **#68 slice 1 (23 Jul, direct merge `59d0015`, no PR):** scanned transfer core + in-transit stock bucket; scan-is-truth / partial→flag rulings; reusable `ScanScreen` (keyboard-wedge scanner).
+- **PR #81 ← #69:** trusted mark-damaged UX + quarantine (re-implementation).
+- **PR #82 ← #70:** approvals inbox + maker-checker.
+- **PR #113 ← #103:** stock leaves at the cost the books say, never at zero — **closes the Sprint-1 zero-cost P0** (cost server-derived, no longer client-writable).
+- **PR #127 ← #94:** one permission gate on every outbound write, so Accounts cannot move stock it may only view — **closes the read/write-scope P1 class**.
+- **PR #115 ← #71:** receive exceptions (short / extra / damaged) + the gaps list.
+- **PR #140 ← #138:** damage becomes flag-then-confirm — a store *reports*, only the warehouse *posts* (per the outbound PRD re-grill ruling).
+- **PR #144 ← #72:** every transfer generates and prints its own PT at dispatch.
+- **PR #143 ← #76:** blind count sessions + the merged variance report (stocktake).
+
+**Access / sidebar / RBAC (24–26 Jul):**
+- **PR #91 ← #85:** SIDEBAR RBAC section contract + dedicated `superadmin` break-glass; `admin`/`owner` become normal matrix-enforced users.
+- **PR #95 ← #87:** sidebar redesign — 13 sections, one URL per screen, + two access-control fixes it uncovered.
+- **PR #109 ← #89** (unbuilt subsections say what will live there) · **PR #112 ← #88** (business-unit switcher scoped to allowed units) · **PR #97 ← #96** (members are staff; store manager keeps them) · **PR #99** (one sidebar line lights up) · **PR #108 ← #100** (0006 rollback no longer eats an admin's staff grant).
+- **The actor model is decided (26 Jul): PRD #104** — three access axes, four locked floor rules, nine ratified roles, twelve tickets. First ticket landed: **PR #142 ← #130** (the nine-role table ratified as one source; store sees its bookings).
+- **PR #146 (hotfix):** #143 + #142 were green in isolation but broke `main` together — #76's ungated views baselined into the RBAC contract test.
+
+**Search:** **PR #92 ← #86** global search (one scope-enforced endpoint + top-bar UI with wedge-scan) · **PR #145 ← #102** shared in-page search control, proven on three screens.
+
+**Dev / process:** **PR #83** one-command local stack (`npm run up`) · **PR #116 ← #93** the environment tells the truth (`/api/health` migration digest + `check_db_drift`) · **PRs #117/#123/#129** the **`/deliver`** skill (one issue → containment → TDD → CI → simplify → review → live QA → PR; never merges) · **PR #128** sandcastle proposes, no longer lands · **PR #139** QA drives whichever browser the session has · **PR #111** Hazaribagh store report · **`d83c56e`** the corpus stops promising a third-party POS — **KDPS builds its own POS** (decided 26 Jul).
+
+**Still true:** Render deploys the `client-testing` branch (pinned `d5428a3`), which **lags `main`** — updating it is a deliberate deploy action. Selling/POS, offers, payments/settlement, Tally sync, analytics, store open/close remain unbuilt. The five CA-gated GST items still block live money.
+
+## Snapshot — 17 July 2026 (superseded above where it conflicts)
 The foundation **and** the first business layer are **built and merged to `main`**, auto-deploying to a **Render alpha** (Postgres 16 + Django API + React PWA). Everything below this section is a **chronological build log**: the earliest (28 Jun) entries describe superseded money mechanics (stock value + auto-bill at **BASIC×qty**); those were **rebuilt to P RATE + commercial-model liability** in the 30-Jun Phase C/E remediation. Treat this section as the source of truth for status.
+
+- **`emergent` merged into `main` (17 Jul, local merge commit — NOT pushed).** Brings the **`outbound` app (D3, "Sprint 1")** — 5 documents + posting + RBAC + 43 tests + 5 PWA pages — plus the 6-Jul implementation review, 9-Jul warehouse notes, the Sanskar ageing report, Apr/Jun invoices, the learning workspace and an Obsidian vault. Clean merge (zero conflicts). **`outbound` is built but NOT signed off — two P0s open (see the 6-Jul review section below). Do not treat D3 as done.**
+- **PRD reconciliation note (17 Jul):** the `emergent` branch replaced this file with a generated 157-line sprint summary asserting *"Sprint 1 — Outbound Module ✅ COMPLETE"*. That claim is **false against the code** (verified 17 Jul — see the outbound section below) and the build log it deleted has been restored. This file stays the build memory; do not let a generated PRD overwrite it again.
 
 - **Landed (git):** PR #31 merged the Emergent export to `main`; PR #33 + #34 merged the `harden/green-and-security` sprint (money-path + security + CI green); PR #35 seeded the PT-mapper master data on Render. `main` is the alpha of record; `emergent` (exports) and `dev` (hand changes) PR into it (3-branch model). *(Corrects the "Deployment readiness check (28 Jun)" section below — deployment is live on Render, not blocked on MongoDB / a missing git remote.)*
 - **Built on `main`:** kernel `core` + 9 apps (`masters` `accounts` `files` `vendors` `inbound` `ptmapper` `stockledger` `finledger` `aiagents`); React/TS PWA with ~12 wired screens + ~20 "coming soon" stubs.
@@ -21,7 +148,34 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **PWA / security batch — merged on `main` (3–4 Jul, #55–#60):** mobile off-canvas sidebar (#55), demo-login Store-manager chip + auto-submit (#56/#60), the 403 auth-race fix (#57), the live-API test-hygiene gate (#58), and role-guarded client routes (#59). #57/#59 improved the auth/route posture — #59 hides + guards finance/RBAC-admin shells client-side — though the two alpha caveats (demo creds on the public Render alpha, JWT/refresh in `localStorage`) still stand and the backend 403 remains the real boundary.
 - **Known alpha caveats:** (1) `finledger` vendor/cash ledgers are still single-entry running balances — only the PT-inward path is true double-entry / in the Σ=0 trial balance; (2) two security items **deferred by decision** — demo creds seeded on the public Render alpha, JWT/refresh in `localStorage`. Five money-critical GST items still await a CA ruling before live money.
 - **Dark mode — merged on `main` (4 Jul, PR #61):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). This is `HEAD` of `main`. See the dated section below.
-- **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
+- **Not built:** selling/POS, offers, payments/settlement, Tally sync, analytics, store open/close. *(Transfers + returns-out now exist in `outbound` but are money-incorrect — see below.)*
+
+
+## Merged — Outbound / D3 ("Sprint 1"), built on Emergent (6 Jul, merged 17 Jul) ⚠️ NOT SIGNED OFF
+> **Update 26 Jul:** the fix order below was executed — cost is server-derived (PR #113 ← #103), every outbound write sits behind one permission gate (PR #127 ← #94), and the module was rebuilt slice-by-slice via `/deliver` (see the 26-Jul current-state section). WriteOff was ruled never-designed and is being folded into Stock Adjustment. This section stays as the historical record of what the Emergent build got wrong.
+The `outbound` Django app + 5 PWA pages landed via the `emergent` merge. **Structure is sound; the money layer is not.** Facts below are verified against the merged code (17 Jul), not against Emergent's status claims.
+
+**What exists (verified):**
+- **5 FSM documents** on `core.Document` — `StoreTransfer` (:71), `ReturnToVendor` (:198), `StockAdjustment` (:270), `WriteOff` (:331), `VFlip` (:385), each with a `*Line` child. `TransferReceipt` (:167) is a companion on `TimeStampedModel`, deliberately **not** a Document (submitted docs are DB-immutable, so the receipt can't mutate the transfer).
+- **16 URL paths** under `/api/outbound/` (`urls.py:24-46`) — note *list+create is one path*, so 16 paths / 20 operations. Emergent's PRD listed these correctly.
+- **43 test functions** — `test_outbound_sprint1.py` (24), `test_outbound_store_scope.py` (10), `test_iteration22_bugfixes.py` (9).
+- **`enforce_store_scope()`** (`permissions.py:49-61`) is real and **fail-closed** on all 10 write paths (`views.py:86,116,145,198,228,272,300,344,372,416,446`; dispatch/receive check source vs destination separately). This part of the work is accepted.
+
+**P0 — outbound posts money at zero (`posting.py:61,268,347,409,497`):**
+`amount_paise = qty * (line.unit_cost_paise if hasattr(...) else 0)`; `unit_cost_paise` is a `MoneyField(default=0)` that is **client-writable** in every serializer (`serializers.py:32,116,174,227,280`) and **omitted by all five PWA create payloads** (e.g. `OutboundWriteoffs.tsx:175-183`). Result: a UI-raised doc posts SLE `amount=0`, leaves `StockOnHand.net_value_paise` untouched, and the `if total_value_paise > 0` guards (`:275,411,500`; `!= 0` at `:350`) then **skip the GL voucher entirely**. Not a hardcoded 0 — a plumbing gap. **The asymmetry that names the fix:** `StockOnHand` is already read for quantity (`:38`) but never for cost. Derive `unit_cost_paise` server-side from `StockOnHand` and make it read-only.
+
+**P1 — outbound READ endpoints are unscoped (fail-open, IDOR):**
+Every `get_queryset` (`views.py:66-76,98-101,178-188,210,255-262,284,327-334,356,399-406,428`) filters only on optional `type`/`docstatus`/`return_type` — **no store filter**; `IsOutboundReader` (`permissions.py:64-71`) checks `is_authenticated` only. **Trap for future audits:** the docstrings assert the opposite — `permissions.py:66-67` "Store scoping is handled at the queryset level" and `views.py:4` "store scoping via queryset" are both **false**. All 10 store-scope tests are write-path only, so the hole is untested.
+
+**Ex-GST payable (P0 #1 of the review) is the *inbound* PT path** (`stockledger/posting.py:176-186,332`; `finledger/posting.py:271-280`), not RTV. Outbound RTV is ex-GST too (`posting.py:268`, cost basis only; no GST anywhere in the module) — symmetric, but not the cited P0.
+
+**Review verdict (`consolidation/implementation-review-2026-07-06.html`, merged with this batch):**
+> "The architecture held; the money semantics on top of it did not." — Kernel ≈ **A−** · Money semantics & read-scope ≈ **C**
+> "**do not sign off Sprint 1 as complete** … The alpha must not handle live money until the two P0s and the P1 money items are closed."
+
+2 P0 (both CONFIRMED, 3/3 adversarial refuters upheld each) · 12 P1 · 17 P2 · 4 P3. Claim #1 (role matrix) graded **PARTIAL** (write real, read false); claim #13 (V-flip SUSPENSE "by design") graded **FAIL** — that treatment is **not** in the posting catalog. Method: 139 agents, ~7.2M tokens, 38 raw → 34 confirmed.
+
+**Fix order before D3 counts as done:** (1) server-derive outbound cost from `StockOnHand`, make `unit_cost_paise` read-only; (2) scope the read querysets + fix the lying docstrings + add read-path tests; (3) resolve V-flip SUSPENSE against the catalog (or amend the catalog consciously per Rule 0); (4) the inbound ex-GST/Input-GST P0 (CA-gated).
 
 
 ## Phase 0 — Emergent environment bring-up: DONE (Emergent session) ✅
@@ -30,7 +184,7 @@ The app now RUNS in the Emergent container (previously down: no Django in venv +
 - Installed Django 5.1 + psycopg + DRF + simplejwt + drf-spectacular + cors + whitenoise + openpyxl/xlrd/pyxlsb into the served venv `/root/.venv` (py3.11). `aiagents` is NOT in INSTALLED_APPS so litellm/emergentintegrations (already present) aren't needed at boot.
 - Ran `migrate` (incl. pg_trgm) + `seed_foundation` + `seed_ptmapper`. Restarted backend.
 - **Verified:** local + external login → 200 (JWT); external authed `/api/masters/stores` returns seeded Bihar/Jharkhand stores; frontend renders; CORS clean; console shows only Vite connect.
-- App URL: `https://kdps-delivery-check.preview.emergentagent.com` (also reachable via APP_URL host `4c10e8e1-…`). Both route to this backend. Frontend `.env` REACT_APP_BACKEND_URL left as-is (`kdps-delivery-check…`, confirmed routing to this container).
+- App URL: `https://retail-erp-system-4.preview.emergentagent.com` (also reachable via APP_URL host `4c10e8e1-…`). Both route to this backend. Frontend `.env` REACT_APP_BACKEND_URL left as-is (`kdps-delivery-check…`, confirmed routing to this container).
 - One-command re-provision script: `/app/scripts/dev-bootstrap.sh` (idempotent).
 - NOTE: this container uses PostgreSQL for KDPS; MongoDB also runs (platform default) but is unused by the app.
 
@@ -792,12 +946,16 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **P2 — Non-Branded Booking / PO Maker agent:** deferred pending user's client clarification.
 - **P2 — Production hardening:** External ingress/proxy CORS policy alignment, reduce localStorage token reliance now that httpOnly cookies exist, HTTPS/secure-cookie review, Django+Postgres deploy path validation.
 
-## Next action items
-Inbound D2 (branded + non-branded, `Grn.kind` + non-brand PT authoring + location-aware posting) landed on
-`main` across #43–#49; the PWA/security batch (#55–#60) + dark mode (#61) followed. The next frontiers:
-1. **D3 outbound / POS ingest** (selling floor, outbox/dead-letter) — the next business layer, still unbuilt.
-2. ~~**Double-entry vendor/cash ledger**~~ **DONE (Jun 2026, F1):** `finledger` vendor/cash now post balanced
-   Σ=0 vouchers through `core.post_entries`; GL control accounts tie to the subledgers, proven live on
-   `/api/finledger/health`. Alpha caveat closed.
-3. Run broader alpha QA over the current screens and capture issues from real users.
-4. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
+## Next action items (revised 26 Jul 2026)
+Inbound D2 landed across #43–#49; ~~D3 outbound still unbuilt~~ **D3 rebuilt slice-by-slice 18–26 Jul**
+(see the 26-Jul current-state section: slices 1–5 + 10, exceptions, damage flag-then-confirm, transfer PT,
+blind counts). The next frontiers:
+1. **Selling floor / own POS** — KDPS builds its own POS (decided 26 Jul); the third-party route is dropped. Still undesigned.
+2. **Finish the PRD #104 actor-model tickets** — #130 landed (PR #142); eleven tickets remain.
+3. **Deploy `main` to Render** — `client-testing` is pinned and lags main; promoting it is a deliberate decision.
+4. Offers, payments/settlement, Tally sync, analytics, store open/close — unbuilt; five CA-gated GST items still block live money.
+5. Run broader alpha QA over the current screens and capture issues from real users.
+6. **From the 26-Jul review (in priority order):** append-only **audit log** + the `/setup/audit` screen (also
+   unblocks #135) → **period lock / month-end close** (ADR-0006's unkept promise) → **three-way match**
+   (invoice ↔ GRN ↔ booking, with a tolerance rule) → **open-order report** off the new booking close →
+   maker-checker on vendor payments → hide the demo logins behind an env flag before any external demo.

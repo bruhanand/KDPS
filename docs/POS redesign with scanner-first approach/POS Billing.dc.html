@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #100D0B; height: 100%; overflow: hidden; }
+  body { font-family: Archivo, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: #FF7A45; text-decoration: none; }
+  a:hover { color: #FF9A6B; }
+  input, select, button { font-family: inherit; }
+  input:focus, select:focus, button:focus-visible { outline: none; }
+  ::placeholder { color: #6B6058; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #332C25; border-radius: 6px; border: 3px solid #100D0B; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes pop { from{transform:scale(.94);opacity:0} to{transform:scale(1);opacity:1} }
+  @keyframes flashrow { from{background:rgba(255,122,69,.16)} to{background:transparent} }
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;background:#100D0B;color:#F3EDE6;font-size:14px">
+
+  <!-- ══ TOP BAR ══ -->
+  <div style="height:52px;flex:0 0 52px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#171310;border-bottom:1px solid #2A231D">
+    <div style="display:flex;align-items:center;gap:10px;width:180px">
+      <div style="width:26px;height:26px;border-radius:7px;background:#FF7A45;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#1A0E07;letter-spacing:-.02em">K</div>
+      <div style="font-weight:600;font-size:13px;letter-spacing:.14em">KDPS</div>
+    </div>
+
+    <div style="flex:1;display:flex;justify-content:center">
+      <div style="display:flex;align-items:center;gap:10px;padding:0 8px;height:34px;width:100%;max-width:420px;border-radius:9px;background:#1F1915;border:1px solid #2E2720">
+        <div style="width:13px;height:13px;border:1.5px solid #6B6058;border-radius:50%;margin-left:4px"></div>
+        <div style="color:#6B6058;font-size:13px">Search anything — bill no, customer, item</div>
+        <div style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5C534B;background:#2A231D;padding:2px 6px;border-radius:4px">CTRL K</div>
+      </div>
+    </div>
+
+    <div style="width:auto;display:flex;align-items:center;gap:8px;justify-content:flex-end">
+      <button onClick="{{ toggleOnline }}" title="Toggle sync state" style="display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:8px;border:1px solid {{ syncBorder }};background:{{ syncBg }};color:{{ syncFg }};font-size:12px;font-weight:600;cursor:pointer">
+        <span style="width:6px;height:6px;border-radius:50%;background:{{ syncFg }}"></span>{{ syncLabel }}
+      </button>
+      <div style="display:flex;align-items:center;gap:9px;height:30px;padding:0 10px 0 4px;border-radius:8px;background:#1F1915;border:1px solid #2E2720">
+        <div style="width:22px;height:22px;border-radius:6px;background:#3A2E26;color:#E8B48F;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">BC</div>
+        <div style="font-size:12px;font-weight:500">{{ storeName }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- ══ NAV RAIL ══ -->
+    <div style="width:60px;flex:0 0 60px;background:#171310;border-right:1px solid #2A231D;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px">
+      <div title="Dashboard" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="5" height="5" rx="1"></rect><rect x="9.5" y="1.5" width="5" height="5" rx="1"></rect><rect x="1.5" y="9.5" width="5" height="5" rx="1"></rect><rect x="9.5" y="9.5" width="5" height="5" rx="1"></rect></svg>
+      </div>
+      <div title="Sell" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#FF7A45;color:#1A0E07;position:relative">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="14" r="1"></circle><circle cx="12.5" cy="14" r="1"></circle><path d="M1 1.5h2l2 9h8.5l1.5-6.5H4"></path></svg>
+      </div>
+      <div title="Inventory" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4.5" width="12" height="10" rx="1.5"></rect><path d="M2 7.5h12M8 4.5v10"></path></svg>
+      </div>
+      <div title="Receive goods" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5l6 3v7l-6 3-6-3v-7z"></path><path d="M2 4.5l6 3 6-3M8 7.5v7"></path></svg>
+      </div>
+      <div title="Transfer" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 5.5h9v5h-9zM10.5 7h2.5l1.5 2v1.5h-4z"></path><circle cx="4.5" cy="12" r="1.2"></circle><circle cx="11.5" cy="12" r="1.2"></circle></svg>
+      </div>
+      <div title="Money" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"></rect><circle cx="8" cy="8" r="2"></circle></svg>
+      </div>
+      <div title="Offers &amp; price" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5H2v6l6.5 6.5 6-6L8 1.5z"></path><circle cx="5" cy="5" r="1"></circle></svg>
+      </div>
+      <div title="Reports" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14V7M6.5 14V2M11 14V9.5M15 14H1"></path></svg>
+      </div>
+      <div style="flex:1"></div>
+      <div title="Attendance" style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7E7268" style-hover="background:#221C17;color:#D8CEC4">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.5" r="2.5"></circle><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5S13.5 11 13.5 14"></path></svg>
+      </div>
+    </div>
+
+    <!-- ══ MAIN ══ -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+      <!-- bill bar -->
+      <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 16px;background:#171310;border-bottom:1px solid #2A231D;min-width:0;overflow-x:auto">
+
+        <div style="display:flex;background:#100D0B;border:1px solid #2E2720;border-radius:9px;padding:3px;gap:2px;flex:0 0 auto">
+          <button onClick="{{ setBillMode }}" style="height:28px;padding:0 14px;border:0;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;background:{{ tabSellBg }};color:{{ tabSellFg }}">Sale</button>
+          <button onClick="{{ setReturnMode }}" style="height:28px;padding:0 14px;border:0;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;background:{{ tabRetBg }};color:{{ tabRetFg }}">Return &amp; exchange</button>
+        </div>
+
+        <div style="width:1px;height:24px;background:#2E2720;flex:0 0 1px"></div>
+
+        <div style="display:flex;flex-direction:column;gap:1px;flex:0 0 auto">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:500;color:#F3EDE6;letter-spacing:-.01em;white-space:nowrap">{{ billNo }}</div>
+          <div style="font-size:10.5px;color:#7E7268;letter-spacing:.02em;white-space:nowrap">{{ billStatus }}</div>
+        </div>
+
+        <!-- salesperson: bill-level default -->
+        <div style="display:flex;align-items:center;gap:0;margin-left:8px;height:34px;flex:0 0 auto;border:1px solid {{ spBorder }};background:{{ spBg }};border-radius:9px;padding:0 4px 0 10px">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#8C8076;text-transform:uppercase;white-space:nowrap">Sold by</span>
+          <select value="{{ billSalesman }}" onChange="{{ onBillSalesman }}" style="height:28px;border:0;background:transparent;color:{{ spFg }};font-size:13px;font-weight:600;padding:0 4px;cursor:pointer;max-width:150px">
+            <option value="">Pick a salesperson…</option>
+            <option value="Ravi Kumar">Ravi Kumar</option>
+            <option value="Sunita Devi">Sunita Devi</option>
+            <option value="Amit Raj">Amit Raj</option>
+            <option value="Pooja Sharma">Pooja Sharma</option>
+            <option value="Nobody / house">Nobody / house</option>
+          </select>
+        </div>
+        <sc-if value="{{ showApplyAll }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ applyToAll }}" style="height:34px;padding:0 11px;border-radius:8px;border:1px dashed #4A3B30;background:transparent;color:#E8B48F;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto" style-hover="background:#221C17">Apply to all {{ lineCount }} lines</button>
+        </sc-if>
+
+        <div style="flex:1"></div>
+
+        <button onClick="{{ toggleHeldPanel }}" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid #2E2720;background:#1F1915;color:#D8CEC4;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;white-space:nowrap;flex:0 0 auto" style-hover="background:#2A231D">
+          Held bills <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:1px 6px;border-radius:5px;background:{{ heldChipBg }};color:{{ heldChipFg }}">{{ heldCount }}</span>
+        </button>
+        <button onClick="{{ holdBill }}" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid #2E2720;background:#1F1915;color:#D8CEC4;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto" style-hover="background:#2A231D">Hold <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7E7268;margin-left:4px">F2</span></button>
+        <button onClick="{{ newBill }}" style="height:34px;padding:0 12px;border-radius:8px;border:1px solid #2E2720;background:#1F1915;color:#D8CEC4;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto" style-hover="background:#2A231D">New bill <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7E7268;margin-left:4px">F4</span></button>
+      </div>
+
+      <!-- held bills drawer -->
+      <sc-if value="{{ heldPanelOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;background:#1A1512;border-bottom:1px solid #2E2720;padding:12px 16px;display:flex;flex-direction:column;gap:8px;animation:pop .12s ease-out">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#8C8076;text-transform:uppercase">Held bills — click to resume</div>
+          <sc-if value="{{ heldEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#7E7268">Nothing on hold right now.</div>
+          </sc-if>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ held }}" as="h" hint-placeholder-count="2">
+              <button onClick="{{ h.resume }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 13px;border-radius:9px;border:1px solid #3A2F27;background:#221C17;cursor:pointer;text-align:left" style-hover="border-color:#FF7A45">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8C8076">{{ h.time }} · {{ h.pieces }} pcs</span>
+                <span style="font-size:14px;font-weight:700;color:#F3EDE6">{{ h.total }}</span>
+                <span style="font-size:11px;color:#A3968A">{{ h.who }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+      <!-- ══ SCAN BAR — the hero ══ -->
+      <div style="flex:0 0 auto;padding:14px 16px 12px 16px;background:#100D0B">
+        <div style="display:flex;align-items:stretch;gap:10px;animation:{{ scanAnim }}">
+          <div style="flex:1;display:flex;align-items:center;gap:14px;height:60px;border-radius:12px;background:{{ scanBg }};border:2px solid {{ scanBorder }};padding:0 18px;box-shadow:{{ scanGlow }}">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="{{ scanIcon }}" stroke-width="1.6" stroke-linecap="round"><path d="M2 3v14M5 3v14M8 3v10M11 3v14M14 3v10M17 3v14"></path></svg>
+            <input value="{{ scanValue }}" onChange="{{ onScanChange }}" onKeyDown="{{ onScanKey }}" ref="{{ scanRef }}" placeholder="{{ scanPlaceholder }}" autoComplete="off" spellCheck="false" style="flex:1;height:100%;border:0;background:transparent;color:#F3EDE6;font-size:19px;font-weight:500;font-family:'IBM Plex Mono',monospace;letter-spacing:.01em" />
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#7E7268;font-weight:600;letter-spacing:.04em">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ scanDot }};animation:pulse 1.6s ease-in-out infinite"></span>{{ scanStateLabel }}
+            </div>
+          </div>
+          <button onClick="{{ manualAdd }}" style="width:112px;border-radius:12px;border:1px solid #2E2720;background:#1F1915;color:#D8CEC4;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px" style-hover="background:#2A231D">
+            {{ lookupLabel }}
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7E7268">F3</span>
+          </button>
+        </div>
+
+        <!-- feedback line under scanner -->
+        <sc-if value="{{ scanError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:9px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#2E1714;border:1px solid #6B2F26;animation:pop .12s ease-out">
+            <div style="width:18px;height:18px;border-radius:50%;background:#E4574A;color:#2E1714;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 18px">!</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13.5px;font-weight:600;color:#FFC9C1">{{ scanErrorTitle }}</div>
+              <div style="font-size:12px;color:#C89189;margin-top:1px">{{ scanErrorHint }}</div>
+            </div>
+            <button onClick="{{ dismissError }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #6B2F26;background:transparent;color:#FFC9C1;font-size:12px;font-weight:600;cursor:pointer">Dismiss · Esc</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showQuickScan }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#5C534B;text-transform:uppercase;margin-right:2px">Demo scanner</span>
+            <sc-for list="{{ demoCodes }}" as="d" hint-placeholder-count="4">
+              <button onClick="{{ d.scan }}" style="height:26px;padding:0 10px;border-radius:7px;border:1px solid #2A231D;background:#171310;color:#8C8076;font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer" style-hover="border-color:#FF7A45;color:#FF9A6B">{{ d.code }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- bill the return is written against -->
+      <sc-if value="{{ billLoaded }}" hint-placeholder-val="{{ false }}">
+        <div style="margin:0 16px 12px 16px;display:flex;align-items:center;flex-wrap:wrap;gap:13px 12px;padding:11px 13px;border-radius:14px;background:#151E2B;border:1px solid #27405F;box-shadow:0 1px 0 rgba(255,255,255,.04) inset;animation:pop .12s ease-out">
+          <div style="width:34px;height:34px;border-radius:9px;background:#0E1621;display:flex;align-items:center;justify-content:center;flex:0 0 34px">
+            <div style="width:17px;height:18px;background:repeating-linear-gradient(90deg,#6EA8FF 0 2px,transparent 2px 4px,#6EA8FF 4px 5px,transparent 5px 8px)"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#CFE1FF;white-space:nowrap">{{ retBillNo }}</div>
+            <div style="font-size:11.5px;color:#8FA6C4;white-space:nowrap">{{ retBillMeta }}</div>
+          </div>
+          <div style="width:1px;height:28px;background:#27405F;flex:0 0 1px"></div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 auto">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#7B93B3;text-transform:uppercase;white-space:nowrap">Bill value</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#CFE1FF;white-space:nowrap">{{ retBillTotal }}</span>
+          </div>
+          <div style="flex:1;min-width:8px"></div>
+          <button onClick="{{ returnAll }}" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid #2F4A6B;background:transparent;color:#9CC4FF;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:#1B2838">Take everything back</button>
+          <button onClick="{{ toggleExchange }}" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid {{ exBorder }};background:{{ exBg }};color:{{ exFg }};font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">{{ exLabel }}</button>
+          <button onClick="{{ clearBill }}" title="Pick a different bill" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid #2F4A6B;background:transparent;color:#7B93B3;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="color:#CFE1FF">Change bill</button>
+        </div>
+      </sc-if>
+
+      <!-- ══ LINES ══ -->
+      <div style="flex:1;min-height:0;margin:0 16px;border:1px solid #241E19;border-radius:12px;background:#151110;display:flex;flex-direction:column;overflow:hidden">
+        <div style="flex:1;min-height:0;overflow:auto">
+        <div style="min-width:940px;min-height:100%;display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;position:sticky;top:0;z-index:2;display:grid;grid-template-columns:28px minmax(250px,1fr) 52px 84px 96px 96px 108px 132px 30px;gap:8px;align-items:center;padding:9px 12px;background:#1A1512;border-bottom:1px solid #241E19;font-size:9.5px;font-weight:700;letter-spacing:.13em;color:#6B6058;text-transform:uppercase">
+          <div style="text-align:center">#</div>
+          <div>Item</div>
+          <div>Size</div>
+          <div style="text-align:center">Qty</div>
+          <div style="text-align:right">Rate</div>
+          <div style="text-align:right">Discount</div>
+          <div style="text-align:right">Net</div>
+          <div>Salesperson</div>
+          <div></div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column">
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px">
+              <svg width="52" height="52" viewBox="0 0 20 20" fill="none" stroke="#33291F" stroke-width="1.2" stroke-linecap="round"><path d="M2 3v14M5 3v14M8 3v10M11 3v14M14 3v10M17 3v14"></path></svg>
+              <div style="text-align:center;max-width:340px">
+                <div style="font-size:17px;font-weight:600;color:#A3968A">Ready to scan</div>
+                <div style="font-size:13px;color:#6B6058;margin-top:6px;line-height:1.5;text-wrap:pretty">Pull the trigger on the scanner — the item drops straight in. The cursor stays in the scan box, always.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ needBill }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:34px 40px">
+              <div style="text-align:center;max-width:430px">
+                <div style="font-size:17px;font-weight:600;color:#A3968A">Every return starts from its bill</div>
+                <div style="font-size:13px;color:#6B6058;margin-top:6px;line-height:1.5;text-wrap:pretty">Scan the barcode printed at the foot of the customer&rsquo;s bill, or type the bill number. A piece can only come back against the bill it went out on.</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:540px">
+                <div style="font-size:9.5px;font-weight:700;letter-spacing:.13em;color:#5C534B;text-transform:uppercase">Recent bills at this counter</div>
+                <sc-for list="{{ recentBills }}" as="rb" hint-placeholder-count="3">
+                  <button onClick="{{ rb.open }}" style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:12px;border:1px solid #2A231D;background:#191412;cursor:pointer;text-align:left" style-hover="border-color:#6EA8FF;background:#1B2230">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#D8CEC4;flex:0 0 auto">{{ rb.no }}</span>
+                    <span style="font-size:12px;color:#8C8076;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ rb.meta }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#F3EDE6;flex:0 0 auto">{{ rb.total }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-for list="{{ lines }}" as="line" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:28px minmax(250px,1fr) 52px 84px 96px 96px 108px 132px 30px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #1E1916;animation:{{ line.anim }};opacity:{{ line.dim }}" style-hover="background:#191412">
+              <div style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#5C534B">{{ line.idx }}</div>
+
+              <div style="min-width:0">
+                <div style="font-size:14px;font-weight:600;color:#F3EDE6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ line.name }}</div>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:2px;overflow:hidden;white-space:nowrap">
+                  <span style="font-size:11.5px;color:#A3968A">{{ line.brand }}</span>
+                  <span style="width:3px;height:3px;border-radius:50%;background:#3F362E"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6B6058">{{ line.barcode }}</span>
+                  <sc-if value="{{ line.offer }}" hint-placeholder-val="{{ false }}">
+                    <span style="flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1.5px 6px;border-radius:5px;background:#2A2312;color:#E5C46A;text-transform:uppercase">{{ line.offer }}</span>
+                  </sc-if>
+                  <sc-if value="{{ line.tag }}" hint-placeholder-val="{{ false }}">
+                    <span style="flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.04em;padding:1.5px 6px;border-radius:5px;background:{{ line.tagBg }};color:{{ line.tagFg }};text-transform:uppercase">{{ line.tag }}</span>
+                  </sc-if>
+                  <sc-if value="{{ line.note }}" hint-placeholder-val="{{ false }}">
+                    <span style="flex:0 0 auto;font-size:10.5px;color:#6B6058;white-space:nowrap">{{ line.note }}</span>
+                  </sc-if>
+                </div>
+              </div>
+
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#D8CEC4">{{ line.size }}</div>
+
+              <div style="display:flex;align-items:center;justify-content:center;gap:1px">
+                <button onClick="{{ line.dec }}" style="width:24px;height:28px;border:1px solid #2E2720;border-right:0;border-radius:7px 0 0 7px;background:#1C1714;color:#A3968A;font-size:15px;line-height:1;cursor:pointer" style-hover="background:#2A231D;color:#F3EDE6">−</button>
+                <input value="{{ line.qty }}" onChange="{{ line.onQty }}" style="width:34px;height:28px;border:1px solid #2E2720;background:#1C1714;color:#F3EDE6;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600" />
+                <button onClick="{{ line.inc }}" style="width:24px;height:28px;border:1px solid #2E2720;border-left:0;border-radius:0 7px 7px 0;background:#1C1714;color:#A3968A;font-size:14px;line-height:1;cursor:pointer" style-hover="background:#2A231D;color:#F3EDE6">+</button>
+              </div>
+
+              <div style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#D8CEC4">{{ line.rate }}</div>
+
+              <div style="display:flex;justify-content:flex-end;align-items:center">
+                <sc-if value="{{ line.locked }}" hint-placeholder-val="{{ false }}">
+                  <span title="Locked to what was billed" style="height:28px;display:flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#8C8076">{{ line.disc }}</span>
+                </sc-if>
+                <sc-if value="{{ line.editable }}" hint-placeholder-val="{{ true }}">
+                  <input value="{{ line.disc }}" onChange="{{ line.onDisc }}" placeholder="0" style="width:88px;height:28px;border:1px solid {{ line.discBorder }};background:{{ line.discBg }};color:{{ line.discFg }};text-align:right;padding:0 8px;border-radius:7px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600" />
+                </sc-if>
+              </div>
+
+              <div style="text-align:right">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:600;color:{{ line.netFg }}">{{ line.net }}</div>
+                <div style="font-size:10px;color:#5C534B;margin-top:1px">incl {{ line.gst }} GST</div>
+              </div>
+
+              <div>
+                <select value="{{ line.sales }}" onChange="{{ line.onSales }}" style="width:100%;height:28px;border:1px solid {{ line.spBorder }};background:{{ line.spBg }};color:{{ line.spFg }};border-radius:7px;font-size:12px;font-weight:600;padding:0 4px;cursor:pointer">
+                  <option value="">— pick —</option>
+                  <option value="Ravi Kumar">Ravi Kumar</option>
+                  <option value="Sunita Devi">Sunita Devi</option>
+                  <option value="Amit Raj">Amit Raj</option>
+                  <option value="Pooja Sharma">Pooja Sharma</option>
+                  <option value="Nobody / house">Nobody / house</option>
+                </select>
+              </div>
+
+              <button onClick="{{ line.remove }}" title="Remove line" style="width:26px;height:26px;border-radius:7px;border:0;background:transparent;color:#5C534B;font-size:15px;line-height:1;cursor:pointer" style-hover="background:#3A1D18;color:#FF9A8B">×</button>
+            </div>
+          </sc-for>
+        </div>
+        </div>
+        </div>
+
+        <!-- totals strip -->
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:26px;padding:11px 16px;background:#1A1512;border-top:1px solid #241E19;overflow:hidden">
+          <div style="display:flex;flex-direction:column;gap:1px;flex:0 0 auto">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#6B6058;text-transform:uppercase;white-space:nowrap">Pieces</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;white-space:nowrap">{{ pieces }}</span>
+          </div>
+          <div style="width:1px;height:26px;background:#2A231D;flex:0 0 1px"></div>
+          <div style="display:flex;flex-direction:column;gap:1px;flex:0 0 auto">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#6B6058;text-transform:uppercase;white-space:nowrap">Gross</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#D8CEC4;white-space:nowrap">{{ gross }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;flex:0 0 auto">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#6B6058;text-transform:uppercase;white-space:nowrap">Discount</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:{{ discFg }};white-space:nowrap">{{ discountTotal }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;flex:0 0 auto">
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:#6B6058;text-transform:uppercase;white-space:nowrap">GST included</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#8C8076;white-space:nowrap">{{ taxTotal }}</span>
+          </div>
+          <div style="flex:1;min-width:12px"></div>
+          <sc-if value="{{ showShortcutHints }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;gap:12px;font-size:10.5px;color:#5C534B;font-family:'IBM Plex Mono',monospace;white-space:nowrap;flex:0 1 auto;overflow:hidden">
+              <span>F2 hold</span><span>F4 new</span><span>F9 pay &amp; print</span><span>ESC back to scan</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="height:16px;flex:0 0 16px"></div>
+    </div>
+
+    <!-- ══ PAY PANEL ══ -->
+    <div style="width:352px;flex:0 0 352px;background:#171310;border-left:1px solid #2A231D;display:flex;flex-direction:column;min-height:0">
+
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:22px 16px 16px 16px;display:flex;flex-direction:column;gap:14px">
+
+        <!-- amount due -->
+        <div style="flex:0 0 auto">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.13em;color:#8C8076;text-transform:uppercase">{{ dueLabel }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.1;margin-top:4px;color:{{ dueFg }}">{{ payable }}</div>
+        </div>
+
+        <!-- payment tile -->
+        <div style="flex:0 0 auto;border-radius:16px;background:#1D1815;border:1px solid #2A231D;box-shadow:0 1px 0 rgba(255,255,255,.035) inset, 0 8px 22px rgba(0,0,0,.35);overflow:hidden">
+          <!-- cash -->
+          <div style="background:{{ cashBg }};padding:11px 14px 12px 14px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="{{ cashIcon }}" stroke-width="1.5"><rect x="1" y="3.5" width="14" height="9" rx="1.5"></rect><circle cx="8" cy="8" r="2"></circle></svg>
+              <span style="font-size:13.5px;font-weight:600;flex:1">Cash</span>
+              <input value="{{ cash }}" onChange="{{ onCash }}" placeholder="0" style="width:104px;height:32px;border:1px solid #342C25;background:#131010;color:#F3EDE6;text-align:right;padding:0 10px;border-radius:9px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600" />
+            </div>
+            <div style="display:flex;gap:6px;margin-top:9px">
+              <sc-for list="{{ tenderChips }}" as="t" hint-placeholder-count="3">
+                <button onClick="{{ t.apply }}" style="flex:1;height:29px;border-radius:8px;border:0;background:#262019;color:#D8CEC4;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:#332A21;color:#FF9A6B">{{ t.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- upi -->
+          <div style="display:flex;align-items:center;gap:10px;background:{{ upiBg }};padding:11px 14px;border-top:1px solid #241E19">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="{{ upiIcon }}" stroke-width="1.5"><rect x="3" y="1.5" width="10" height="13" rx="2"></rect><path d="M6.5 12.5h3"></path></svg>
+            <span style="font-size:13.5px;font-weight:600;flex:1">UPI</span>
+            <button onClick="{{ upiRest }}" style="height:26px;padding:0 10px;border-radius:7px;border:0;background:#262019;color:#8C8076;font-size:11px;font-weight:600;cursor:pointer" style-hover="background:#332A21;color:#FF9A6B">rest</button>
+            <input value="{{ upi }}" onChange="{{ onUpi }}" placeholder="0" style="width:104px;height:32px;border:1px solid #342C25;background:#131010;color:#F3EDE6;text-align:right;padding:0 10px;border-radius:9px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600" />
+          </div>
+
+          <!-- card -->
+          <div style="display:flex;align-items:center;gap:10px;background:{{ cardBg }};padding:11px 14px;border-top:1px solid #241E19">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="{{ cardIcon }}" stroke-width="1.5"><rect x="1" y="3" width="14" height="10" rx="2"></rect><path d="M1 6.5h14"></path></svg>
+            <span style="font-size:13.5px;font-weight:600;flex:1">Card</span>
+            <button onClick="{{ cardRest }}" style="height:26px;padding:0 10px;border-radius:7px;border:0;background:#262019;color:#8C8076;font-size:11px;font-weight:600;cursor:pointer" style-hover="background:#332A21;color:#FF9A6B">rest</button>
+            <input value="{{ card }}" onChange="{{ onCard }}" placeholder="0" style="width:104px;height:32px;border:1px solid #342C25;background:#131010;color:#F3EDE6;text-align:right;padding:0 10px;border-radius:9px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600" />
+          </div>
+
+          <!-- balance footer -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:{{ balBg }};border-top:1px solid {{ balBorder }}">
+            <span style="font-size:13px;font-weight:600;color:{{ balFg }}">{{ balLabel }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;color:{{ balFg }}">{{ balAmount }}</span>
+          </div>
+        </div>
+
+        <!-- customer tile -->
+        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:8px;padding:0 3px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.13em;color:#8C8076;text-transform:uppercase">Customer</span>
+            <span style="font-size:11px;color:#5C534B">optional</span>
+          </div>
+          <div style="flex:0 0 auto;border-radius:16px;background:#1D1815;border:1px solid #2A231D;box-shadow:0 1px 0 rgba(255,255,255,.035) inset, 0 8px 22px rgba(0,0,0,.35);overflow:hidden">
+            <div style="display:flex;align-items:center">
+              <input value="{{ mobile }}" onChange="{{ onMobile }}" placeholder="Mobile" style="width:130px;height:42px;border:0;background:transparent;color:#F3EDE6;padding:0 14px;font-family:'IBM Plex Mono',monospace;font-size:13.5px" />
+              <span style="width:1px;align-self:stretch;background:#241E19"></span>
+              <input value="{{ cname }}" onChange="{{ onCname }}" placeholder="Name" style="flex:1;min-width:0;height:42px;border:0;background:transparent;color:#F3EDE6;padding:0 14px;font-size:13.5px" />
+            </div>
+            <sc-if value="{{ knownCustomer }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#17251C;border-top:1px solid #241E19">
+                <span style="width:6px;height:6px;border-radius:50%;background:#5CC98C"></span>
+                <span style="font-size:12px;color:#9FD9B8">{{ knownCustomer }}</span>
+              </div>
+            </sc-if>
+            <button onClick="{{ toggleGst }}" style="width:100%;height:40px;border:0;border-top:1px solid #241E19;background:{{ gstBg }};color:{{ gstFg }};font-size:12.5px;font-weight:600;cursor:pointer;text-align:left;padding:0 14px">{{ gstLabel }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- sticky action -->
+      <div style="flex:0 0 auto;padding:12px 16px 14px 16px;border-top:1px solid #241E19;background:#1A1512;display:flex;flex-direction:column;gap:9px">
+        <sc-if value="{{ blockMsg }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#E5B26A">
+            <span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E5B26A;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex:0 0 14px">!</span>
+            {{ blockMsg }}
+          </div>
+        </sc-if>
+        <div style="display:flex;gap:9px">
+          <button onClick="{{ reprint }}" style="width:88px;height:48px;border-radius:11px;border:1px solid #2E2720;background:#1F1915;color:#A3968A;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:#2A231D;color:#F3EDE6">Reprint</button>
+          <button onClick="{{ savePrint }}" disabled="{{ payDisabled }}" style="flex:1;height:48px;border-radius:11px;border:0;background:{{ payBg }};color:{{ payFg }};font-size:15.5px;font-weight:700;cursor:{{ payCursor }};display:flex;align-items:center;justify-content:center;gap:9px;letter-spacing:-.01em">
+            {{ payLabel }}
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;opacity:.55;font-weight:600">F9</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RECEIPT OVERLAY ══ -->
+  <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(8,6,5,.78);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(3px)">
+      <div style="width:400px;background:#1A1512;border:1px solid #33291F;border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:18px;animation:pop .16s ease-out;box-shadow:0 30px 80px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:center;gap:13px">
+          <div style="width:40px;height:40px;border-radius:50%;background:#1D3628;display:flex;align-items:center;justify-content:center">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#6FD79B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"></path></svg>
+          </div>
+          <div>
+            <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">{{ doneTitle }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8C8076;margin-top:2px">{{ doneBillNo }}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:9px;padding:15px;border-radius:12px;background:#100D0B;border:1px solid #241E19">
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#8C8076">{{ donePaidLabel }}</span><span style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ donePaid }}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#8C8076">Split</span><span style="font-family:'IBM Plex Mono',monospace;color:#D8CEC4">{{ doneSplit }}</span></div>
+          <div style="height:1px;background:#241E19"></div>
+          <sc-if value="{{ doneAgainst }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#8C8076">Against bill</span><span style="font-family:'IBM Plex Mono',monospace;color:#9CC4FF">{{ doneAgainst }}</span></div>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600;color:#F3EDE6">{{ doneChangeLabel }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:700;color:#FFB07A">{{ doneChange }}</span></div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 16px 12px 16px;border-radius:12px;background:#F3EDE6">
+          <div style="width:100%;height:40px;background:repeating-linear-gradient(90deg,#100D0B 0 2px,transparent 2px 5px,#100D0B 5px 6px,transparent 6px 9px,#100D0B 9px 12px,transparent 12px 14px)"></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#100D0B">{{ doneBillNo }}</div>
+          <div style="font-size:11px;color:#6B6058;text-align:center">Printed on every bill — scan it to bring anything back.</div>
+        </div>
+
+        <div style="display:flex;gap:9px">
+          <button onClick="{{ reprint }}" style="flex:1;height:44px;border-radius:11px;border:1px solid #2E2720;background:#1F1915;color:#D8CEC4;font-size:13.5px;font-weight:600;cursor:pointer">Print again</button>
+          <button onClick="{{ newBill }}" style="flex:1.4;height:44px;border-radius:11px;border:0;background:#FF7A45;color:#1A0E07;font-size:14.5px;font-weight:700;cursor:pointer">Next bill · Enter</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:11px;background:#241E19;border:1px solid #3A2F27;font-size:13px;font-weight:600;color:#F3EDE6;z-index:60;animation:pop .12s ease-out;box-shadow:0 12px 30px rgba(0,0,0,.5)">{{ toast }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;storeName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Banka&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;defaultSalesman&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;Ravi Kumar&quot;,&quot;Sunita Devi&quot;,&quot;Amit Raj&quot;,&quot;Pooja Sharma&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behaviour&quot;},&quot;showQuickScan&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behaviour&quot;},&quot;showShortcutHints&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behaviour&quot;}}">
+const CATALOG = {
+  "BB-BLAZ-NVY-40": { name: "Slim Blazer", brand: "Blackberrys", size: "40", rate: 5999, gst: 18 },
+  "LP-SHRT-WHT-39": { name: "Oxford Shirt", brand: "Louis Philippe", size: "39", rate: 2499, gst: 12 },
+  "AS-JEAN-IND-32": { name: "Slim Jeans", brand: "Allen Solly", size: "32", rate: 3299, gst: 12 },
+  "VH-TSHT-BLK-M":  { name: "Crew Neck Tee", brand: "Van Heusen", size: "M", rate: 1299, gst: 5 },
+  "PE-KURT-BEI-L":  { name: "Linen Kurta", brand: "Peter England", size: "L", rate: 1899, gst: 5 },
+  "RM-TROU-CHR-34": { name: "Chino Trouser", brand: "Raymond", size: "34", rate: 2799, gst: 12 },
+  "BB-BELT-BRN-36": { name: "Leather Belt", brand: "Blackberrys", size: "36", rate: 1499, gst: 18 }
+};
+const CUSTOMERS = { "9835012211": "Sunita Devi", "9905477310": "Rakesh Prasad" };
+const inr = n => "\u20B9" + Math.round(n).toLocaleString("en-IN");
+
+const PAST_BILLS = [
+  { short: "1041", no: "26-27/BANKA/SAL/1041", date: "28 Jul 2026", cust: "Sunita Devi", mobile: "9835012211", sp: "Ravi Kumar",
+    items: [{ code: "BB-BLAZ-NVY-40", qty: 1, discPer: 600, returned: 0 }, { code: "LP-SHRT-WHT-39", qty: 2, discPer: 0, returned: 0 }, { code: "BB-BELT-BRN-36", qty: 1, discPer: 0, returned: 1 }] },
+  { short: "1038", no: "26-27/BANKA/SAL/1038", date: "26 Jul 2026", cust: "Rakesh Prasad", mobile: "9905477310", sp: "Sunita Devi",
+    items: [{ code: "AS-JEAN-IND-32", qty: 2, discPer: 300, returned: 0 }, { code: "VH-TSHT-BLK-M", qty: 3, discPer: 0, returned: 0 }] },
+  { short: "1032", no: "26-27/BANKA/SAL/1032", date: "21 Jul 2026", cust: "Walk-in", mobile: "", sp: "Amit Raj",
+    items: [{ code: "PE-KURT-BEI-L", qty: 1, discPer: 0, returned: 0 }, { code: "RM-TROU-CHR-34", qty: 1, discPer: 200, returned: 0 }] }
+];
+const billTotal = b => b.items.reduce((a, it) => a + (CATALOG[it.code].rate - it.discPer) * it.qty, 0);
+const findBill = q => {
+  const t = String(q || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!t) return null;
+  return PAST_BILLS.find(b => t === b.short || t === b.no || t === "BILL" + b.short || t.endsWith("/" + b.short)) || null;
+};
+
+class Component extends DCLogic {
+  state = {
+    lines: [], seq: 1, billNo: 1,
+    billSalesman: "", scanValue: "", scanError: null, shake: 0,
+    cash: "", upi: "", card: "", mobile: "", cname: "",
+    gstBill: false, held: [], heldPanelOpen: false,
+    online: true, mode: "sale", retBill: null, exchange: false, done: null, toast: null, touched: false
+  };
+
+  componentDidMount() {
+    this.focusScan();
+    this._key = e => {
+      const k = e.key;
+      if (k === "F2") { e.preventDefault(); this.holdBill(); }
+      else if (k === "F4") { e.preventDefault(); this.newBill(); }
+      else if (k === "F9") { e.preventDefault(); this.savePrint(); }
+      else if (k === "Escape") { e.preventDefault(); this.setState({ scanError: null }); this.focusScan(); }
+      else if (k === "Enter" && this.state.done) { e.preventDefault(); this.newBill(); }
+    };
+    window.addEventListener("keydown", this._key);
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this._key); }
+
+  focusScan = () => { setTimeout(() => { if (this.scanEl) this.scanEl.focus(); }, 20); };
+  flash = t => { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 1800); };
+
+  defaultSp = () => this.state.billSalesman || this.props.defaultSalesman || "";
+
+  err = (title, hint) => {
+    this.setState(s => ({ scanValue: "", scanError: { title, hint }, shake: s.shake + 1 }));
+    this.focusScan();
+  };
+
+  loadBill = b => {
+    const items = b.items.map((it, i) => {
+      const cat = CATALOG[it.code];
+      return { id: 900 + i, code: it.code, ...cat, kind: "return", fromBill: true, qty: 0,
+        max: it.qty - it.returned, bought: it.qty, returned: it.returned, discPer: it.discPer,
+        disc: "0", sales: b.sp, fresh: 0 };
+    });
+    this.setState({ retBill: b, lines: items, exchange: false, scanValue: "", scanError: null,
+      cash: "", upi: "", card: "", mobile: b.mobile, cname: b.cust === "Walk-in" ? "" : b.cust, billSalesman: b.sp });
+    this.flash("Bill " + b.short + " pulled up");
+    this.focusScan();
+  };
+
+  addCode = raw => {
+    const code = String(raw || "").trim().toUpperCase();
+    if (!code) return;
+    const s = this.state;
+
+    if (s.mode === "return" && !s.retBill) {
+      const b = findBill(code);
+      if (!b) { this.err("No bill matches “" + code + "”", "Scan the barcode at the foot of the bill, or type just the bill number."); return; }
+      this.loadBill(b); return;
+    }
+
+    if (s.mode === "return" && !s.exchange) {
+      const l = s.lines.find(x => x.fromBill && x.code === code);
+      if (!l) { this.err(code + " isn’t on bill " + s.retBill.short, "Only pieces sold on this bill can come back. Turn on exchange to add a new piece."); return; }
+      if (l.qty >= l.max) { this.err("Every piece of this line is already marked", l.returned ? l.returned + " of " + l.bought + " came back on an earlier return." : "The bill had " + l.bought + "."); return; }
+      this.patch(l.id, { qty: l.qty + 1, fresh: Date.now() });
+      this.setState({ scanValue: "", scanError: null });
+      this.focusScan(); return;
+    }
+
+    const item = CATALOG[code];
+    if (!item) { this.err("“" + code + "” isn’t in this store", "Check the tag, or press F3 to look the piece up by brand and design."); return; }
+    this.setState(st => {
+      const hit = st.lines.find(l => l.code === code && l.kind !== "return");
+      const lines = hit
+        ? st.lines.map(l => l === hit ? { ...l, qty: l.qty + 1, fresh: Date.now() } : l)
+        : [...st.lines, { id: st.seq, code, ...item, kind: "sale", qty: 1, disc: "", sales: this.defaultSp(), fresh: Date.now() }];
+      return { lines, seq: st.seq + (hit ? 0 : 1), scanValue: "", scanError: null, touched: true };
+    });
+    this.focusScan();
+  };
+
+  patch = (id, p) => this.setState(s => ({ lines: s.lines.map(l => l.id === id ? { ...l, ...p } : l) }));
+
+  lineDisc = l => l.fromBill ? (l.discPer || 0) * l.qty : Math.min(Number(l.disc) || 0, l.rate * l.qty);
+
+  calc = () => {
+    let gross = 0, disc = 0, tax = 0, net = 0, pieces = 0, back = 0;
+    this.state.lines.forEach(l => {
+      const sgn = l.kind === "return" ? -1 : 1;
+      const g = l.rate * l.qty, d = this.lineDisc(l), n = g - d;
+      gross += sgn * g; disc += sgn * d; tax += sgn * (n - n / (1 + l.gst / 100)); net += sgn * n;
+      pieces += l.qty; if (sgn < 0) back += l.qty;
+    });
+    return { gross, disc, tax, net, pieces, back };
+  };
+
+  paidSum = () => (Number(this.state.cash) || 0) + (Number(this.state.upi) || 0) + (Number(this.state.card) || 0);
+
+  holdBill = () => {
+    if (!this.state.lines.length) { this.flash("Nothing to hold"); return; }
+    const c = this.calc();
+    this.setState(s => ({
+      held: [...s.held, { id: Date.now(), lines: s.lines, who: s.billSalesman || "No salesperson", total: inr(c.net), pieces: c.pieces, time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) }],
+      lines: [], cash: "", upi: "", card: "", mobile: "", cname: "", scanError: null, retBill: null, exchange: false
+    }));
+    this.flash("Bill held");
+    this.focusScan();
+  };
+
+  resume = h => {
+    this.setState(s => ({ lines: h.lines, held: s.held.filter(x => x.id !== h.id), heldPanelOpen: false }));
+    this.focusScan();
+  };
+
+  newBill = () => {
+    this.setState(s => ({ lines: [], cash: "", upi: "", card: "", mobile: "", cname: "", scanError: null, done: null, gstBill: false, retBill: null, exchange: false, billNo: s.done ? s.billNo + 1 : s.billNo }));
+    this.focusScan();
+  };
+
+  savePrint = () => {
+    const c = this.calc(), due = Math.abs(c.net), paid = this.paidSum();
+    if (!c.pieces || paid < due) return;
+    const parts = [];
+    if (Number(this.state.cash)) parts.push("Cash " + inr(Number(this.state.cash)));
+    if (Number(this.state.upi)) parts.push("UPI " + inr(Number(this.state.upi)));
+    if (Number(this.state.card)) parts.push("Card " + inr(Number(this.state.card)));
+    const refund = c.net < 0;
+    this.setState(s => ({ done: {
+      refund,
+      title: refund ? "Refund done & printing" : (s.retBill ? "Exchange done & printing" : "Bill saved & printing"),
+      no: (refund || s.retBill ? "26-27/BANKA/RET/" : "26-27/BANKA/SAL/") + s.billNo,
+      against: s.retBill ? s.retBill.no : "",
+      paidLabel: refund ? "Refunded" : "Paid",
+      paid: inr(paid),
+      change: refund ? inr(due) : inr(paid - due),
+      changeLabel: refund ? "Back to the customer" : "Change to return",
+      split: parts.join("  ·  ") || "—"
+    } }));
+  };
+
+  renderVals() {
+    const s = this.state, c = this.calc(), paid = this.paidSum();
+    const due = Math.abs(c.net), bal = due - paid, refund = c.net < 0;
+    const ret = s.mode === "return", b = s.retBill;
+    const accent = ret ? "#6EA8FF" : "#FF7A45";
+    const noSp = s.lines.some(l => l.qty > 0 && !l.sales);
+    const canPay = c.pieces > 0 && bal <= 0 && !noSp;
+    const signed = v => (v < 0 ? "−" : "") + inr(Math.abs(v));
+
+    const lines = s.lines.map((l, i) => {
+      const isRet = l.kind === "return";
+      const g = l.rate * l.qty, d = this.lineDisc(l), n = g - d;
+      const pct = d && g ? Math.round((d / g) * 100) : 0;
+      return {
+        idx: i + 1, name: l.name, brand: l.brand, barcode: l.code, size: l.size,
+        qty: String(l.qty), rate: inr(l.rate), gst: l.gst + "%",
+        disc: l.fromBill ? (d ? "−" + inr(d) : "—") : l.disc,
+        locked: !!l.fromBill, editable: !l.fromBill,
+        dim: l.fromBill && !l.qty ? "0.5" : "1",
+        net: (isRet ? "−" : "") + inr(n), netFg: isRet ? "#9CC4FF" : "#F3EDE6",
+        tag: isRet ? "Coming back" : (ret ? "Exchange" : ""),
+        tagBg: isRet ? "#14243A" : "#152A1F", tagFg: isRet ? "#9CC4FF" : "#6FD79B",
+        note: l.fromBill ? (l.returned ? l.max + " of " + l.bought + " left · " + l.returned + " already returned" : l.bought + " on the bill") : "",
+        offer: pct >= 5 ? pct + "% off" : "",
+        anim: Date.now() - l.fresh < 700 ? "flashrow .7s ease-out" : "none",
+        discBorder: d ? "#5A4A22" : "#2E2720", discBg: d ? "#221C10" : "#1C1714", discFg: d ? "#E5C46A" : "#F3EDE6",
+        spBorder: l.sales ? "#2E2720" : "#6B4A26", spBg: l.sales ? "#1C1714" : "#241A11", spFg: l.sales ? "#D8CEC4" : "#E5B26A",
+        sales: l.sales,
+        inc: () => this.patch(l.id, { qty: l.fromBill ? Math.min(l.max, l.qty + 1) : l.qty + 1 }),
+        dec: () => l.fromBill ? this.patch(l.id, { qty: Math.max(0, l.qty - 1) })
+          : (l.qty > 1 ? this.patch(l.id, { qty: l.qty - 1 }) : this.setState(st => ({ lines: st.lines.filter(x => x.id !== l.id) }))),
+        onQty: e => {
+          const v = parseInt(e.target.value, 10) || 0;
+          this.patch(l.id, { qty: l.fromBill ? Math.max(0, Math.min(l.max, v)) : Math.max(1, v) });
+        },
+        onDisc: e => this.patch(l.id, { disc: e.target.value.replace(/[^0-9]/g, "") }),
+        onSales: e => this.patch(l.id, { sales: e.target.value }),
+        remove: () => l.fromBill ? this.patch(l.id, { qty: 0 }) : this.setState(st => ({ lines: st.lines.filter(x => x.id !== l.id) }))
+      };
+    });
+
+    const round = (v, to) => Math.ceil(v / to) * to;
+    let tenderChips = [];
+    if (due > 0) {
+      const exact = Math.round(due);
+      const seen = new Set([exact]);
+      tenderChips = [{ label: "exact", apply: () => this.setState({ cash: String(exact) }) }];
+      [100, 500, 1000, 2000].forEach(step => {
+        if (tenderChips.length >= 3) return;
+        const v = round(due, step);
+        if (seen.has(v)) return;
+        seen.add(v);
+        tenderChips.push({ label: inr(v), apply: () => this.setState({ cash: String(v) }) });
+      });
+    }
+
+    const rest = () => Math.max(0, Math.round(due - paid));
+
+    return {
+      storeName: this.props.storeName ?? "Banka",
+      showQuickScan: this.props.showQuickScan ?? true,
+      showShortcutHints: this.props.showShortcutHints ?? true,
+
+      billNo: (ret ? "26-27/BANKA/RET/" : "26-27/BANKA/SAL/") + s.billNo,
+      billStatus: ret && !b ? "Waiting for a bill" : (s.lines.length ? "Draft · saved just now" : "New bill"),
+      lines, isEmpty: !s.lines.length && !ret, needBill: ret && !b, lineCount: s.lines.length,
+      pieces: String(c.pieces), gross: signed(c.gross),
+      discountTotal: c.disc ? signed(-Math.abs(c.disc)) : "—",
+      discFg: c.disc ? "#E5C46A" : "#4A4139",
+      taxTotal: signed(c.tax),
+
+      // return against a bill
+      billLoaded: !!b,
+      retBillNo: b ? b.no : "",
+      retBillMeta: b ? b.date + " · " + b.cust + " · sold by " + b.sp : "",
+      retBillTotal: b ? inr(billTotal(b)) : "",
+      recentBills: PAST_BILLS.map(x => ({
+        no: x.no, total: inr(billTotal(x)),
+        meta: x.date + " · " + x.cust + " · " + x.items.reduce((a, it) => a + it.qty, 0) + " pcs · " + x.sp,
+        open: () => this.loadBill(x)
+      })),
+      returnAll: () => this.setState(st => ({ lines: st.lines.map(l => l.fromBill ? { ...l, qty: l.max, fresh: Date.now() } : l) })),
+      clearBill: () => { this.setState({ retBill: null, lines: [], exchange: false, cash: "", upi: "", card: "", mobile: "", cname: "", scanError: null }); this.focusScan(); },
+      toggleExchange: () => { this.setState(st => ({ exchange: !st.exchange, scanError: null })); this.focusScan(); },
+      exLabel: s.exchange ? "Scanning exchange items" : "Add exchange items",
+      exBg: s.exchange ? "#6EA8FF" : "transparent",
+      exFg: s.exchange ? "#0C1524" : "#9CC4FF",
+      exBorder: s.exchange ? "#6EA8FF" : "#2F4A6B",
+      lookupLabel: ret && !b ? "Find bill" : "Look up",
+
+      // sync
+      syncLabel: s.online ? "Synced" : "Offline · will sync",
+      syncFg: s.online ? "#6FD79B" : "#E5B26A",
+      syncBg: s.online ? "#16241C" : "#251D10",
+      syncBorder: s.online ? "#2B4A38" : "#5A4622",
+      toggleOnline: () => this.setState(st => ({ online: !st.online })),
+
+      // mode
+      tabSellBg: ret ? "transparent" : "#FF7A45", tabSellFg: ret ? "#8C8076" : "#1A0E07",
+      tabRetBg: ret ? "#6EA8FF" : "transparent", tabRetFg: ret ? "#0C1524" : "#8C8076",
+      setBillMode: () => { this.setState({ mode: "sale", lines: [], retBill: null, exchange: false, scanError: null, cash: "", upi: "", card: "" }); this.focusScan(); },
+      setReturnMode: () => { this.setState({ mode: "return", lines: [], retBill: null, exchange: false, scanError: null, cash: "", upi: "", card: "" }); this.focusScan(); },
+
+      // salesperson
+      billSalesman: s.billSalesman,
+      onBillSalesman: e => {
+        const v = e.target.value;
+        this.setState(st => ({ billSalesman: v, lines: st.lines.map(l => l.sales ? l : { ...l, sales: v }) }));
+      },
+      spBorder: s.billSalesman ? "#2E2720" : "#6B4A26",
+      spBg: s.billSalesman ? "#100D0B" : "#241A11",
+      spFg: s.billSalesman ? "#F3EDE6" : "#E5B26A",
+      showApplyAll: !!s.billSalesman && s.lines.some(l => l.sales !== s.billSalesman),
+      applyToAll: () => this.setState(st => ({ lines: st.lines.map(l => ({ ...l, sales: st.billSalesman })) })),
+
+      // scan
+      scanValue: s.scanValue,
+      scanRef: el => { this.scanEl = el; },
+      scanPlaceholder: ret
+        ? (!b ? "Scan the bill barcode, or type the bill number…" : (s.exchange ? "Scan the piece going out in exchange…" : "Scan the item coming back…"))
+        : "Scan a tag, or type a design number",
+      onScanChange: e => this.setState({ scanValue: e.target.value }),
+      onScanKey: e => { if (e.key === "Enter") { e.preventDefault(); this.addCode(e.target.value); } },
+      scanBg: s.scanError ? "#211311" : "#181310",
+      scanBorder: s.scanError ? "#7A342A" : accent,
+      scanGlow: s.scanError ? "0 0 0 4px rgba(228,87,74,.10)" : "0 0 0 4px rgba(255,122,69,.08)",
+      scanIcon: s.scanError ? "#E4574A" : accent,
+      scanDot: s.scanError ? "#E4574A" : "#6FD79B",
+      scanStateLabel: s.scanError ? "NOT FOUND" : (ret && !b ? "AWAITING BILL" : "LISTENING"),
+      scanAnim: s.scanError ? "shake .3s ease-out " + s.shake : "none",
+      scanError: !!s.scanError,
+      scanErrorTitle: s.scanError ? s.scanError.title : "",
+      scanErrorHint: s.scanError ? s.scanError.hint : "",
+      dismissError: () => { this.setState({ scanError: null }); this.focusScan(); },
+      demoCodes: (ret && !b
+        ? PAST_BILLS.map(x => "BILL " + x.short)
+        : (ret && !s.exchange ? b.items.map(it => it.code) : Object.keys(CATALOG).slice(0, 5))
+      ).map(code => ({ code, scan: () => this.addCode(code) })),
+      manualAdd: () => this.flash(ret && !b ? "Search bills by customer, mobile or date" : "Look-up by brand / design opens here"),
+
+      // held
+      held: s.held.map(h => ({ ...h, resume: () => this.resume(h) })),
+      heldCount: String(s.held.length),
+      heldEmpty: !s.held.length,
+      heldChipBg: s.held.length ? "#FF7A45" : "#2A231D",
+      heldChipFg: s.held.length ? "#1A0E07" : "#6B6058",
+      heldPanelOpen: s.heldPanelOpen,
+      toggleHeldPanel: () => this.setState(st => ({ heldPanelOpen: !st.heldPanelOpen })),
+      holdBill: this.holdBill,
+      newBill: this.newBill,
+
+      // pay
+      dueLabel: refund ? "To refund" : "To pay",
+      dueFg: refund ? "#9CC4FF" : "#F3EDE6",
+      payable: inr(due),
+      cash: s.cash, upi: s.upi, card: s.card,
+      onCash: e => this.setState({ cash: e.target.value.replace(/[^0-9]/g, "") }),
+      onUpi: e => this.setState({ upi: e.target.value.replace(/[^0-9]/g, "") }),
+      onCard: e => this.setState({ card: e.target.value.replace(/[^0-9]/g, "") }),
+      upiRest: () => this.setState({ upi: String(rest()) }),
+      cardRest: () => this.setState({ card: String(rest()) }),
+      tenderChips,
+      cashBg: Number(s.cash) ? "#231C15" : "transparent", cashIcon: Number(s.cash) ? "#FFB07A" : "#7E7268",
+      upiBg: Number(s.upi) ? "#231C15" : "transparent", upiIcon: Number(s.upi) ? "#FFB07A" : "#7E7268",
+      cardBg: Number(s.card) ? "#231C15" : "transparent", cardIcon: Number(s.card) ? "#FFB07A" : "#7E7268",
+
+      balLabel: bal > 0 ? (refund ? "Still to refund" : "Still to collect") : (bal < 0 ? "Change to return" : (c.pieces ? (refund ? "Refund settled" : "Fully paid") : "Nothing yet")),
+      balAmount: inr(Math.abs(bal)),
+      balFg: bal > 0 ? "#E5B26A" : (bal < 0 ? "#FFB07A" : (c.pieces ? "#6FD79B" : "#6B6058")),
+      balBg: bal > 0 ? "#241B10" : (c.pieces && bal <= 0 ? "#16241C" : "#191412"),
+      balBorder: bal > 0 ? "#4A3A1E" : (c.pieces && bal <= 0 ? "#2B4A38" : "#241E19"),
+
+      // customer
+      mobile: s.mobile, cname: s.cname,
+      onMobile: e => {
+        const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+        this.setState({ mobile: v, cname: CUSTOMERS[v] || (CUSTOMERS[s.mobile] === s.cname ? "" : s.cname) });
+      },
+      onCname: e => this.setState({ cname: e.target.value }),
+      knownCustomer: CUSTOMERS[s.mobile] ? "Returning customer · 4 past bills" : "",
+      gstBill: s.gstBill,
+      gstLabel: s.gstBill ? "GST / business bill — on" : "Need a GST business bill?",
+      gstBg: s.gstBill ? "#1E1813" : "transparent",
+      gstBorder: s.gstBill ? "#4A3B2A" : "#2A231D",
+      gstFg: s.gstBill ? "#FFB07A" : "#8C8076",
+      toggleGst: () => this.setState(st => ({ gstBill: !st.gstBill })),
+
+      // action
+      blockMsg: !c.pieces ? (ret && !b ? "Pull up the bill first — scan its barcode." : "") : (noSp ? "One line has no salesperson — pick who sold it." : (bal > 0 ? (refund ? "Hand back " + inr(bal) + " more to finish." : "Collect " + inr(bal) + " more to finish.") : "")),
+      payLabel: ret ? (refund ? "Refund & print" : "Exchange & print") : "Save & print",
+      payBg: canPay ? (ret ? "#6EA8FF" : "#FF7A45") : "#2A231D",
+      payFg: canPay ? (ret ? "#0C1524" : "#1A0E07") : "#5C534B",
+      payCursor: canPay ? "pointer" : "not-allowed",
+      payDisabled: !canPay,
+      savePrint: this.savePrint,
+      reprint: () => this.flash("Sent to the counter printer"),
+
+      // done
+      done: !!s.done,
+      doneTitle: s.done ? s.done.title : "",
+      doneBillNo: s.done ? s.done.no : "",
+      doneAgainst: s.done ? s.done.against : "",
+      donePaidLabel: s.done ? s.done.paidLabel : "",
+      donePaid: s.done ? s.done.paid : "",
+      doneSplit: s.done ? s.done.split : "",
+      doneChange: s.done ? s.done.change : "",
+      doneChangeLabel: s.done ? s.done.changeLabel : "",
+
+      toast: s.toast
+    };
+  }
+}
+
+</script>
+</body>
+</html>

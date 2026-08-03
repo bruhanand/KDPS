@@ -1,0 +1,881 @@
+/* Billing (#181, revamped to a fixed one-screen frame by #243; two-column
+   CSS grid by this branch). House tokens only - no colour is spelled out here,
+   so the dark theme's one override block keeps working without touching this file.
+
+   The frame (G-2): `.bill-page` is a two-row × two-column CSS grid.
+   Row 1: BillBar spanning both columns (grid-column 1/-1).
+   Row 2: left column is the scrolling work area; right column is the payment
+   rail, which is a flex column pinned to the same row height with no
+   independent scrollbar at 1366×768. Below 1280px the grid collapses to a
+   single column and the page scrolls normally again (G-2). */
+
+.bill-page {
+  /* Two-row × two-column grid. Row 1 = BillBar (full width). Row 2 = work
+     area (left, scrolls) + payment rail (right, fixed). No padding-right
+     compensation: the rail is a real grid child, not an overlay.
+     Height equals `.content`'s box exactly so `.content` never scrolls. */
+  height: calc(100dvh - var(--topbar-h));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 352px;
+  overflow: hidden;
+  width: 100%;
+  max-width: none;
+  padding: 0 0 0 16px;
+}
+
+/* The BillBar spans the full width across both columns. */
+.bill-bar { grid-column: 1 / -1; }
+
+/* The work area and the rail share row 2 side by side.
+   Both are flex columns pinned to 100% of row 2's height with overflow: hidden. */
+.bill-lines {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+.bill-pay {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--hairline);
+  padding-bottom: 12px;
+}
+
+/* The rail body takes remaining space above RailFoot and scrolls if needed. */
+.bill-rail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The counter's top area (ScanHero + alerts) stays fixed at top of work area. */
+.bill-top { flex: 0 0 auto; min-height: 0; margin-bottom: 12px; }
+
+/* BillBar: spans full width (grid-column: 1/-1 above). 16px 24px padding,
+   16px between major groups, 8px within controls (spec §Counter frame). */
+.bill-bar-inner {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 24px; border-bottom: 1px solid var(--hairline);
+  padding-right: 24px; /* right edge has its own 24px, not the work area's 16px */
+}
+.bill-mode { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 9px; }
+.bill-mode-button {
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  padding: 6px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.bill-mode-button.is-active { background: var(--navy-fill); color: #fff; }
+.bill-mode-button:disabled { cursor: not-allowed; opacity: .55; }
+/* Mode+identity group, separated from Sold-by by a vertical divider. */
+.bill-bar-left { display: flex; align-items: center; gap: 8px; }
+.bill-bar-divider { width: 1px; height: 28px; background: var(--hairline); flex-shrink: 0; }
+.bill-identity { display: flex; flex-direction: column; min-width: 136px; gap: 1px; font-size: 12.5px; }
+.bill-identity strong { color: var(--ink); }
+/* Sold-by as a self-contained field (label + select). */
+.bill-sold-by-field { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.bill-sold-by-field .select { min-width: 120px; padding: 6px 8px; font-size: 12.5px; }
+.bill-bar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.bill-bar-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.bill-scan-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.bill-page[data-mode="return"] {
+  --navy: var(--counter-return-blue, var(--blue));
+  --navy-fill: var(--counter-return-blue, var(--blue));
+  --navy-fill-hover: var(--counter-return-blue, var(--blue));
+}
+.bill-page[data-mode="return"] .bill-mode-button.is-active { background: var(--counter-return-blue, var(--blue)); }
+.bill-page[data-mode="return"] .scan-hero-input-wrap { border-color: var(--counter-return-blue, var(--blue)); }
+
+/* The input stays the wedge scanner's same controlled input; only its visual
+   shell changes. Keeping it full-height makes the 60px target easy to hit
+   without widening the header band. */
+.scan-hero { padding: 14px 0 12px; }
+.scan-hero-row { display: flex; gap: 10px; align-items: stretch; }
+.scan-hero-input-wrap {
+  min-width: 0; flex: 1; height: 60px; display: flex; align-items: center; gap: 13px;
+  padding: 0 17px; border: 2px solid var(--navy-fill); border-radius: 12px;
+  color: var(--navy-fill); background: var(--inner); box-shadow: 0 0 0 3px var(--hairline);
+}
+.scan-hero-input {
+  min-width: 0; flex: 1; height: 100%; border: 0; outline: 0; background: transparent;
+  color: var(--ink); font-size: 18px; font-weight: 500;
+}
+.scan-hero-input::placeholder { color: var(--muted); }
+.scan-hero-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; white-space: nowrap; }
+.scan-hero-state-ring { width: 7px; height: 7px; border-radius: 50%; background: var(--navy-fill); box-shadow: 0 0 0 3px var(--hairline); }
+.scan-hero-lookup { width: 106px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.scan-hero-lookup small { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.scan-hero.is-error .scan-hero-input-wrap { border-color: var(--red); color: var(--red); box-shadow: 0 0 0 3px var(--red-bg); animation: bill-scan-shake .22s ease-in-out; }
+.scan-hero.is-error .scan-hero-state-ring { background: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+.scan-hero-error { margin-top: 9px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--red-bd); border-radius: 10px; color: var(--red); background: var(--red-bg); }
+.scan-hero-error > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.scan-hero-error strong { font-size: 13px; }
+.scan-hero-error small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.scan-hero-error-icon { width: 20px; height: 20px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--red); color: var(--paper); }
+.scan-hero-error .btn { flex: 0 0 auto; }
+.scan-hero-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
+.scan-hero-demo > span { color: var(--caption); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.scan-hero-demo button { border: 1px solid var(--hairline); border-radius: 7px; background: var(--surface); color: var(--muted); padding: 4px 8px; font: 11px var(--mono); cursor: pointer; }
+@keyframes bill-scan-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* The autosave indicator (#244) - quiet on purpose, beside the bill number
+   rather than a banner of its own: a bill that autosaves continuously has
+   nothing to announce loudly, only something to confirm is happening. */
+.bill-draft-saved { font-weight: 400; }
+
+.bill-alert {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--amber);
+  border-radius: 10px; padding: 10px 13px; font-size: 13px; margin: 0 0 16px;
+}
+
+/* A scan that found nothing (#186). It sits above the suggestion list because
+   the two are one question asked in the right order: "did you mean one of
+   these?" first, "bill it off the tag" second. Floating (#243, G-4) - see
+   `.bill-float` - so the two keep their own spacing but neither carries the
+   bottom margin a stacked banner needed. */
+.bill-unknown { padding: 14px 16px; }
+/* The message is one wrapping text block, not four flex items (icon, three
+   text runs split by the barcode span) - `.bill-float`'s 380px is narrower
+   than the full page width this banner used to stack across, and letting the
+   sentence itself be a flex item put its icon, its first clause and its
+   barcode in three side-by-side columns instead of one wrapped paragraph. */
+.bill-unknown-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 0 10px; font-size: 13px; color: var(--amber);
+}
+.bill-unknown-note svg { flex-shrink: 0; margin-top: 2px; }
+.bill-unknown-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.bill-unknown .muted-cell { font-size: 11.5px; }
+
+/* The counter itself cannot bill (#189) - data cleared, or a second window on
+   one till. Red rather than the amber every other banner on this page wears: it
+   is the only one that means "nothing below this works". Rule 5 says
+   collapsing alerts to one line must not soften this case, so it is not one of
+   the alert-strip banners at all - `.bill-blocked-area` below is `.bill-work`'s
+   entire content instead of a line above it. */
+.bill-alert-stop {
+  background: var(--red-bg); border-color: var(--red-bd); color: var(--red);
+}
+
+/* The full-band takeover (#243, AC4): the work area's only content while
+   `till.blocked`, in place of the grid and the rail. */
+.bill-blocked-area {
+  grid-column: 1 / -1;
+  height: 100%; margin: 0; padding: 40px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  text-align: center; font-size: 15.5px;
+}
+
+/* Keying a printed bill back in after a register handover (#189). Deliberately
+   not an alert: nothing is wrong, this is a job somebody was sent here to do. */
+.bill-paper {
+  display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  background: var(--band-edge-bg); border: 1px solid var(--band-edge-bd); color: var(--ink);
+  border-radius: 10px; padding: 12px 14px; font-size: 13px; margin: 0 0 16px;
+}
+.bill-paper > div:first-child { flex: 1 1 320px; }
+.bill-paper .field { margin: 0; }
+.bill-paper .input { width: 220px; }
+.bill-paper .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+.bill-suggest { padding: 14px 16px; }
+.bill-suggest-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.bill-suggest-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; text-align: left; font-weight: 500;
+}
+
+/* "Did you mean" and "bill it off the tag" (#243, G-4: "nothing pushes the
+   layout"). Portaled to `document.body` and placed by
+   `usePositionedPopover(..., "below")`, hanging under the scan box rather
+   than over the grid it used to sit inline above - a fixed width because a
+   portaled node answers to no parent's column width, only the viewport's. */
+/* Barcodes are non-unique scan-aliases by design (CONTEXT.md), so a collision
+   can put more candidate rows here than a short viewport has room for below
+   the scan box - `position: fixed` ignores page scroll, so without its own
+   scrollbar the lower rows would be there but unreachable (round-2 finding).
+   The cap has to be an inline style (`scanFloat.at.maxHeight`), not a CSS
+   `100vh` rule: the float starts at `scanBox.bottom`, which moves with the
+   top strip's own height, and a `vh`-only formula can't see that offset -
+   it let the panel run past the bottom of a short viewport uncapped
+   (round-3 finding). */
+.bill-float {
+  position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 32px);
+  overflow-y: auto;
+}
+.bill-float > * + * { margin-top: 10px; }
+
+/* Return mode (#273): bill discovery stays attached to the scanner, and the
+   bill itself lives in the one scrolling line band. */
+.return-customer-float { width: 680px; }
+.return-customer-search {
+  padding: 16px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow-lift);
+}
+.return-customer-head,
+.return-customer-form,
+.return-customer-row,
+.return-against-head,
+.return-exchange-switch,
+.return-exchange-switch label {
+  display: flex; align-items: center; gap: 10px;
+}
+.return-customer-head { justify-content: space-between; margin-bottom: 12px; }
+.return-customer-head > div { display: flex; flex-direction: column; gap: 2px; }
+.return-offline { color: var(--amber); font-size: 11px; font-weight: 700; }
+.return-customer-form .input { min-width: 0; flex: 1; }
+.return-customer-form .btn { display: inline-flex; align-items: center; gap: 6px; }
+.return-customer-results { max-height: 280px; overflow-y: auto; margin-top: 10px; }
+.return-known-customers { margin-top: 12px; }
+.return-known-customers > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.return-known-customers .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.return-known-customers small { color: var(--muted); }
+.return-customer-row {
+  width: 100%; justify-content: space-between; padding: 10px 8px;
+  border: 0; border-top: 1px solid var(--hairline); background: transparent;
+  color: var(--ink); text-align: left; cursor: pointer;
+}
+.return-customer-row:hover { background: var(--inner); }
+.return-customer-row > span { display: flex; flex-direction: column; gap: 2px; }
+.return-customer-row > span:last-child { align-items: flex-end; white-space: nowrap; }
+.return-customer-row small { color: var(--muted); }
+
+.return-against {
+  margin-bottom: 12px; overflow: hidden; border: 1px solid var(--hairline);
+  border-radius: 12px; background: var(--surface);
+}
+.return-against-head { padding: 12px 14px; background: var(--inner); }
+.return-against-head > div:first-child { display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.return-against-value { display: flex; flex-direction: column; align-items: flex-end; }
+.return-against-value > span { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.return-against-value strong { font: 600 17px/1.2 var(--mono); }
+.return-against-actions { display: flex; gap: 6px; }
+.return-against-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+.return-against > .warn-note { margin: 10px 14px; }
+.return-lines-wrap { overflow-x: auto; }
+.return-lines { width: 100%; border-collapse: collapse; font-size: 12px; }
+.return-lines th { padding: 8px 7px; background: var(--inner); color: var(--caption); font-size: 9px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+.return-lines td { padding: 8px 7px; border-top: 1px solid var(--hairline); }
+.return-lines .num { text-align: right; white-space: nowrap; }
+.return-lines td:first-child strong,
+.return-lines td:first-child small { display: block; }
+.return-lines td:first-child small { margin-top: 2px; color: var(--muted); }
+.return-lines tr.is-unmarked { opacity: .48; }
+.return-lines tr.is-marked { background: var(--blue-bg); }
+.return-lines input.bill-cell { width: 46px; text-align: right; }
+.return-lines select.bill-cell { min-width: 112px; }
+.return-lines td small { color: var(--muted); font-size: 9px; }
+.return-exchange-switch { justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--hairline); background: var(--inner); }
+.return-exchange-switch label { cursor: pointer; }
+.return-exchange-switch label > span { display: flex; flex-direction: column; }
+.return-exchange-switch small { color: var(--muted); }
+
+/* Bills on hold (#185). A panel above the grid rather than a drawer or a modal:
+   picking one up replaces what is on the counter, so the cashier should be able
+   to see both at once before choosing. Lives inside `.bill-lines` (#243) - the
+   one band that scrolls - rather than pushing the rail or the footer. */
+.bill-holds { padding: 14px 16px; margin-bottom: 16px; }
+.bill-holds-blocked { display: block; margin-top: 6px; color: var(--amber); }
+.bill-holds-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bill-hold-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 9px 12px;
+}
+.bill-hold-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bill-hold-name { font-weight: 600; font-size: 13.5px; }
+.bill-hold-who .muted-cell { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
+.bill-hold-money { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.bill-hold-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bill-alert .btn { margin-left: auto; }
+
+/* A flagged draft (#244) offers two answers, not one - `.bill-alert .btn`'s
+   own `margin-left: auto` would push both to the right independently and
+   spread them apart, so they are grouped and pushed as one instead. */
+.bill-pending-draft-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.bill-pending-draft-actions .btn { margin-left: 0; }
+
+.bill-work { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.bill-empty {
+  display: block; padding: 40px 0; text-align: center; font-size: 14px;
+  border: 1px dashed var(--hairline); border-radius: var(--radius);
+}
+
+/* Twelve columns is what staff read today (D10 §4), so the grid is tuned to
+   carry all twelve on a counter screen rather than to look roomy: none of them
+   may fall off the right-hand edge, least of all Net. */
+/* `table.data th` is more specific than `.bill-grid th`, so the padding has to
+   be written to out-weigh it or the generic 18px gutter keeps twelve columns
+   from fitting. */
+.bill-grid { font-size: 12.5px; table-layout: fixed; width: 100%; }
+table.data.bill-grid th { padding: 9px 7px; }
+table.data.bill-grid td { vertical-align: top; padding: 8px 7px; }
+/* Sticky column header (#243, design.md: "the line list is the only
+   overflow-y: auto, with position: sticky column headers"). `position: sticky`
+   is contained by the nearest ancestor with its own scroll box, which by the
+   generic `.table-wrap { overflow: auto }` (index.css) would be `.bill-grid-wrap`
+   itself - a box that never actually scrolls here, since `.bill-lines` around
+   it does. Sticky against a box that never scrolls just sits still, so this
+   scopes the grid's own wrap back to `overflow: visible`, making
+   `.bill-lines` the scrolling ancestor sticky measures against - scoped to
+   `.bill-grid-wrap` alone (BillGrid.tsx) rather than every `.table-wrap` in
+   `.bill-lines`, so the exchange table above it keeps its own rounded corners
+   and scroll safety net. Safe at the frame's own floor (1280px and up): the
+   twelve columns are sized in fixed percentages precisely so the grid never
+   needs its own horizontal scrollbar there (the comment above). Below that
+   floor the frame gives way and this reverts (media query, bottom of file).
+   `.table-wrap.bill-grid-wrap`, not `.bill-grid-wrap` alone: both classes are
+   on the one element (BillGrid.tsx), and a bare `.bill-grid-wrap` ties with
+   `.table-wrap` on specificity - same trap as `table.data th` above, same
+   answer, this time the loser was whichever file's bundle chunk happened to
+   land second rather than which rule "should" win by reading order. */
+.table-wrap.bill-grid-wrap { overflow: visible; }
+table.data.bill-grid thead th { position: sticky; top: 0; z-index: 2; }
+/* Figures never break: "₹3,4 / 99" over two lines is not money. Words may. */
+.bill-grid td.num, .bill-grid th.num { white-space: nowrap; }
+.bill-grid .muted-cell { font-size: 11px; }
+.bill-barcode { font-size: 11px; overflow-wrap: anywhere; }
+/* Element-qualified on purpose. A bare `.bill-cell` ties with the app's generic
+   `.input` - both are one class - so the winner is whatever the bundler happens
+   to emit last, and when `.input` won, its 15px text and 14px side padding did
+   not fit a column this narrow: "1499" rendered as "149" in the box a cashier
+   reads a price out of. Same trap as `table.data th` above, same answer.
+   `min-width` is nought because `table-layout: fixed` sets the widths here; a
+   floor on the input would push the column wider than its share. */
+input.bill-cell,
+select.bill-cell {
+  width: 100%; min-width: 0; padding: 4px 6px; font-size: 12.5px;
+}
+.bill-grid td.num .bill-cell { text-align: right; }
+select.bill-season { min-width: 0; }
+/* Which slab the line was taxed at (#247, grill Q7) - "a quiet badge", so it is
+   a wash and a hairline rather than a colour that means something. The three
+   status colours on this screen are all warnings (`.bill-overcap` red,
+   `.bill-offer` green), and a rate is neither good nor bad news. */
+.bill-gst-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  color: var(--muted); background: var(--inner); border: 1px solid var(--hairline);
+}
+
+.bill-overcap {
+  display: block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--red);
+}
+/* The offers on a strip of their own under each line, spanning the grid, with
+   no top border so it reads as part of the line above rather than as a line in
+   its own right. Tokens only - no literal colours - so the dark theme inherits
+   it with no second rule, per that theme's one standing constraint.
+
+   The strip is here because the chips were in the Disc column first, and that
+   column is sixty pixels wide. It holds "₹1,049.70" and nothing longer, and it
+   is a `td.num` - `white-space: nowrap`, so that "₹3,4 / 99" can never break
+   across two lines. A rule's *name* is not a figure: left nowrap it did not
+   wrap, it printed straight across the GST and salesman columns; wrapped, it
+   broke to one syllable a line and stood up as a tall thin column. Browser QA
+   found both. A rule is the one thing on this row a cashier reads aloud to a
+   customer asking why the shirt is cheaper, so it gets width to be read in. */
+.bill-grid tr.bill-offer-row td {
+  padding-top: 0; padding-bottom: 10px; border-top: 0; white-space: normal;
+}
+.bill-offer {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; line-height: 1.6;
+  white-space: normal; overflow-wrap: break-word;
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+
+/* The re-cut grid is a card, not a generic data table: item identity has room
+   to breathe, while quantities and money retain their fixed scan-line rhythm. */
+.bill-grid-card { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; }
+.bill-grid-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.bill-grid-card .bill-grid { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; border-spacing: 0; font-size: 12px; }
+.bill-grid-card .bill-grid th { position: sticky; top: 0; z-index: 2; padding: 9px 6px; background: var(--inner); color: var(--caption); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; text-align: left; }
+.bill-grid-card .bill-grid td { padding: 10px 6px; vertical-align: middle; border-top: 1px solid var(--hairline); }
+.bill-grid-card .bill-grid .num { text-align: right; white-space: nowrap; }
+.bill-line-number { color: var(--caption); font-family: var(--mono); text-align: center; }
+.bill-grid-card .bill-grid td:nth-child(2) { min-width: 0; }
+.bill-grid-card .bill-grid td:nth-child(3) { color: var(--muted); }
+.bill-grid-card input.bill-cell, .bill-grid-card select.bill-cell { height: 28px; padding: 3px 5px; font-size: 12px; }
+.bill-item-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.bill-grid-card .bill-grid td:nth-child(2) > :first-child { display: block; overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.bill-item-meta > span { overflow: hidden; text-overflow: ellipsis; }
+.bill-item-meta > span:first-child { flex: 1 1 28px; }
+.bill-item-meta .bill-barcode { flex: 0 0 auto; overflow: visible; }
+.bill-item-meta .bill-offer, .bill-item-meta .bill-tag { flex: 0 0 auto; overflow: visible; }
+.bill-item-meta .bill-offer, .bill-tag { margin: 0; padding: 1px 5px; border-radius: 5px; font-size: 9px; line-height: 1.35; text-transform: uppercase; }
+.bill-tag { color: var(--muted); background: var(--inner); border: 1px solid var(--hairline); font-weight: 700; }
+.bill-size-fold { display: none; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.bill-qty-stepper { display: inline-flex; align-items: center; justify-content: flex-end; }
+.bill-qty-stepper button { width: 22px; height: 28px; padding: 0; border: 1px solid var(--hairline); background: var(--inner); color: var(--ink); font: 15px/1 inherit; cursor: pointer; }
+.bill-qty-stepper button:first-child { border-radius: 6px 0 0 6px; }
+.bill-qty-stepper button:last-child { border-radius: 0 6px 6px 0; }
+.bill-qty-stepper input.bill-cell { width: 32px; border-radius: 0; border-left: 0; border-right: 0; text-align: center; }
+.bill-discount-carrying input { border-color: var(--amber-bd); background: var(--amber-bg); color: var(--amber); font-weight: 700; }
+.bill-net-tax { display: flex; justify-content: flex-end; align-items: center; gap: 3px; margin-top: 2px; color: var(--caption); font-size: 9.5px; }
+.bill-net-tax .bill-gst-badge { padding: 0 4px; font-size: 9px; }
+select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--amber-bg); color: var(--amber); }
+.bill-grid-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--hairline); background: var(--inner); }
+.bill-grid-totals { min-width: 0; flex: 1; }
+.bill-grid-footer .bill-totals { gap: 16px; flex-wrap: nowrap; overflow-x: auto; }
+.bill-grid-footer .bill-figure { flex: 0 0 auto; font-size: 12.5px; }
+.bill-grid-footer .bill-figure-label { font-size: 9.5px; }
+.bill-grid-footer .bill-figure-strong { font-size: 15px; }
+.bill-grid-undo { flex: 0 0 auto; }
+.bill-empty { height: 100%; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px; border: 0; border-radius: 0; color: var(--muted); }
+.bill-empty strong { color: var(--ink); font-size: 16px; }
+.bill-empty > span:last-child { max-width: 330px; text-align: center; line-height: 1.5; }
+.bill-empty-barcode { color: var(--caption); font-family: var(--mono); font-size: 26px; letter-spacing: 2px; }
+
+/* The rail: now a true CSS grid child (column 2, row 2) rather than an
+   absolute overlay. No independent scrollbar target at 1366×768: payment
+   and customer sections are trimmed to fit within row-2 height. Below 1280px
+   the column collapses and the rail stacks below the work area (media query
+   at the bottom of this file). */
+.bill-pay {
+  display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--hairline); background: var(--sidebar);
+}
+.bill-rail-body {
+  flex: 1; min-height: 0; overflow-y: visible; padding: 16px 16px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.bill-panel { padding: 14px 16px; }
+.bill-panel .field { margin-top: 10px; }
+.bill-panel .muted-cell { display: block; margin-top: 10px; font-size: 12px; }
+.bill-payment-heading { padding: 0; }
+.bill-payment-heading .eyebrow { margin: 0; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
+.bill-due { font: 600 40px/1.1 var(--mono); letter-spacing: -.03em; color: var(--ink); margin: 4px 0 0; }
+.bill-page[data-mode="return"] .bill-due { color: var(--counter-return-blue, var(--blue)); }
+/* A connected rail tile: one border wraps multiple sections separated by
+   internal hairline dividers (spec §Payment and customer rail). */
+.bill-rail-tile { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--inner); box-shadow: var(--shadow-rest); }
+.bill-tile-divider { margin: 0; border: 0; border-top: 1px solid var(--hairline); }
+/* Payment tile: single connected card, internal dividers only. */
+.bill-payment-tile { /* no top margin: rail-body gap handles spacing */ }
+/* The payment panel: three incoming modes, separated by .bill-tile-divider. */
+.bill-payment-stack { display: flex; flex-direction: column; }
+/* Individual tender rows are no longer separate cards; they sit inside the
+   shared tile and are separated only by its internal dividers. */
+.bill-payment-method { background: transparent; box-shadow: none; }
+.bill-tender { display: grid; grid-template-columns: minmax(0, 1fr) auto 104px; align-items: center; gap: 8px; padding: 10px 12px; }
+/* Cash, its chips and the cash-received box read as one block (#246): they are
+   three parts of one question - how much of this bill is cash, what did the
+   customer hand over, what goes back - and grouping them is what let the panel
+   drop the separate "Cash received" field and "Change" row that were sitting at
+   the bottom, well away from the row they belong to. */
+.bill-cash-block { display: flex; flex-direction: column; }
+/* Cash received is a note to self about the drawer, not a tender: it is indented
+   under Cash and set quieter, so an eye running down the amounts reads three
+   tenders, not four. */
+.bill-tender.is-quiet { padding-left: 24px; }
+.bill-cash-block .bill-tender.is-quiet { border-top: 1px solid var(--hairline); }
+.bill-tender.is-quiet > label { font-size: 12px; font-weight: 500; color: var(--caption); }
+.bill-tender > label {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.bill-tender-icon { display: inline-flex; color: var(--muted); }
+.bill-tender-action { display: inline-flex; justify-content: flex-end; }
+.bill-tender-rest { height: 26px; padding: 0 9px; color: var(--muted); font-size: 11px; font-weight: 600; }
+/* "the rest" beside the cash label, where the panel's other hints sit under a
+   block. It has to stay on the label's own line, so the panel-wide rule that
+   drops `.muted-cell` onto its own line is undone here. */
+.bill-tender > label .muted-cell {
+  display: inline; margin: 0; font-size: 11.5px; font-weight: 500;
+}
+.bill-tender .bill-cell { text-align: right; }
+.bill-payment-method .bill-cell {
+  height: 32px; padding: 0 10px; border-color: var(--sidebar-border);
+  border-radius: 9px; background: var(--field-bg); font-size: 15px; font-weight: 600;
+}
+
+/* The quick-cash chips (#246, grill Q4). Indented to the same rule as the
+   cash-received row above, so the whole cash block hangs off the Cash label.
+   They wrap rather than shrink: "₹4,848" is a figure a cashier reads at a
+   glance and a chip that clipped it would be worse than no chip. */
+.bill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.bill-chip {
+  display: inline-flex; flex: 1; min-height: 29px; align-items: baseline; justify-content: center; gap: 5px;
+  padding: 4px 7px; border-color: var(--sidebar-border); background: transparent;
+  font-size: 12px; font-weight: 600;
+}
+.bill-chip-tag {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--caption);
+}
+
+/* The one balance line (#246). It says exactly one thing at a time, because the
+   two rows it replaced were both on screen reading ₹0 for most of a bill's
+   life, which teaches a cashier to stop looking at the one number that matters.
+   Which of the five states it is in is `balanceStandingOf`'s decision (tender.ts,
+   where it has tests); this only paints them. Tokens only, per the dark theme's
+   standing constraint.
+
+   Three of the five are red, and they get three class names rather than one
+   shared one: `short`, `over` and `stranded` are different problems with
+   different fixes, and a class called `is-short` on an over-tendered bill would
+   be a lie the next person reading the DOM has to unpick. */
+.bill-balance-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  margin: 14px 0 0; padding: 12px 14px; border-radius: 12px;
+  font-size: 14px; font-weight: 700;
+}
+.bill-balance-line.is-over,
+.bill-balance-line.is-stranded {
+  color: var(--red); background: var(--red-bg); border: 1px solid var(--red-bd);
+}
+.bill-balance-line.is-short {
+  color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-bd);
+}
+/* The one red state whose words are a sentence rather than a label, so it is the
+   one that needs room to wrap in a 340px rail. */
+.bill-balance-line.is-stranded { font-size: 13px; align-items: center; }
+.bill-balance-line.is-change {
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+.bill-balance-line.is-settled {
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+  font-weight: 600;
+}
+.bill-balance-line [data-testid="bill-balance"] { font: 700 19px/1 var(--mono); }
+
+/* The customer section: joined to the payment tile as a footer row within the
+   same .bill-rail-tile, separated by a .bill-tile-divider. */
+.bill-customer-card { padding-top: 14px; border-top: 1px solid var(--hairline); }
+.bill-customer-heading { display: flex; align-items: baseline; gap: 8px; padding: 0; }
+.bill-customer-heading .eyebrow { margin: 0; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
+.bill-customer-heading > span { color: var(--caption); font-size: 11px; }
+.bill-customer-tile { margin-top: 9px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+.bill-customer-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); gap: 8px; margin: 0; }
+.bill-customer-fields .field { position: relative; margin: 0; }
+.bill-customer-fields .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.bill-customer-fields .input {
+  height: 42px; border: 1px solid var(--sidebar-border); border-radius: 10px;
+  background: transparent; padding: 9px 12px; font-size: 13.5px;
+}
+/* The disclosure itself - quiet, because on most bills the answer is no. */
+.bill-business-toggle {
+  width: 100%; min-height: 38px; margin: 8px 0 0; padding: 6px 12px;
+  justify-content: flex-start; border: 1px solid var(--sidebar-border); border-radius: 10px;
+  background: transparent; text-align: left;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+/* The card's last word, and the one thing on it that is not a control: no
+   bottom margin, because a paragraph's default one is a card's worth of
+   padding again. */
+.bill-customer-tile .bill-customer-note { margin: 8px 0 0; font-size: 12px; }
+.bill-known-customer { display: flex; align-items: center; gap: 7px; margin: 9px 0 0; color: var(--green); font-size: 12px; }
+.bill-known-customer > span { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+/* The sale is already durable when this lands. It takes over the counter so a
+   second customer cannot be added behind a saved bill; Enter is its one key. */
+.bill-finish-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
+  padding: 24px; background: var(--scrim-modal); backdrop-filter: blur(5px);
+}
+.bill-finish {
+  width: min(720px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+  border: 1px solid var(--hairline); border-radius: 18px; background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.bill-finish-head { display: flex; align-items: center; gap: 14px; padding: 22px 24px 16px; }
+.bill-finish-head h2 { margin: 2px 0; font-size: 24px; }
+.bill-finish-head p { margin: 0; }
+.bill-finish-check {
+  flex: 0 0 auto; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 50%; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+.bill-finish-print-problem { margin: 0 24px 16px; }
+.bill-finish-body { display: grid; grid-template-columns: 1fr 1.25fr; gap: 18px; padding: 0 24px 22px; }
+.bill-finish-payment, .bill-finish-barcode { border: 1px solid var(--hairline); border-radius: 12px; background: var(--inner); }
+.bill-finish-paid { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px; }
+.bill-finish-paid strong { font: 600 23px/1 var(--mono); }
+.bill-finish-split { border-top: 1px solid var(--hairline); padding: 8px 14px; }
+.bill-finish-split > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; color: var(--muted); }
+.bill-finish-split .bill-finish-change { margin-top: 5px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--green); }
+.bill-finish-barcode { display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 14px; text-align: center; }
+.bill-finish-barcode svg { display: block; width: 100%; height: 74px; fill: var(--ink); }
+.bill-finish-barcode > strong { overflow-wrap: anywhere; }
+.bill-finish-barcode > span { color: var(--muted); font-size: 11px; }
+.bill-finish-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--hairline); }
+.bill-finish-actions .btn { min-width: 140px; justify-content: center; }
+.bill-finish-actions kbd { margin-left: 8px; padding: 2px 6px; border: 1px solid currentColor; border-radius: 4px; font: 10px/1 var(--mono); opacity: .72; }
+
+@media (max-width: 680px) {
+  .bill-finish-body { grid-template-columns: 1fr; }
+  .bill-finish-actions { flex-direction: column-reverse; }
+  .bill-finish-actions .btn { width: 100%; }
+}
+
+/* The phone book, under the mobile field (#249, Q11: nothing pushes the
+   layout). Portaled to `document.body` and placed by `usePositionedPopover`,
+   which here is load-bearing twice: the rail is a scroll box of its own and
+   would clip an ordinary descendant invisibly, and a panel that pushed the card
+   down would move Save & Print while a cashier was reaching for it. Fixed
+   width, because a portaled node answers to no parent's column - and a
+   `max-height` for the same reason `.bill-float` carries one: `position: fixed`
+   ignores page scroll, so rows below the fold would be there and unreachable. */
+.bill-customer-float {
+  position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 32px);
+  overflow-y: auto; padding: 12px 14px;
+}
+.bill-customer-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+/* Name left, number right, one line each - the two things a cashier checks
+   against what the customer just said, in the order they said them. */
+.bill-customer-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: left; font-weight: 500; font-size: 13px; padding: 7px 11px;
+}
+.bill-customer-row .muted-cell { font-size: 12px; }
+.bill-customer-none { display: block; margin: 0 0 10px; font-size: 12.5px; }
+
+/* The UPI row and how it is being proved (#248, grill Q5). Same hanging indent
+   as the cash block above, so the panel still reads as three tenders with their
+   own detail under them rather than as six rows. */
+.bill-upi-block { display: flex; flex-direction: column; }
+.bill-upi-proof {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 12px 9px 42px;
+}
+.bill-upi-open {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; font-size: 12px; font-weight: 600;
+}
+/* Green because this is the one payment on the panel nobody has to take
+   anybody's word for. The reference wraps rather than truncating: it is what a
+   store person matches against the bank statement, so half of one is no use. */
+.bill-upi-confirmed {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 600; color: var(--green);
+  overflow-wrap: anywhere;
+}
+
+/* The charge card itself. Narrow, because everything on it is one column and a
+   760px modal round a QR code reads as a page rather than as a payment. */
+.bill-upi { max-width: 420px; }
+/* The figure, at the size it is read at across a counter - the one thing on the
+   card that is true in every one of the five states. */
+.bill-upi-amount {
+  margin: 4px 0 16px; font-size: 34px; font-weight: 700; color: var(--navy);
+  letter-spacing: -0.5px; text-align: center;
+}
+.bill-upi-qr {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 22px 18px; border-radius: 12px;
+  border: 1px dashed var(--hairline); background: var(--band-edge-bg);
+  color: var(--caption); font-size: 12.5px; text-align: center;
+}
+.bill-upi-says { margin: 12px 0 0; font-size: 13px; color: var(--ink); }
+.bill-upi-answer {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 0; padding: 12px 14px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; line-height: 1.45;
+}
+.bill-upi-answer.is-good {
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+.bill-upi-answer.is-bad {
+  color: var(--red); background: var(--red-bg); border: 1px solid var(--red-bd);
+}
+/* Amber, not red: an unknown is not a failure. The bank may well have taken the
+   customer's money, and a card that painted it like a refusal would push a
+   cashier towards collecting the same payment twice (grill Q5). */
+.bill-upi-answer.is-doubt {
+  color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-bd);
+}
+.bill-upi-answer svg { flex: none; margin-top: 1px; }
+.bill-upi-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.bill-upi-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.bill-upi .muted-cell { display: block; margin-top: 14px; font-size: 11.5px; }
+
+.bill-pin { max-width: 460px; }
+/* What the manager is agreeing to, itemised. They are approving these lines and
+   these amounts and nothing else, so the modal shows all of them rather than a
+   count. */
+.bill-asks { margin: 4px 0 16px; padding-left: 18px; font-size: 13.5px; color: var(--ink); }
+.bill-asks li { margin-top: 4px; }
+
+.bill-rail-foot { flex: 0 0 auto; padding: 12px 16px 14px; border-top: 1px solid var(--hairline); background: var(--paper); }
+.bill-rail-blocked { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 9px; color: var(--amber); font-size: 12px; line-height: 1.35; }
+.bill-rail-blocked svg { flex: 0 0 auto; margin-top: 1px; }
+.bill-rail-actions { display: flex; gap: 9px; }
+.bill-rail-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 48px; }
+.bill-rail-reprint { flex: 0 0 88px; min-width: 88px; color: var(--muted); background: transparent; }
+.bill-rail-reprint .mono { overflow: hidden; max-width: 82px; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.bill-rail-save { flex: 1 1 auto; font-size: 15px; font-weight: 700; }
+.bill-rail-save:disabled {
+  opacity: .55; background: var(--inner); border-color: var(--inner); color: var(--caption);
+}
+.bill-rail-save:disabled:hover { background: var(--inner); }
+.bill-rail-key { font-size: 10.5px; opacity: .55; }
+
+.bill-foot {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  flex-wrap: wrap; margin-top: 18px;
+}
+.bill-totals { display: flex; flex-wrap: wrap; gap: 22px; }
+.bill-figure { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+.bill-figure-label { font-size: 11.5px; text-transform: uppercase; color: var(--caption); }
+.bill-figure-strong { font-size: 20px; font-weight: 700; }
+
+/* The tax figure as a way in (#247, grill Q7). It has to keep reading as one of
+   the footer's figures - a cashier reads this number out - so the button is
+   stripped back to the text and given a dotted underline, the shell's usual
+   "there is more behind this" mark, rather than a box that would make one
+   number in a row of six look like an action. */
+.bill-tax-open {
+  appearance: none; background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  border-bottom: 1px dashed var(--caption);
+}
+.bill-tax-open:hover { border-bottom-color: var(--ink); }
+
+/* Floating over the footer rather than inside it (Q11: nothing pushes the
+   layout), portaled to `document.body` and placed by `usePositionedPopover`.
+   Fixed width for the same reason `.bill-float` has one: a portaled node
+   answers to no parent's column. */
+/* `max-height` is not decoration: the panel is `position: fixed`, so a bill
+   with several slabs on it and a short viewport would put rows below the fold
+   with no way to scroll to them - the same trap `.bill-float` documents above.
+   It must stay equal to `PANEL_HEIGHT` in TaxFigure.tsx, which is what the
+   popover hook clamps its first placement against. */
+.bill-tax-panel {
+  position: fixed; z-index: 40; width: 320px; max-width: calc(100vw - 32px);
+  max-height: 320px; overflow-y: auto; padding: 14px 16px;
+}
+.bill-tax-panel .eyebrow { margin-bottom: 8px; }
+table.data.bill-tax-rows { font-size: 12.5px; width: 100%; }
+table.data.bill-tax-rows th { padding: 6px 4px; }
+table.data.bill-tax-rows td { padding: 6px 4px; }
+.bill-tax-split { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.bill-tax-split .bill-row { margin-top: 6px; }
+.bill-tax-panel .muted-cell { display: block; margin-top: 8px; font-size: 11.5px; }
+
+.bill-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bill-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.bill-blocked { font-size: 12.5px; color: var(--red); max-width: 320px; }
+
+/* G-2: "the fixed one-screen frame holds at 1280px width and up... narrower
+   than that, the frame degrades honestly: bands stack, the page scrolls
+   again, everything still works. A till is a laptop in landscape." Below the
+   floor every fixed-height/scroll-locking rule above is given back to the
+   ordinary page: `.bill-page` stops being a `calc(100dvh - ...)` box (so
+   `.content` is free to scroll it, per the shell contract) and `.bill-lines`
+   stops being its own scroller (so the twelve-column grid gets its
+   horizontal safety net back too - see the sticky-header comment above). */
+@media (max-width: 1279px) {
+  /* Collapse to single-column, restore page scrolling (G-2). */
+  .bill-page {
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    overflow: visible;
+    padding: 0 16px;
+  }
+  .bill-bar  { grid-column: 1; }
+  .bill-lines { grid-column: 1; height: auto; min-height: auto; overflow: visible; padding-bottom: 0; }
+  .bill-pay  { grid-column: 1; height: auto; min-height: auto; border-left: 0; border-top: 1px solid var(--hairline); margin-top: 16px; padding-bottom: 0; overflow: visible; }
+  .bill-rail-body { overflow: visible; flex: none; }
+  .bill-top { flex: none; margin-bottom: 0; }
+  .bill-grid-card { flex: none; height: auto; overflow: visible; }
+  .bill-grid-scroll { flex: none; overflow-y: visible; }
+  /* Same two-class selector as the desktop rule above, or this loses to it on
+     specificity regardless of which comes later in the cascade. */
+  .table-wrap.bill-grid-wrap { overflow: auto; }
+  table.data.bill-grid thead th { position: static; }
+  .scan-hero { padding-top: 10px; }
+}
+
+/* 1366px is the counter's reference width. Folding the separate size column
+   gains 52px exactly where identity needs it; the table remains 100% wide and
+   therefore never creates a horizontal scroll box. */
+@media (max-width: 1439px) and (min-width: 1280px) {
+  .bill-grid-card .bill-size-column { display: none; width: 0 !important; }
+  .bill-size-fold { display: block; }
+}
+
+/* On a phone, keep the line grid's fixed columns readable and let the wrapper
+   provide the horizontal safety net. Without a floor, `width: 100%` compresses
+   all twelve columns into the viewport and text/controls visibly collide. */
+@media (max-width: 600px) {
+  .bill-grid-card .bill-grid {
+    width: 900px;
+    min-width: 900px;
+  }
+  .bill-grid-scroll { overflow-x: auto; }
+  .scan-hero-row { align-items: stretch; }
+  .scan-hero-state { display: none; }
+  .scan-hero-error { flex-wrap: wrap; }
+}
+
+/* ── Progressive-disclosure item popover ──────────────────────────────────────
+   Secondary metadata (design, colour, season, HSN) is hidden by default and
+   revealed via an anchored popover without increasing the row height.
+   The disclosure button wraps the item identity cell; it is stripped visually
+   but remains keyboard-accessible (aria-expanded / aria-controls). */
+.bill-item-disclosure-btn {
+  display: block; width: 100%; text-align: left; background: none;
+  border: 0; padding: 0; cursor: pointer; font: inherit; color: inherit;
+  border-bottom: 1px dashed transparent;
+}
+.bill-item-disclosure-btn:hover { border-bottom-color: var(--caption); }
+.bill-item-disclosure-btn[aria-expanded="true"] { border-bottom-color: var(--navy-fill); }
+
+/* The popover itself: portaled to document.body, placed by
+   usePositionedPopover("below"). Fixed width so it is independent of the
+   column it anchors to. A max-height + overflow-y so it never runs below
+   the fold on short viewports. */
+.bill-item-popover {
+  position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 32px);
+  max-height: 360px; overflow-y: auto;
+  padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow-lift);
+}
+.bill-item-popover .eyebrow { margin: 0 0 10px; font-size: 9.5px; letter-spacing: .12em; }
+.bill-item-popover-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12.5px; }
+.bill-item-popover-row label { color: var(--caption); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; }
+.bill-item-popover-row .select { min-width: 0; flex: 1; }
+.bill-item-popover-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Payment tile: return-mode not-ready state ────────────────────────────────
+   When the counter is in return mode but no original bill has been found yet,
+   the tender inputs are disabled and a short explanation replaces the "To pay"
+   figure. */
+.bill-payment-panel[data-return-ready="false"] .bill-due,
+.bill-payment-panel[data-return-ready="false"] .bill-payment-stack { opacity: .45; pointer-events: none; }
+.bill-payment-panel[data-return-ready="false"] .bill-due { font-size: 16px; }
+.bill-payment-return-hint {
+  margin: 10px 12px 4px; font-size: 12px; color: var(--muted); line-height: 1.4;
+}
+
+/* ── Recent bills in the empty return grid ────────────────────────────────────
+   Three most-recent bills shown as pick buttons while mode=return and no
+   original bill is loaded yet. Lives inside .bill-lines (scrolling area),
+   above the empty grid placeholder. */
+.bill-recent-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 16px 8px; }
+.bill-recent-head .eyebrow { margin: 0; }
+.bill-recent-rows { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+.bill-recent-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 11px 14px; border: 1px solid var(--hairline); border-radius: 10px;
+  background: var(--surface); text-align: left; font-size: 13px; font-weight: 500;
+  cursor: pointer; width: 100%;
+}
+.bill-recent-row:hover { background: var(--inner); }
+.bill-recent-row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bill-recent-row-left strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.bill-recent-row-left small { color: var(--muted); font-size: 11px; }
+.bill-recent-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.bill-recent-row-right strong { font: 700 14px/1.2 var(--mono); }
+.bill-recent-row-right small { color: var(--muted); font-size: 10.5px; }

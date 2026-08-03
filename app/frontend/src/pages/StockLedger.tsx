@@ -3,8 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, IndianRupee, Layers, PackageCheck, ScrollText } from "lucide-react";
 
 import { api } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface EntryT {
   id: number;
@@ -44,26 +46,28 @@ export default function StockLedger() {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
+  const [q, setQ] = useState("");
   const PAGE_SIZE = 50;
 
-  useEffect(() => setPage(1), [docFilter, fileFilter]);
+  useEffect(() => setPage(1), [docFilter, fileFilter, q]);
 
   useEffect(() => {
     setLoading(true);
-    const q = new URLSearchParams();
-    if (fileFilter) q.set("pt_file", fileFilter);
-    else if (docFilter) q.set("doc_number", docFilter);
-    q.set("page", String(page));
-    q.set("page_size", String(PAGE_SIZE));
+    const params = new URLSearchParams();
+    if (fileFilter) params.set("pt_file", fileFilter);
+    else if (docFilter) params.set("doc_number", docFilter);
+    if (q.trim()) params.set("q", q.trim());
+    params.set("page", String(page));
+    params.set("page_size", String(PAGE_SIZE));
     Promise.all([
-      api.get(`/stockledger/entries?${q.toString()}`).then((r) => {
+      api.get(`/stockledger/entries?${params.toString()}`).then((r) => {
         setEntries(r.data.results);
         setCount(r.data.count);
         setHasNext(Boolean(r.data.next));
       }),
       api.get(`/stockledger/summary`).then((r) => setSummary(r.data)),
     ]).finally(() => setLoading(false));
-  }, [docFilter, fileFilter, page]);
+  }, [docFilter, fileFilter, page, q]);
 
   const cards = useMemo(
     () => [
@@ -77,14 +81,12 @@ export default function StockLedger() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · append-only (corrections are reversing entries)</p>
-          <h1 className="h1 h2-rust">Stock Ledger</h1>
-        </div>
-        <div className="spacer" />
-        <Link className="btn" to="/ledgers/stock-on-hand" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
-      </div>
+      <PageHeader
+        lead="Every movement, in the order it happened. The stock ledger is append-only — a correction is a reversing entry, never an edit."
+        actions={
+          <Link className="btn" to="/stock" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
+        }
+      />
 
       <div className="stat-grid" data-testid="stock-summary">
         {cards.map((c) => (
@@ -104,11 +106,24 @@ export default function StockLedger() {
         </div>
       )}
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search movements — doc number, style, barcode"
+        label="Search movement history"
+        testId="stock-search"
+        noun="movement"
+        count={count}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : entries.length === 0 ? (
         <div className="card section-card" data-testid="stock-empty">
-          No stock postings yet. Post a PT file from Patna (PT Mapper → Push into system) to write the first inward.
+          {q
+            ? `No movement matches “${q}”.`
+            : "No stock postings yet. Post a PT file from Patna (PT Mapper → Push into system) to write the first inward."}
         </div>
       ) : (
         <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>

@@ -8,11 +8,13 @@ from masters.views import (
     GstinDetailView,
     GstinListView,
     LegalEntityListView,
+    LocationListView,
     SeasonDetailView,
     SeasonListView,
     SkuLookupView,
     StoreDetailView,
     StoreListView,
+    StoreTargetView,
     SummaryView,
 )
 
@@ -20,6 +22,10 @@ urlpatterns = [
     path("skus/lookup", SkuLookupView.as_view(), name="sku-lookup"),
     path("stores", StoreListView.as_view(), name="store-list"),
     path("stores/<int:pk>", StoreDetailView.as_view(), name="store-detail"),
+    path("locations", LocationListView.as_view(), name="location-list"),
+    # Before `stores/<int:pk>` would ever be consulted, and its own path anyway -
+    # the monthly target grid is keyed by store *code*, not by a store row id.
+    path("store-targets", StoreTargetView.as_view(), name="store-target-grid"),
     path("brands", BrandListView.as_view(), name="brand-list"),
     path("brands/<int:pk>", BrandDetailView.as_view(), name="brand-detail"),
     path("seasons", SeasonListView.as_view(), name="season-list"),

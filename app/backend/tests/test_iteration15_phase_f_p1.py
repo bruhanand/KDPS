@@ -11,6 +11,7 @@ import uuid
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
@@ -29,7 +30,7 @@ def _login(username: str, password: str) -> str:
 
 @pytest.fixture(scope="module")
 def owner_token():
-    return _login("owner", "Owner@123")
+    return _login("owner", SEED_OWNER_PASSWORD)
 
 
 @pytest.fixture(scope="module")
@@ -101,14 +102,18 @@ class TestMastersSteward:
 
     UNIQUE = uuid.uuid4().hex[:6].upper()
 
-    def _first_gstin_id(self, token):
-        r = requests.get(f"{API}/masters/gstins", headers=_hdr(token), timeout=15)
+    def _first_id(self, token, collection):
+        """The id of the first seeded row of a masters collection."""
+        r = requests.get(f"{API}/masters/{collection}", headers=_hdr(token), timeout=15)
         assert r.status_code == 200, r.text
         rows = r.json()
         if isinstance(rows, dict):
             rows = rows.get("results") or rows.get("rows") or []
-        assert rows, "no gstins seeded"
+        assert rows, f"no {collection} seeded"
         return rows[0]["id"]
+
+    def _first_gstin_id(self, token):
+        return self._first_id(token, "gstins")
 
     def test_steward_creates_and_patches_store(self, steward_token):
         gstin_id = self._first_gstin_id(steward_token)
@@ -181,21 +186,21 @@ class TestMastersSteward:
         assert r.json()["code"] == code
 
     def test_steward_creates_gstin(self, steward_token):
-        # GSTIN is 15 chars. Build something obviously test-prefixed but valid in length.
+        # This used to post `legal_name`/`active` - neither is a field on the
+        # serializer - collect a 400 for the two *required* fields it therefore
+        # omitted, and skip itself blaming a GSTIN checksum rule that does not
+        # exist. It asserted nothing for months (issue #93). GSTIN is 15 chars:
+        # state code, then a PAN-shaped body.
         gstin_value = f"10AAACT{self.UNIQUE[:4]}A1Z5"[:15].ljust(15, "Z")
         payload = {
             "gstin": gstin_value,
-            "legal_name": f"Test Legal {self.UNIQUE}",
             "state_code": "10",
-            "active": True,
+            "state_name": "Bihar",
+            "legal_entity": self._first_id(steward_token, "entities"),
+            "is_active": True,
         }
         r = requests.post(
             f"{API}/masters/gstins", headers=_hdr(steward_token), json=payload, timeout=15
         )
-        # accept 201; if the backend validates the gstin checksum, accept 400 too
-        assert r.status_code in (201, 400), f"unexpected status {r.status_code}: {r.text}"
-        if r.status_code == 400:
-            pytest.skip(
-                f"gstin creation rejected by validation (expected for non-checksum value): {r.text}"
-            )
-        assert r.json().get("gstin") or r.json().get("number")
+        assert r.status_code == 201, f"create gstin failed: {r.status_code} {r.text}"
+        assert r.json()["gstin"] == gstin_value

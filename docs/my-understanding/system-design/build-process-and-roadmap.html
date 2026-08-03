@@ -130,7 +130,7 @@
       <dt>Engineering-led order along the spine</dt>
       <dd>Slices follow the <strong>process order of the system</strong> (a shipment exists before it can be sold; a sale exists before it can be reported), <em>not</em> the client's wishlist order. The sequence (single canonical numbering, matching the slice roadmap below): <span class="badge b-locked">0</span> foundation scaffold &rarr; <span class="badge b-locked">1</span> master data + identity + PT-line model &rarr; <span class="badge b-locked">2</span> inbound thin slice (one outright brand: GRN qty &rarr; PT value &rarr; stock ledger, ending <em>at the ledger</em>, not at POS) &rarr; <span class="badge b-locked">3</span> vendor liability + vendor ledger &rarr; <span class="badge b-ext">4</span> selling thin slice (ingest one POS sale) &rarr; <span class="badge b-locked">5</span> offers on the sale &rarr; <span class="badge b-locked">6</span> payments + collection audit &rarr; <span class="badge b-ext">7</span> Tally voucher export &rarr; <span class="badge b-locked">8</span> SOR / Consignment + GST clock &rarr; <span class="badge b-ai">9</span> the Brain / analytics + WhatsApp digest.</dd>
       <dt>Why the first inbound slice stops at the ledger</dt>
-      <dd>The first end-to-end proof must not be hostage to the riskiest unknown. POS (Ten Software), Tally import, and the barcode tool are the three external gates with real lead time, so they are <strong>spiked in parallel</strong> &mdash; slices 1&ndash;2 (master data, then inbound ending at the stock ledger) prove the spine on ground we fully control first, before the POS edge arrives at slice 4.</dd>
+      <dd>The first end-to-end proof must not be hostage to the riskiest unknown. Tally import and the barcode tool are the external gates with real lead time, so they are <strong>spiked in parallel</strong> (the POS was a third gate until 26 Jul 2026, when KDPS decided to build its own counter) &mdash; slices 1&ndash;2 (master data, then inbound ending at the stock ledger) prove the spine on ground we fully control first, before the POS edge arrives at slice 4.</dd>
     </dl>
   </div>
 
@@ -497,7 +497,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 
   <h3>Definition of "foundation done"</h3>
   <div class="callout co-key">
-    <strong>Foundation is complete when the empty skeleton is provably real, not when it is feature-rich.</strong> Concretely: (1) monorepo builds, import-linter contracts pass; (2) a throwaway document posts one balanced paise leg-pair into Postgres inside a transaction and is read back; (3) the four foundation tests are green on real Postgres in CI, green-required-to-merge is on, pre-commit + git guardrails active; (4) one seeded user logs in through the same-origin service and sees only their scoped rows; (5) the seed is idempotent across dev/staging/prod; (6) FD-0 through FD-8 are ratified ADRs replacing the deleted distrust set. <strong>Then &mdash; and only then &mdash; slice 1 (master data + identity + the PT-line model) begins, followed by slice 2 (the GRN&rarr;PT&rarr;ledger inbound walking skeleton).</strong> The three externals (Ten Software POS API, Tally/TaxOne import, barcode tool) spike <em>in parallel</em> through all of this &mdash; they have lead time and gate later slices, not the foundation.</p>
+    <strong>Foundation is complete when the empty skeleton is provably real, not when it is feature-rich.</strong> Concretely: (1) monorepo builds, import-linter contracts pass; (2) a throwaway document posts one balanced paise leg-pair into Postgres inside a transaction and is read back; (3) the four foundation tests are green on real Postgres in CI, green-required-to-merge is on, pre-commit + git guardrails active; (4) one seeded user logs in through the same-origin service and sees only their scoped rows; (5) the seed is idempotent across dev/staging/prod; (6) FD-0 through FD-8 are ratified ADRs replacing the deleted distrust set. <strong>Then &mdash; and only then &mdash; slice 1 (master data + identity + the PT-line model) begins, followed by slice 2 (the GRN&rarr;PT&rarr;ledger inbound walking skeleton).</strong> The two externals (Tally/TaxOne import, barcode tool) spike <em>in parallel</em> through all of this &mdash; they have lead time and gate later slices, not the foundation.</p>
   </div>
 </section>
 
@@ -651,7 +651,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
   </div>
 
   <div class="callout co-ext">
-    <strong>Three external spikes run in PARALLEL from day one</strong> &mdash; they have lead time and must not sit on the critical path. <span class="badge b-ext">SPIKE</span> <strong>Ten Software POS API</strong> (push/pull shape, join key = barcode, EOD batch) feeds slice 4. <span class="badge b-ext">SPIKE</span> <strong>Tally / Vyapar&nbsp;TaxOne import</strong> (voucher XML/TDL, prevent-duplicates semantics) feeds slice 7. <span class="badge b-ext">SPIKE</span> <strong>Barcode tool</strong> (13-digit EAN print/scan, vendor-else-generate) feeds slices 1&ndash;2. Start all three as throwaway spikes <em>now</em>; fold the findings into the slice when its turn comes.</p>
+    <strong>Three external spikes run in PARALLEL from day one</strong> &mdash; they have lead time and must not sit on the critical path. <span class="badge b-ext">SPIKE</span> <strong>Tally / Vyapar&nbsp;TaxOne import</strong> (voucher XML/TDL, prevent-duplicates semantics) feeds slice 7. <span class="badge b-ext">SPIKE</span> <strong>Barcode tool</strong> (13-digit EAN print/scan, vendor-else-generate) feeds slices 1&ndash;2. Start all three as throwaway spikes <em>now</em>; fold the findings into the slice when its turn comes.</p>
   </div>
 
   <h3>The ordered slices</h3>
@@ -742,13 +742,12 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
     <div class="lab">SLICE 4 &middot; SELLING THIN SLICE &mdash; INGEST ONE POS SALE</div>
     <dl>
       <dt>Delivers (end-to-end)</dt>
-      <dd>Ingest <strong>one completed POS sale</strong> from Ten Software (SKU, qty, price, store/GSTIN, tender) &rarr; post stock-out at the piece's <em>frozen lot cost</em> (COGS derived, never hand-entered) + the cash/revenue legs + output GST. The first slice that closes the loop: a real sale moves stock and money. No offers yet (sale ingested at the price the POS already applied).</dd>
+      <dd>Take <strong>one completed sale</strong> from our own counter (SKU, qty, price, store/GSTIN, tender, salesperson) &rarr; post stock-out at the piece's <em>frozen lot cost</em> (COGS derived, never hand-entered) + the cash/revenue legs + output GST. The first slice that closes the loop: a real sale moves stock and money. No offers yet (sale ingested at the price the POS already applied).</dd>
       <dt>Borrows from ERPNext</dt>
       <dd>The <strong>one-document-posts-stock+revenue+COGS-together shape</strong> &mdash; <code>Sales Invoice update_stock=1</code> (<code>accounts/doctype/sales_invoice/sales_invoice.py:443</code>), assembled by <code>services/gl_composer.py</code> (Dr Cash/Debtor, Cr Income, Cr Output-GST; Dr COGS / Cr Inventory at cost) over <code>base_stock_gl_composer.py:20-89</code>. The <strong>Bin availability cache</strong> for free-to-sell (<code>stock/doctype/bin/bin.py:295</code>) and the declarative <code>status_updater</code> for derived piece-state.</dd>
       <dt>KDPS-is-different</dt>
       <dd>KDPS <strong>ingests</strong> the finished sale (ingest, don't recreate; one-owner R4) &mdash; the SI <em>UI</em> and customer-credit staging are dropped. COGS reads the <strong>frozen lot cost</strong> (closest ERPNext bridge = batch-wise valuation; <em>no</em> moving-avg recompute). Free-to-sell is derived from <em>open KDPS documents</em> (Reserved / In-transit / Quarantined), not SO/PO reservation. The POS sits behind a <strong>swappable adapter</strong> (push/pull, EOD authoritative batch, manual-bill fallback). The scan carries only the raw barcode, so the <strong>adapter infers season at the edge</strong> (Q6): one matching cohort &rarr; post; many &rarr; oldest-season-first (FIFO); genuinely ambiguous &rarr; a one-tap "which season?" &mdash; never a blocked sale, never re-barcoding at inbound.</dd>
       <dt>External spike</dt>
-      <dd><span class="badge b-ext">Ten Software POS API</span> &mdash; this slice consumes the spike's output: intraday poll + authoritative EOD batch, barcode join with season inferred at the adapter (Q6), failure queue.</dd>
       <dt>Golden file / recon that proves it</dt>
       <dd>One real POS EOD batch &rarr; stock ledger drops the exact pieces; margin per line = sale price &minus; frozen landed cost; store&times;day cash total matches the ingested tender. Golden file = the per-SKU margin + the stock-out SLE; recon = POS gross vs posted revenue + GST for that store-day.</dd>
     </dl>
@@ -782,7 +781,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
       <dt>KDPS-is-different (the whole governance + collection layer is net-new)</dt>
       <dd>ERPNext collapses authorisation into one <code>submit()</code> with two flat roles &mdash; KDPS builds the <strong>pre-posting state machine</strong> (Draft&rarr;Pending&rarr;Approved&rarr;Executed&rarr;Confirmed-UTR&rarr;Reconciled, with Confirmed distinct from Reconciled), <strong>role-based segregation of duties</strong> (bank-change &ne; approve &ne; release), <strong>eligibility gates</strong> (hard-block: no bank/GSTIN, not tied to inwarded PT, SOR-piece-not-sold; soft-hold: discrepancy &rarr; flag + senior release), the <strong>vendor-bank-change control</strong> (second-eye + AI-reflag), and the <strong>3-rail 3-way audit</strong> with MDR net-off and settlement-lag &mdash; none exist in ERPNext.</dd>
       <dt>External spike</dt>
-      <dd>Bank-statement + acquirer-settlement feed (uses real <code>data-from-kdps/bank-statement/</code> samples). POS settlement report from the Ten Software spike.</dd>
+      <dd>Bank-statement + acquirer-settlement feed (uses real <code>data-from-kdps/bank-statement/</code> samples). POS settlement report from our own counter.</dd>
       <dt>Golden file / recon that proves it</dt>
       <dd>A payment against several bills &rarr; allocations and vendor balance tie out; a store-day's three rails reconcile POS gross &rarr; settlement (net of MDR) &rarr; bank credit, with the lag carried as expected/in-transit. Golden file = the allocation rows + the per-rail 3-way match with reason-coded exceptions.</dd>
     </dl>
@@ -844,7 +843,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
     <div class="lab">LATER &middot; DEFERRED BY DECISION (revisit before go-live)</div>
     <dl>
       <dt>Own POS</dt>
-      <dd>A KDPS-built POS behind the <em>same</em> swappable adapter from slice 4 (joined on barcode), replacing Ten Software when justified. The adapter seam means this is a swap, not a rebuild.</dd>
+      <dd>The KDPS-built counter behind the <em>same</em> boundary as slice 4 (joined on barcode). Since 26 Jul 2026 this is the only POS — there is nothing to swap out.</dd>
       <dt>Attendance &amp; Payroll</dt>
       <dd>Does not block the foundation or any spine slice; own module when prioritised.</dd>
       <dt>D9 &middot; Migration &amp; rollout</dt>
@@ -980,8 +979,8 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 <tr><th>Item</th><th>Risk</th><th>Mitigation / checkpoint</th></tr>
 
 <tr>
-<td><strong>Ten Software POS API</strong> <span class="badge b-ext">EXT</span></td>
-<td>Highest-risk external. The whole outbound + sale path (slice 4) is hostage to whether Ten Software exposes a usable sale/exchange/return feed. If it can't, we fork to build-our-own-POS — a large, late surprise if discovered during slice 4.</td>
+<td><strong>POS &mdash; resolved</strong> <span class="badge b-locked">OURS</span></td>
+<td>Was the highest-risk external: the whole outbound + sale path hung on whether a third-party POS exposed a usable sale/exchange/return feed, with build-our-own as the fork. <strong>Settled 26 Jul 2026 by taking the fork deliberately</strong> — KDPS builds its own counter, so the risk is now ordinary build work rather than a late surprise.</td>
 <td><strong>Spike now, in parallel.</strong> Goal: confirm read of sale lines (SKU = Style x Color x Size, MRP, discount, GST split) and whether returns/exchanges come through. <em>Checkpoint:</em> pre-decide the build-own-POS fork <strong>before</strong> slice 4 specs. This is why the inbound walking skeleton (slice 2) ends at the ledger, not at POS — the first proof must not depend on this unknown.</td>
 </tr>
 
@@ -1069,7 +1068,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 <li><strong>Delete the distrust set.</strong> Remove ADRs 0001–0007 — unratified sketches presented as LOCKED. They were input/ideas; the ratified set from action 1 replaces them.</li>
 <li><strong>Scaffold repo + DB + auth.</strong> Slice 0: foundation only, no business logic — monorepo, database with the agreed conventions, login + identity/session. Scaffold only what slice 1 needs (core + masters + vendors + inbound); grow apps per slice.</li>
 <li><strong>Open the foundation issues.</strong> One issue per scaffold piece + the slice-1 (master data) and slice-2 walking-skeleton spec (GRN → PT → ledger postings → store stock screen, ending at the ledger).</li>
-<li><strong>Kick off the 3 spikes in parallel.</strong> Ten Software POS API, Tally/TaxOne import, barcode generator — plus book the CA sitting (e-invoicing applicability, SOR deemed-supply ruling, slab basis — entity count confirmed: one PAN / one Tally company). They have lead time; start them the same day as the scaffold.</li>
+<li><strong>Kick off the 2 spikes in parallel.</strong> Tally/TaxOne import, barcode generator — plus book the CA sitting (e-invoicing applicability, SOR deemed-supply ruling, slab basis — entity count confirmed: one PAN / one Tally company). They have lead time; start them the same day as the scaffold.</li>
 </ol>
 
 </section>

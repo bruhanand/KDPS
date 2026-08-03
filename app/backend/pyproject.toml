@@ -13,6 +13,10 @@ dependencies = [
     "django-cors-headers>=4.4",
     "python-dotenv>=1.0",
     "bcrypt>=4.0",
+    # Fernet, for the Google refresh tokens the `mail` app stores. Already
+    # present transitively via simplejwt; declared because we import it directly
+    # and a transitive dependency is not a promise.
+    "cryptography>=42.0",
     "requests>=2.34.2",
     "openpyxl>=3.1",
     "xlrd>=2.0",
@@ -55,7 +59,27 @@ target-version = "py312"
 extend-exclude = ["migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "DJ"]
+select = ["E", "F", "I", "UP", "B", "DJ", "C90"]
+
+# One function, one job — enforced, because "this function got long" is a review
+# comment nobody makes twice. The ceiling is 10 branches; the files below are the
+# baseline as it stood when the gate went in (26 Jul 2026), and like the ungated-
+# views baseline it may only ever shrink. Anything new, anywhere else, fails.
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Management commands: one-shot operational scripts, branch-heavy by nature
+# (argument combinations, dry-run/apply, progress reporting). Low blast radius.
+"*/management/commands/*.py" = ["C901"]
+# The PT-mapper HTTP layer (patch: 25, post: 16) and its taxonomy mapper. The
+# mapping engine is the least-safe thing in the codebase to restructure while
+# archetypes are still being fed; splitting these is its own ticket.
+"ptmapper/views.py" = ["C901"]
+"ptmapper/engine.py" = ["C901"]
+# The collection hook that decides which live suites can run here: a decision
+# table about the target environment, and clearest read as one.
+"tests/conftest.py" = ["C901"]
 
 # --- Types -------------------------------------------------------------------
 # K0 starts mypy strict on a tiny surface (core + config). As money slices land,
@@ -68,6 +92,10 @@ exclude = ['migrations/', 'tests/']
 
 [[tool.mypy.overrides]]
 module = ["dj_database_url"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["rest_framework.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]
@@ -86,13 +114,44 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core", "ptmapper"]
+root_packages = [
+    # `mail` is a root package for a reason worth knowing: nothing imports it.
+    # It is mounted by string (`include("mail.urls")`), so it never enters the
+    # graph as a dependency of anything, and a contract naming it as a source
+    # would fail with "module does not exist". Being unimported is exactly the
+    # property the two mail contracts below exist to keep.
+    "config", "core", "ptmapper", "approvals", "outbound", "offers", "search", "storefront",
+    "mail",
+]
+# The domain apps below aren't root packages yet, so they are "external" to the
+# graph; the approvals contract names them explicitly.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "core (kernel) must not import the config/project layer"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["config"]
+
+[[tool.importlinter.contracts]]
+# `approvals` is a cross-cutting service every domain module depends on *downward*
+# (ADR-0002's core/masters exception in spirit): it must never know what it is
+# approving. Enforced, not trusted — the maker-checker spine erodes fastest if a
+# convenience import from outbound sneaks in.
+name = "approvals (maker-checker spine) must not import any domain module"
+type = "forbidden"
+source_modules = ["approvals"]
+forbidden_modules = [
+    "config",
+    "outbound",
+    "inbound",
+    "vendors",
+    "ptmapper",
+    "stockledger",
+    "finledger",
+    "sell",
+    "offers",
+]
 
 [[tool.importlinter.contracts]]
 name = "ptmapper mapping/learning layer must not import the HTTP (views) layer"
@@ -105,3 +164,101 @@ source_modules = [
     "ptmapper.profiles",
 ]
 forbidden_modules = ["ptmapper.views"]
+
+[[tool.importlinter.contracts]]
+# The two composition roots read across every domain app so that no domain app
+# has to read another one just to draw a screen (`search` for the top bar,
+# `storefront` for the store's Home). That only buys anything while the arrow
+# points one way: the moment a domain module imports one of them for a helper,
+# they stop being leaves and become another layer everything depends on. The
+# settings comment beside them said "imported by none of them" and nothing
+# checked it; this is the check (#174).
+name = "the composition roots are leaves: no domain module may import them"
+type = "forbidden"
+source_modules = [
+    # `config` is deliberately absent: mounting the two is its whole job.
+    "core",
+    "ptmapper",
+    "approvals",
+    "outbound",
+    "masters",
+    "accounts",
+    "inbound",
+    "vendors",
+    "stockledger",
+    "finledger",
+    "alerts",
+    "files",
+    "offers",
+    "mail",
+]
+forbidden_modules = ["search", "storefront"]
+
+[[tool.importlinter.contracts]]
+# Mail is a leaf, and the value of this feature depends on it staying one. It
+# caches a person's Google inbox; it writes no ledger, posts no entry and owns
+# no document. The moment a domain module imports it, mail has become part of
+# the money path by the back door — and the moment it imports a domain module,
+# somebody has started deriving business state from an inbox we do not control
+# and may drop and refill at will. Both directions are forbidden.
+name = "mail must not import any domain module"
+type = "forbidden"
+source_modules = ["mail"]
+forbidden_modules = [
+    "outbound",
+    "inbound",
+    "vendors",
+    "ptmapper",
+    "stockledger",
+    "finledger",
+    "sell",
+    "offers",
+    "approvals",
+    "alerts",
+    "search",
+    "storefront",
+]
+
+[[tool.importlinter.contracts]]
+# The other direction, and the one that actually protects the books.
+name = "no domain module may import mail"
+type = "forbidden"
+source_modules = [
+    "core",
+    "ptmapper",
+    "approvals",
+    "outbound",
+    "masters",
+    "accounts",
+    "inbound",
+    "vendors",
+    "stockledger",
+    "finledger",
+    "alerts",
+    "files",
+    "offers",
+    "search",
+    "storefront",
+]
+forbidden_modules = ["mail"]
+
+[[tool.importlinter.contracts]]
+# The rulebook is a leaf below the counter, and it has to stay one: the engine
+# runs unchanged in a browser tab, so the moment `offers` reaches for a Sale it
+# stops being portable and the TypeScript port stops being a port. `sell` reads
+# `offers` (the dataset ships it, the accept pipeline re-prices with it); the
+# arrow never turns round.
+name = "the rulebook must not import the counter"
+type = "forbidden"
+source_modules = ["offers"]
+forbidden_modules = ["sell", "config", "outbound", "inbound", "vendors", "ptmapper"]
+
+[[tool.importlinter.contracts]]
+# `posting` imports `maker_checker` (every posting path asks whether a second
+# person is needed) and `maker_checker` needed the cost of a piece and the
+# refusal type back — a real cycle, previously held apart by four function-level
+# imports. Those two things now live in `costing`, below both. Stated as layers
+# so the deferred-import workaround can never be reintroduced as the fix.
+name = "outbound posting is layered: posting → maker_checker → costing, never back"
+type = "layers"
+layers = ["outbound.posting", "outbound.maker_checker", "outbound.costing"]

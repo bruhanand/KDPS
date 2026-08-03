@@ -1,0 +1,91 @@
+{
+  "name": "dates-are-the-tills-own-clock",
+  "note": "A dead offer and an unborn one are both invisible on 31 July, whatever the till last synced.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 100,
+      "name": "Ended yesterday",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "50.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": "2026-07-30",
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 101,
+      "name": "Starts tomorrow",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "40.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-08-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 102,
+      "name": "Running",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "10.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-15",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 100000,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 10000,
+        "offer_id": 102,
+        "evidence": {
+          "offer_id": 102,
+          "offer_name": "Running",
+          "layer": "brand",
+          "saved_paise": 10000,
+          "beat": [],
+          "stack": []
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 10000
+  }
+}

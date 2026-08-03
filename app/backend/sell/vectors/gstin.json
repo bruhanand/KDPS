@@ -1,0 +1,72 @@
+{
+  "note": "The GSTIN checker, as one file two engines answer to (#187). Python reads it from tests/test_sell_gstin.py, TypeScript from src/till/gstin.vectors.test.ts, and neither may be 'fixed' by editing this file - a vector changes only when the rule changes, and then it changes for both at once. The three registrations marked real exist; they are the whole argument that the mod-36 check digit is computed the way the GSTN computes it, because a checksum subtly wrong would pass its own unit tests happily and flag every genuine B2B bill KDPS ever takes.",
+
+  "well_formedness": [
+    { "gstin": "27AAPFU0939F1ZV", "reason": "", "why": "real registration" },
+    { "gstin": "27AAACR5055K1Z7", "reason": "", "why": "real registration, digit check character" },
+    { "gstin": "09AAACH7409R1ZZ", "reason": "", "why": "real registration, Z check character" },
+    { "gstin": "", "reason": "", "why": "a B2C bill has no GSTIN and that is not a defect" },
+    { "gstin": "   ", "reason": "", "why": "nor is an empty box somebody tabbed through" },
+    { "gstin": "  27aapfu0939f1zv  ", "reason": "", "why": "case and stray spaces are the counter typing" },
+    {
+      "gstin": "27AAPFU0939F",
+      "reason": "A GSTIN is 15 characters; this one is 12.",
+      "why": "half-typed, caught before anything else"
+    },
+    {
+      "gstin": "HELLO WORLD 123",
+      "reason": "Not shaped like a GSTIN (2 digits, a PAN, an entity character, Z, a check digit).",
+      "why": "right length, wrong everything"
+    },
+    {
+      "gstin": "45AAPFU0939F1ZV",
+      "reason": "'45' is not a state code the GSTN issues.",
+      "why": "shaped perfectly, no such state"
+    },
+    {
+      "gstin": "27AAPFU0993F1ZV",
+      "reason": "The check digit does not match - a character is probably mistyped.",
+      "why": "a transposed pair - the commonest mistype, and the one the shape alone lets through"
+    },
+    {
+      "gstin": "27AAPFU0939F1ZW",
+      "reason": "The check digit does not match - a character is probably mistyped.",
+      "why": "the last character alone is wrong"
+    },
+    {
+      "gstin": "10AABCU9603R1ZM",
+      "reason": "The check digit does not match - a character is probably mistyped.",
+      "why": "the mistyped Bihar buyer the accept-pipeline suite bills with"
+    }
+  ],
+
+  "state_code": [
+    { "gstin": "27AAPFU0939F1ZV", "state_code": "27" },
+    { "gstin": "10AABCU9603R1Z2", "state_code": "10" },
+    { "gstin": "", "state_code": "" },
+    {
+      "gstin": "20AABCU9603R1ZM",
+      "state_code": "20",
+      "why": "taken as typed even though the checksum fails - what the till printed is what the books must record"
+    },
+    { "gstin": "zz-nonsense", "state_code": "ZZ", "why": "no interpretation, just the first two" }
+  ],
+
+  "tax_kind": [
+    { "buyer_gstin": "", "store_state_code": "10", "kind": "none" },
+    { "buyer_gstin": "10AABCU9603R1Z2", "store_state_code": "10", "kind": "cgst_sgst" },
+    {
+      "buyer_gstin": "20AABCU9603R1Z1",
+      "store_state_code": "10",
+      "kind": "igst",
+      "why": "the everyday KDPS case - Bihar and Jharkhand are separate registered persons"
+    },
+    {
+      "buyer_gstin": "20AABCU9603R1ZM",
+      "store_state_code": "10",
+      "kind": "igst",
+      "why": "a mistyped GSTIN is flagged, never re-taxed"
+    },
+    { "buyer_gstin": " 10aabcu9603r1z2 ", "store_state_code": "10", "kind": "cgst_sgst" }
+  ]
+}

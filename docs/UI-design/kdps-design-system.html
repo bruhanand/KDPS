@@ -1,0 +1,4158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KDPS Design System — Retail ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           KDPS DESIGN SYSTEM — DESIGN TOKENS
+           Clothing Brand / Retail Chain ERP
+           ═══════════════════════════════════════════════════════════════ */
+
+        :root {
+            /* ── CORE BRAND COLORS ── */
+            --brand-primary:        #2D2B55;     /* Deep indigo — authority, trust */
+            --brand-primary-light:  #4A478A;
+            --brand-primary-dark:   #1E1C3D;
+
+            /* ── BACKGROUND SYSTEM ── */
+            --bg-page:              #F8F7FC;     /* Warm near-white with lavender hint */
+            --bg-main:              #FFFFFF;     /* Pure white main content */
+            --bg-sidebar:           rgba(255, 255, 255, 0.55); /* Frosted glass base */
+            --bg-card:              #FFFFFF;
+            --bg-card-hover:        #FAFAFE;
+            --bg-elevated:          #FFFFFF;
+            --bg-overlay:           rgba(45, 43, 85, 0.35);
+
+            /* ── FROSTED GLASS ── */
+            --glass-blur:           20px;
+            --glass-saturate:       180%;
+            --glass-bg:             rgba(255, 255, 255, 0.55);
+            --glass-bg-hover:       rgba(255, 255, 255, 0.7);
+            --glass-border:         rgba(255, 255, 255, 0.6);
+
+            /* ── PASTEL PALETTE — Muted & Soft ── */
+            --pastel-lavender:      #E8E0F0;
+            --pastel-lavender-deep: #C9B8E8;
+            --pastel-peach:         #FDDCCD;
+            --pastel-peach-deep:    #F5B99A;
+            --pastel-mint:          #C5EBE0;
+            --pastel-mint-deep:     #8DD5C0;
+            --pastel-sky:           #C4DEF6;
+            --pastel-sky-deep:      #8FC3ED;
+            --pastel-blush:         #F8D0D8;
+            --pastel-blush-deep:    #F0A0B4;
+            --pastel-butter:        #FBE9C7;
+            --pastel-butter-deep:   #F5D28B;
+            --pastel-sage:          #D4E5D0;
+            --pastel-sage-deep:     #A8CCA0;
+            --pastel-lilac:         #DDD0F0;
+            --pastel-lilac-deep:    #BBA8E0;
+
+            /* ── SEMANTIC COLORS ── */
+            --color-success:        #43B581;
+            --color-success-bg:     #E8F8F0;
+            --color-warning:        #E8A838;
+            --color-warning-bg:     #FEF5E0;
+            --color-danger:         #E55050;
+            --color-danger-bg:      #FDE8E8;
+            --color-info:           #5B8DEF;
+            --color-info-bg:        #E6EFFD;
+
+            /* ── TEXT ── */
+            --text-primary:         #1A1A2E;
+            --text-secondary:       #5A5A7A;
+            --text-muted:           #9494B0;
+            --text-on-dark:         #FFFFFF;
+            --text-on-pastel:       #3A3A5A;
+
+            /* ── BORDER ── */
+            --border-light:         #ECEAF5;
+            --border-medium:        #D8D6E8;
+            --border-focus:         var(--brand-primary);
+
+            /* ── SHADOW SYSTEM ── */
+            --shadow-xs:            0 1px 2px rgba(45, 43, 85, 0.04);
+            --shadow-sm:            0 1px 3px rgba(45, 43, 85, 0.06), 0 1px 2px rgba(45, 43, 85, 0.04);
+            --shadow-md:            0 4px 6px rgba(45, 43, 85, 0.06), 0 2px 4px rgba(45, 43, 85, 0.04);
+            --shadow-lg:            0 10px 20px rgba(45, 43, 85, 0.08), 0 4px 8px rgba(45, 43, 85, 0.04);
+            --shadow-xl:            0 20px 40px rgba(45, 43, 85, 0.10);
+            --shadow-glass:         0 8px 32px rgba(45, 43, 85, 0.08);
+
+            /* ── RADIUS ── */
+            --radius-xs:            4px;
+            --radius-sm:            8px;
+            --radius-md:            12px;
+            --radius-lg:            16px;
+            --radius-xl:            20px;
+            --radius-2xl:           24px;
+            --radius-pill:          999px;
+
+            /* ── SPACING ── */
+            --space-1:  4px;
+            --space-2:  8px;
+            --space-3:  12px;
+            --space-4:  16px;
+            --space-5:  20px;
+            --space-6:  24px;
+            --space-8:  32px;
+            --space-10: 40px;
+            --space-12: 48px;
+            --space-16: 64px;
+
+            /* ── TYPOGRAPHY ── */
+            --font-heading:     'Outfit', -apple-system, sans-serif;
+            --font-body:        'Work Sans', -apple-system, sans-serif;
+            --font-mono:        'JetBrains Mono', 'Fira Code', monospace;
+
+            --text-xs:   0.75rem;    /* 12px */
+            --text-sm:   0.8125rem;  /* 13px */
+            --text-base: 0.875rem;   /* 14px */
+            --text-md:   1rem;       /* 16px */
+            --text-lg:   1.125rem;   /* 18px */
+            --text-xl:   1.25rem;    /* 20px */
+            --text-2xl:  1.5rem;     /* 24px */
+            --text-3xl:  1.875rem;   /* 30px */
+            --text-4xl:  2.25rem;    /* 36px */
+
+            /* ── TRANSITIONS ── */
+            --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+            --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+            --duration-fast:    150ms;
+            --duration-normal:  250ms;
+            --duration-slow:    400ms;
+
+            /* ── LAYOUT ── */
+            --sidebar-width:        260px;
+            --sidebar-collapsed:    72px;
+            --header-height:        60px;
+            --content-max-width:    1400px;
+        }
+
+        [data-theme="dark"] {
+            --brand-primary:        #9D95FF;
+            --brand-primary-light:  #B5AEFF;
+            --brand-primary-dark:   #7A70E0;
+
+            --bg-page:              #0D0B18;
+            --bg-main:              #131124;
+            --bg-sidebar:           rgba(19, 17, 36, 0.75);
+            --bg-card:              #1B1833;
+            --bg-card-hover:        #231F42;
+            --bg-elevated:          #231F42;
+            --bg-overlay:           rgba(0, 0, 0, 0.65);
+
+            --glass-bg:             rgba(19, 17, 36, 0.75);
+            --glass-bg-hover:       rgba(35, 31, 66, 0.85);
+            --glass-border:         rgba(255, 255, 255, 0.12);
+
+            --text-primary:         #F3F2FD;
+            --text-secondary:       #B8B4D8;
+            --text-muted:           #7E7A9F;
+            --text-on-dark:         #0D0B18;
+
+            --border-light:         #231F42;
+            --border-medium:        #35305E;
+
+            --pastel-lavender:      rgba(157, 149, 255, 0.18);
+            --pastel-peach:         rgba(253, 185, 154, 0.18);
+            --pastel-mint:          rgba(141, 213, 192, 0.18);
+            --pastel-sky:           rgba(143, 195, 237, 0.18);
+            --pastel-blush:         rgba(240, 160, 180, 0.18);
+            --pastel-butter:        rgba(245, 210, 139, 0.18);
+
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.7);
+        }
+
+        [data-theme="dark"] .content-header {
+            background: rgba(19, 17, 36, 0.85);
+        }
+
+        [data-theme="dark"] table,
+        [data-theme="dark"] th,
+        [data-theme="dark"] .select-modal,
+        [data-theme="dark"] .dropdown-menu,
+        [data-theme="dark"] .notif-panel,
+        [data-theme="dark"] .calendar-widget,
+        [data-theme="dark"] .modal-card {
+            background: #1B1833;
+            color: #F3F2FD;
+        }
+
+        [data-theme="dark"] th {
+            background: #131124;
+        }
+
+        [data-theme="dark"] td {
+            border-bottom-color: #231F42;
+        }
+
+        [data-theme="dark"] tr:hover td {
+            background: #231F42;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           RESET & BASE
+           ═══════════════════════════════════════════════════════════════ */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--text-primary);
+            background: var(--bg-page);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DESIGN SYSTEM SHOWCASE — LAYOUT
+           ═══════════════════════════════════════════════════════════════ */
+
+        .showcase-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ── FROSTED GLASS SIDEBAR ── */
+        .sidebar {
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 100;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            border-right: 1px solid var(--glass-border);
+            padding: var(--space-6);
+            display: flex;
+            flex-direction: column;
+            transition: width var(--duration-normal) var(--ease-out);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            margin-bottom: var(--space-8);
+        }
+
+        .sidebar-brand .brand-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--brand-primary), var(--pastel-lavender-deep));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: var(--text-md);
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand .brand-name {
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: var(--text-lg);
+            color: var(--text-primary);
+        }
+
+        .sidebar-brand .brand-tag {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .sidebar-section-label {
+            font-size: var(--text-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: var(--space-4) var(--space-3) var(--space-2);
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-1);
+            flex: 1;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-size: var(--text-base);
+            font-weight: 450;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+            text-decoration: none;
+            position: relative;
+        }
+
+        .sidebar-item:hover {
+            background: rgba(45, 43, 85, 0.06);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item.active {
+            background: var(--pastel-lavender);
+            color: var(--brand-primary);
+            font-weight: 500;
+        }
+
+        .sidebar-item.active::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 20px;
+            border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+            background: var(--brand-primary);
+        }
+
+        .sidebar-item .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-item .nav-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke-width: 1.8;
+        }
+
+        .sidebar-item .nav-badge {
+            margin-left: auto;
+            min-width: 20px;
+            height: 20px;
+            border-radius: var(--radius-pill);
+            background: var(--color-danger);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 6px;
+        }
+
+        .sidebar-divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: var(--space-3) 0;
+        }
+
+        .sidebar-user {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-3);
+            margin-top: auto;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: background var(--duration-fast) var(--ease-out);
+        }
+
+        .sidebar-user:hover {
+            background: rgba(45, 43, 85, 0.04);
+        }
+
+        .sidebar-user .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-pill);
+            background: linear-gradient(135deg, var(--pastel-peach), var(--pastel-blush));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: var(--text-sm);
+            color: var(--text-on-pastel);
+        }
+
+        .sidebar-user .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .sidebar-user .user-name {
+            font-weight: 500;
+            font-size: var(--text-sm);
+            color: var(--text-primary);
+        }
+
+        .sidebar-user .user-role {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        /* ── MAIN CONTENT AREA ── */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            min-height: 100vh;
+            background: var(--bg-main);
+            border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+
+        .content-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-8);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .header-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .header-breadcrumb span {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .header-breadcrumb .separator {
+            color: var(--text-muted);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .header-icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-md);
+            border: none;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all var(--duration-fast) var(--ease-out);
+            position: relative;
+        }
+
+        .header-icon-btn:hover {
+            background: var(--bg-page);
+            color: var(--text-primary);
+        }
+
+        .header-icon-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .header-icon-btn .notif-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-danger);
+            border: 2px solid white;
+        }
+
+        .header-search {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-md);
+            background: var(--bg-page);
+            border: 1px solid var(--border-light);
+            min-width: 240px;
+            cursor: text;
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .header-search:hover {
+            border-color: var(--border-medium);
+        }
+
+        .header-search svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+        }
+
+        .header-search span {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .header-search kbd {
+            margin-left: auto;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: var(--radius-xs);
+            background: white;
+            border: 1px solid var(--border-light);
+            color: var(--text-muted);
+            font-family: var(--font-body);
+        }
+
+        /* ── CONTENT SECTIONS ── */
+        .content-body {
+            padding: var(--space-8);
+            max-width: var(--content-max-width);
+        }
+
+        .section {
+            margin-bottom: var(--space-16);
+        }
+
+        .section-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-2xl);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .section-description {
+            font-size: var(--text-base);
+            color: var(--text-muted);
+            margin-bottom: var(--space-8);
+            max-width: 600px;
+        }
+
+        .subsection {
+            margin-bottom: var(--space-10);
+        }
+
+        .subsection-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-md);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-4);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .subsection-title .tag {
+            font-size: var(--text-xs);
+            background: var(--pastel-lavender);
+            color: var(--brand-primary);
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            font-weight: 500;
+            font-family: var(--font-body);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           COLOR PALETTE DISPLAY
+           ═══════════════════════════════════════════════════════════════ */
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: var(--space-4);
+        }
+
+        .color-swatch {
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            background: white;
+            transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+        }
+
+        .color-swatch:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .color-swatch .swatch-block {
+            height: 80px;
+            width: 100%;
+        }
+
+        .color-swatch .swatch-info {
+            padding: var(--space-3);
+        }
+
+        .color-swatch .swatch-name {
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .color-swatch .swatch-hex {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           BUTTONS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            align-items: center;
+            margin-bottom: var(--space-4);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-5);
+            border-radius: var(--radius-md);
+            font-family: var(--font-body);
+            font-size: var(--text-base);
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+            line-height: 1.4;
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Primary — Frosted Indigo */
+        .btn-primary {
+            background: var(--brand-primary);
+            color: var(--text-on-dark);
+            box-shadow: 0 2px 8px rgba(45, 43, 85, 0.20);
+        }
+        .btn-primary:hover {
+            background: var(--brand-primary-light);
+            box-shadow: 0 4px 14px rgba(45, 43, 85, 0.25);
+            transform: translateY(-1px);
+        }
+
+        /* Secondary — Frosted / Muted Glass */
+        .btn-secondary {
+            background: var(--pastel-lavender);
+            color: var(--brand-primary);
+            border: 1px solid rgba(45, 43, 85, 0.08);
+        }
+        .btn-secondary:hover {
+            background: var(--pastel-lavender-deep);
+            border-color: rgba(45, 43, 85, 0.12);
+        }
+
+        /* Ghost — Transparent */
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-light);
+        }
+        .btn-ghost:hover {
+            background: var(--bg-page);
+            border-color: var(--border-medium);
+            color: var(--text-primary);
+        }
+
+        /* Pastel Variants */
+        .btn-pastel-peach {
+            background: var(--pastel-peach);
+            color: #8B4513;
+            border: 1px solid rgba(253, 220, 205, 0.6);
+        }
+        .btn-pastel-peach:hover { background: var(--pastel-peach-deep); }
+
+        .btn-pastel-mint {
+            background: var(--pastel-mint);
+            color: #2D6A4F;
+            border: 1px solid rgba(197, 235, 224, 0.6);
+        }
+        .btn-pastel-mint:hover { background: var(--pastel-mint-deep); }
+
+        .btn-pastel-sky {
+            background: var(--pastel-sky);
+            color: #1E4D8C;
+            border: 1px solid rgba(196, 222, 246, 0.6);
+        }
+        .btn-pastel-sky:hover { background: var(--pastel-sky-deep); }
+
+        .btn-pastel-blush {
+            background: var(--pastel-blush);
+            color: #8B2252;
+            border: 1px solid rgba(248, 208, 216, 0.6);
+        }
+        .btn-pastel-blush:hover { background: var(--pastel-blush-deep); }
+
+        .btn-pastel-butter {
+            background: var(--pastel-butter);
+            color: #8B6914;
+            border: 1px solid rgba(251, 233, 199, 0.6);
+        }
+        .btn-pastel-butter:hover { background: var(--pastel-butter-deep); }
+
+        .btn-pastel-lilac {
+            background: var(--pastel-lilac);
+            color: #4A2D8C;
+            border: 1px solid rgba(221, 208, 240, 0.6);
+        }
+        .btn-pastel-lilac:hover { background: var(--pastel-lilac-deep); }
+
+        /* Danger — Soft Red */
+        .btn-danger {
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+            border: 1px solid rgba(229, 80, 80, 0.15);
+        }
+        .btn-danger:hover {
+            background: var(--color-danger);
+            color: white;
+        }
+
+        /* Success — Soft Green */
+        .btn-success {
+            background: var(--color-success-bg);
+            color: var(--color-success);
+            border: 1px solid rgba(67, 181, 129, 0.15);
+        }
+        .btn-success:hover {
+            background: var(--color-success);
+            color: white;
+        }
+
+        /* Sizes */
+        .btn-xs {
+            padding: var(--space-1) var(--space-3);
+            font-size: var(--text-xs);
+            border-radius: var(--radius-sm);
+        }
+
+        .btn-sm {
+            padding: 6px var(--space-4);
+            font-size: var(--text-sm);
+        }
+
+        .btn-lg {
+            padding: var(--space-3) var(--space-6);
+            font-size: var(--text-md);
+        }
+
+        /* Icon-only button */
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: var(--radius-md);
+        }
+
+        .btn-icon.btn-sm {
+            width: 30px;
+            height: 30px;
+        }
+
+        /* Pill shape */
+        .btn-pill {
+            border-radius: var(--radius-pill);
+        }
+
+        .btn:disabled, .btn[disabled] {
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           FORM INPUTS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .form-group {
+            margin-bottom: var(--space-5);
+        }
+
+        .form-label {
+            display: block;
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .form-hint {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            margin-top: var(--space-1);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: var(--space-2) var(--space-4);
+            font-family: var(--font-body);
+            font-size: var(--text-base);
+            color: var(--text-primary);
+            background: var(--bg-page);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            outline: none;
+            transition: all var(--duration-fast) var(--ease-out);
+            line-height: 1.6;
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-input:hover {
+            border-color: var(--border-medium);
+        }
+
+        .form-input:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(45, 43, 85, 0.08);
+            background: white;
+        }
+
+        .form-input.error {
+            border-color: var(--color-danger);
+            box-shadow: 0 0 0 3px rgba(229, 80, 80, 0.08);
+        }
+
+        .form-error {
+            font-size: var(--text-xs);
+            color: var(--color-danger);
+            margin-top: var(--space-1);
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+
+        textarea.form-input {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239494B0' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 16px;
+            padding-right: 36px;
+        }
+
+        /* Checkbox & Radio */
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            cursor: pointer;
+            margin-bottom: var(--space-2);
+        }
+
+        .form-check input[type="checkbox"],
+        .form-check input[type="radio"] {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border-medium);
+            border-radius: var(--radius-xs);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .form-check input[type="radio"] {
+            border-radius: 50%;
+        }
+
+        .form-check input:checked {
+            background: var(--brand-primary);
+            border-color: var(--brand-primary);
+        }
+
+        .form-check input[type="checkbox"]:checked::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .form-check input[type="radio"]:checked::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+        }
+
+        .form-check-label {
+            font-size: var(--text-base);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        /* Toggle Switch */
+        .toggle-wrapper {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .toggle {
+            width: 44px;
+            height: 24px;
+            border-radius: var(--radius-pill);
+            background: var(--border-medium);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: background var(--duration-fast) var(--ease-out);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: var(--shadow-sm);
+            transition: transform var(--duration-fast) var(--ease-spring);
+        }
+
+        .toggle.active {
+            background: var(--brand-primary);
+        }
+
+        .toggle.active::after {
+            transform: translateX(20px);
+        }
+
+        .toggle-label {
+            font-size: var(--text-sm);
+            color: var(--text-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CARDS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--space-5);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            transition: all var(--duration-normal) var(--ease-out);
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+            border-color: var(--border-medium);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-4);
+        }
+
+        .card-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-md);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-subtitle {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .card-body {
+            font-size: var(--text-base);
+            color: var(--text-secondary);
+        }
+
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: var(--space-4);
+            padding-top: var(--space-4);
+            border-top: 1px solid var(--border-light);
+        }
+
+        /* Pastel Accent Cards */
+        .card-accent-lavender { border-left: 3px solid var(--pastel-lavender-deep); }
+        .card-accent-peach    { border-left: 3px solid var(--pastel-peach-deep); }
+        .card-accent-mint     { border-left: 3px solid var(--pastel-mint-deep); }
+        .card-accent-sky      { border-left: 3px solid var(--pastel-sky-deep); }
+        .card-accent-blush    { border-left: 3px solid var(--pastel-blush-deep); }
+        .card-accent-butter   { border-left: 3px solid var(--pastel-butter-deep); }
+
+        /* KPI Stat Card */
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .stat-card .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-card .stat-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .stat-card .stat-value {
+            font-family: var(--font-heading);
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-card .stat-label {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .stat-card .stat-change {
+            font-size: var(--text-xs);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+        }
+
+        .stat-change.positive {
+            background: var(--color-success-bg);
+            color: var(--color-success);
+        }
+
+        .stat-change.negative {
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+        }
+
+        /* Frosted Glass Card */
+        .card-glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-glass);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TABLE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .table-wrapper {
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: white;
+        }
+
+        .table-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .table-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .table-toolbar-title {
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: var(--text-md);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: var(--space-3) var(--space-5);
+            font-size: var(--text-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            background: var(--bg-page);
+            border-bottom: 1px solid var(--border-light);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: var(--space-3) var(--space-5);
+            font-size: var(--text-base);
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-light);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: var(--bg-page);
+        }
+
+        .table-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-pill);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--text-xs);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .table-cell-flex {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .table-cell-name {
+            font-weight: 500;
+        }
+
+        .table-cell-sub {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        .table-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-3) var(--space-5);
+            border-top: 1px solid var(--border-light);
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .pagination-btns {
+            display: flex;
+            gap: var(--space-1);
+        }
+
+        .pagination-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-light);
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            transition: all var(--duration-fast);
+        }
+
+        .pagination-btn:hover {
+            background: var(--bg-page);
+        }
+
+        .pagination-btn.active {
+            background: var(--brand-primary);
+            color: white;
+            border-color: var(--brand-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           BADGES & TAGS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: var(--radius-pill);
+            font-size: var(--text-xs);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .badge-success   { background: var(--color-success-bg); color: var(--color-success); }
+        .badge-success .badge-dot { background: var(--color-success); }
+
+        .badge-warning   { background: var(--color-warning-bg); color: var(--color-warning); }
+        .badge-warning .badge-dot { background: var(--color-warning); }
+
+        .badge-danger    { background: var(--color-danger-bg); color: var(--color-danger); }
+        .badge-danger .badge-dot { background: var(--color-danger); }
+
+        .badge-info      { background: var(--color-info-bg); color: var(--color-info); }
+        .badge-info .badge-dot { background: var(--color-info); }
+
+        .badge-lavender  { background: var(--pastel-lavender); color: #4A2D8C; }
+        .badge-peach     { background: var(--pastel-peach); color: #8B4513; }
+        .badge-mint      { background: var(--pastel-mint); color: #2D6A4F; }
+        .badge-sky       { background: var(--pastel-sky); color: #1E4D8C; }
+        .badge-blush     { background: var(--pastel-blush); color: #8B2252; }
+        .badge-butter    { background: var(--pastel-butter); color: #8B6914; }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MODALS & DIALOGS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .modal-demo-container {
+            position: relative;
+            background: var(--bg-page);
+            border-radius: var(--radius-lg);
+            padding: var(--space-10);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            overflow: hidden;
+        }
+
+        .modal-demo-backdrop {
+            position: absolute;
+            inset: 0;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-lg);
+        }
+
+        .modal-card {
+            position: relative;
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            width: 100%;
+            max-width: 440px;
+            overflow: hidden;
+            animation: modalIn 0.35s var(--ease-out);
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-5) var(--space-6);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .modal-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-lg);
+            font-weight: 600;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all var(--duration-fast);
+        }
+
+        .modal-close:hover {
+            background: var(--bg-page);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: var(--space-6);
+        }
+
+        .modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: var(--space-3);
+            padding: var(--space-4) var(--space-6);
+            border-top: 1px solid var(--border-light);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ALERTS / TOAST
+           ═══════════════════════════════════════════════════════════════ */
+
+        .alert {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-3);
+            padding: var(--space-4) var(--space-5);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-3);
+            font-size: var(--text-sm);
+            border: 1px solid transparent;
+        }
+
+        .alert-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .alert-content { flex: 1; }
+        .alert-title { font-weight: 600; margin-bottom: 2px; }
+
+        .alert-success {
+            background: var(--color-success-bg);
+            color: #2D6A4F;
+            border-color: rgba(67, 181, 129, 0.2);
+        }
+
+        .alert-warning {
+            background: var(--color-warning-bg);
+            color: #8B6914;
+            border-color: rgba(232, 168, 56, 0.2);
+        }
+
+        .alert-danger {
+            background: var(--color-danger-bg);
+            color: #8B2020;
+            border-color: rgba(229, 80, 80, 0.2);
+        }
+
+        .alert-info {
+            background: var(--color-info-bg);
+            color: #1E4D8C;
+            border-color: rgba(91, 141, 239, 0.2);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           AVATAR & AVATAR GROUP
+           ═══════════════════════════════════════════════════════════════ */
+
+        .avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-pill);
+            font-weight: 600;
+            flex-shrink: 0;
+            border: 2px solid white;
+        }
+
+        .avatar-xs   { width: 24px; height: 24px; font-size: 10px; }
+        .avatar-sm   { width: 32px; height: 32px; font-size: var(--text-xs); }
+        .avatar-md   { width: 40px; height: 40px; font-size: var(--text-sm); }
+        .avatar-lg   { width: 48px; height: 48px; font-size: var(--text-md); }
+        .avatar-xl   { width: 64px; height: 64px; font-size: var(--text-xl); }
+
+        .avatar-group {
+            display: flex;
+        }
+
+        .avatar-group .avatar {
+            margin-left: -8px;
+        }
+
+        .avatar-group .avatar:first-child {
+            margin-left: 0;
+        }
+
+        .avatar-group .avatar-overflow {
+            background: var(--pastel-lavender);
+            color: var(--brand-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TABS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: var(--space-5);
+        }
+
+        .tab {
+            padding: var(--space-3) var(--space-5);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all var(--duration-fast);
+            margin-bottom: -1px;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--brand-primary);
+            border-bottom-color: var(--brand-primary);
+        }
+
+        /* Pill Tabs */
+        .tabs-pill {
+            display: flex;
+            gap: var(--space-1);
+            background: var(--bg-page);
+            padding: var(--space-1);
+            border-radius: var(--radius-md);
+            border-bottom: none;
+            width: fit-content;
+            margin-bottom: var(--space-5);
+        }
+
+        .tab-pill {
+            padding: 6px var(--space-4);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .tab-pill:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-pill.active {
+            background: white;
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Month-style pill selector (from screenshot) */
+        .month-selector {
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+
+        .month-pill {
+            padding: 6px 14px;
+            font-size: var(--text-sm);
+            font-weight: 500;
+            color: var(--text-muted);
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .month-pill:hover {
+            color: var(--text-primary);
+            background: var(--bg-page);
+        }
+
+        .month-pill.active {
+            background: var(--brand-primary);
+            color: white;
+        }
+
+        .month-nav {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-light);
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }
+
+        .month-nav:hover {
+            background: var(--bg-page);
+        }
+
+        .month-nav svg {
+            width: 14px;
+            height: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CALENDAR WIDGET
+           ═══════════════════════════════════════════════════════════════ */
+
+        .calendar-widget {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            max-width: 320px;
+        }
+
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-4);
+        }
+
+        .calendar-month {
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: var(--text-md);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            text-align: center;
+        }
+
+        .calendar-day-name {
+            font-size: var(--text-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: var(--space-2) 0;
+        }
+
+        .calendar-day {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            font-size: var(--text-sm);
+            cursor: pointer;
+            transition: all var(--duration-fast);
+            margin: 0 auto;
+        }
+
+        .calendar-day:hover {
+            background: var(--bg-page);
+        }
+
+        .calendar-day.today {
+            background: var(--brand-primary);
+            color: white;
+            font-weight: 600;
+            border-radius: var(--radius-pill);
+        }
+
+        .calendar-day.other-month {
+            color: var(--text-muted);
+            opacity: 0.4;
+        }
+
+        .calendar-day.has-event::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--color-info);
+        }
+
+        .calendar-day {
+            position: relative;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           EVENT / ACTIVITY CHIPS (from Techerly screenshots)
+           ═══════════════════════════════════════════════════════════════ */
+
+        .event-chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2);
+        }
+
+        .event-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: 6px var(--space-3);
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .event-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .event-chip-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: var(--radius-xs);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .event-chip-icon svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .event-chip-lavender { background: var(--pastel-lavender); color: #4A2D8C; }
+        .event-chip-lavender .event-chip-icon { background: var(--pastel-lavender-deep); }
+
+        .event-chip-peach { background: var(--pastel-peach); color: #8B4513; }
+        .event-chip-peach .event-chip-icon { background: var(--pastel-peach-deep); }
+
+        .event-chip-mint { background: var(--pastel-mint); color: #2D6A4F; }
+        .event-chip-mint .event-chip-icon { background: var(--pastel-mint-deep); }
+
+        .event-chip-sky { background: var(--pastel-sky); color: #1E4D8C; }
+        .event-chip-sky .event-chip-icon { background: var(--pastel-sky-deep); }
+
+        .event-chip-blush { background: var(--pastel-blush); color: #8B2252; }
+        .event-chip-blush .event-chip-icon { background: var(--pastel-blush-deep); }
+
+        .event-chip-butter { background: var(--pastel-butter); color: #8B6914; }
+        .event-chip-butter .event-chip-icon { background: var(--pastel-butter-deep); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           UPCOMING EVENTS LIST (from Techerly screenshots)
+           ═══════════════════════════════════════════════════════════════ */
+
+        .event-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        .event-list-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+            padding: var(--space-4);
+            border-radius: var(--radius-md);
+            transition: all var(--duration-fast);
+            cursor: pointer;
+        }
+
+        .event-list-item:hover {
+            transform: translateX(4px);
+        }
+
+        .event-list-item.event-lavender { background: var(--pastel-lavender); }
+        .event-list-item.event-mint     { background: var(--pastel-mint); }
+        .event-list-item.event-butter   { background: var(--pastel-butter); }
+        .event-list-item.event-blush    { background: var(--pastel-blush); }
+
+        .event-list-content { flex: 1; }
+        .event-list-title { font-weight: 600; font-size: var(--text-sm); }
+        .event-list-sub { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px; }
+
+        .event-list-badge {
+            padding: 3px 8px;
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(255,255,255,0.7);
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DROPDOWN
+           ═══════════════════════════════════════════════════════════════ */
+
+        .dropdown-demo {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-menu {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: var(--space-2);
+            min-width: 200px;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm);
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }
+
+        .dropdown-item:hover {
+            background: var(--bg-page);
+            color: var(--text-primary);
+        }
+
+        .dropdown-item.danger {
+            color: var(--color-danger);
+        }
+
+        .dropdown-item.danger:hover {
+            background: var(--color-danger-bg);
+        }
+
+        .dropdown-separator {
+            height: 1px;
+            background: var(--border-light);
+            margin: var(--space-2) 0;
+        }
+
+        .dropdown-item svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           SELECT MODAL / PICKER (from screenshot 5)
+           ═══════════════════════════════════════════════════════════════ */
+
+        .select-modal {
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            max-width: 400px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .select-modal-header {
+            padding: var(--space-5) var(--space-6);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .select-modal-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-lg);
+            font-weight: 600;
+        }
+
+        .select-modal-sub {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .select-modal-filters {
+            display: flex;
+            gap: var(--space-3);
+            padding: var(--space-4) var(--space-6);
+        }
+
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+            padding: 5px 12px;
+            border-radius: var(--radius-pill);
+            font-size: var(--text-sm);
+            background: var(--bg-page);
+            border: 1px solid var(--border-light);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--duration-fast);
+        }
+
+        .filter-chip:hover {
+            border-color: var(--border-medium);
+        }
+
+        .filter-chip svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .select-modal-search {
+            padding: 0 var(--space-6);
+            margin-bottom: var(--space-3);
+        }
+
+        .select-modal-search input {
+            width: 100%;
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            background: var(--bg-page);
+            font-size: var(--text-sm);
+            outline: none;
+        }
+
+        .select-modal-search input:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 3px rgba(45, 43, 85, 0.08);
+        }
+
+        .select-list {
+            max-height: 280px;
+            overflow-y: auto;
+            padding: 0 var(--space-4);
+        }
+
+        .select-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-3) var(--space-2);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .select-group-count {
+            font-weight: 400;
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+        }
+
+        .select-list-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) var(--space-2);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background var(--duration-fast);
+        }
+
+        .select-list-item:hover {
+            background: var(--bg-page);
+        }
+
+        .select-list-item .select-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-pill);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--text-xs);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .select-list-item .select-info { flex: 1; }
+        .select-list-item .select-name { font-size: var(--text-sm); font-weight: 500; }
+        .select-list-item .select-sub  { font-size: var(--text-xs); color: var(--text-muted); }
+
+        .select-list-item .select-check {
+            width: 24px;
+            height: 24px;
+            border-radius: var(--radius-pill);
+            border: 2px solid var(--border-medium);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--duration-fast);
+        }
+
+        .select-list-item .select-check.checked {
+            background: var(--brand-primary);
+            border-color: var(--brand-primary);
+            color: white;
+        }
+
+        .select-modal-footer {
+            padding: var(--space-4) var(--space-6);
+        }
+
+        .select-modal-footer .btn {
+            width: 100%;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           PROGRESS & LOADING
+           ═══════════════════════════════════════════════════════════════ */
+
+        .progress-bar-wrapper {
+            margin-bottom: var(--space-4);
+        }
+
+        .progress-bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--space-2);
+            font-size: var(--text-sm);
+        }
+
+        .progress-bar-track {
+            height: 8px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-page);
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: var(--radius-pill);
+            transition: width var(--duration-slow) var(--ease-out);
+        }
+
+        .progress-bar-fill.lavender { background: linear-gradient(90deg, var(--pastel-lavender-deep), var(--brand-primary)); }
+        .progress-bar-fill.mint     { background: linear-gradient(90deg, var(--pastel-mint), var(--color-success)); }
+        .progress-bar-fill.peach    { background: linear-gradient(90deg, var(--pastel-peach), var(--pastel-peach-deep)); }
+        .progress-bar-fill.sky      { background: linear-gradient(90deg, var(--pastel-sky), var(--color-info)); }
+
+        /* Circular progress */
+        .progress-circle {
+            position: relative;
+            width: 64px;
+            height: 64px;
+        }
+
+        .progress-circle svg {
+            transform: rotate(-90deg);
+        }
+
+        .progress-circle .progress-track {
+            fill: none;
+            stroke: var(--bg-page);
+            stroke-width: 5;
+        }
+
+        .progress-circle .progress-value {
+            fill: none;
+            stroke-width: 5;
+            stroke-linecap: round;
+            transition: stroke-dashoffset var(--duration-slow) var(--ease-out);
+        }
+
+        .progress-circle .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: var(--text-sm);
+            font-weight: 600;
+        }
+
+        /* Skeleton loader */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-page) 25%, #f0eef8 50%, var(--bg-page) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .skeleton-text   { height: 14px; margin-bottom: 8px; }
+        .skeleton-heading { height: 24px; width: 60%; margin-bottom: 12px; }
+        .skeleton-avatar  { width: 40px; height: 40px; border-radius: 50%; }
+        .skeleton-card    { height: 120px; border-radius: var(--radius-lg); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TOOLTIP
+           ═══════════════════════════════════════════════════════════════ */
+
+        .tooltip-demo {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary);
+            color: white;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: var(--text-xs);
+            white-space: nowrap;
+            box-shadow: var(--shadow-md);
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: var(--text-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           EMPTY STATE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-16) var(--space-8);
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: var(--radius-2xl);
+            background: var(--pastel-lavender);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-5);
+        }
+
+        .empty-state-icon svg {
+            width: 36px;
+            height: 36px;
+            color: var(--brand-primary);
+        }
+
+        .empty-state-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-lg);
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+        }
+
+        .empty-state-text {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            max-width: 360px;
+            margin-bottom: var(--space-5);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DASHBOARD DEMO PAGE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .dashboard-hero {
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-light));
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            color: white;
+            margin-bottom: var(--space-6);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dashboard-hero::before {
+            content: '';
+            position: absolute;
+            top: -40%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .dashboard-hero::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: 20%;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.04);
+        }
+
+        .dashboard-hero-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-2xl);
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .dashboard-hero-sub {
+            font-size: var(--text-base);
+            opacity: 0.8;
+            position: relative;
+            z-index: 1;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-5);
+            margin-bottom: var(--space-6);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           DESIGN TOKENS REFERENCE TABLE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .tokens-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--text-sm);
+        }
+
+        .tokens-table th {
+            text-align: left;
+            padding: var(--space-3) var(--space-4);
+            font-size: var(--text-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            background: var(--bg-page);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .tokens-table td {
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--border-light);
+            font-size: var(--text-sm);
+        }
+
+        .tokens-table code {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            background: var(--bg-page);
+            padding: 2px 6px;
+            border-radius: var(--radius-xs);
+            color: var(--brand-primary);
+        }
+
+        .token-preview {
+            width: 24px;
+            height: 24px;
+            border-radius: var(--radius-xs);
+            display: inline-block;
+            vertical-align: middle;
+            border: 1px solid var(--border-light);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TYPOGRAPHY SHOWCASE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .type-showcase {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+
+        .type-row {
+            display: flex;
+            align-items: baseline;
+            gap: var(--space-6);
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .type-label {
+            width: 120px;
+            flex-shrink: 0;
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .type-sample {
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           SHADOW SHOWCASE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .shadow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: var(--space-6);
+        }
+
+        .shadow-box {
+            width: 100%;
+            height: 100px;
+            border-radius: var(--radius-lg);
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           RADIUS SHOWCASE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .radius-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-5);
+            align-items: flex-end;
+        }
+
+        .radius-box {
+            width: 80px;
+            height: 80px;
+            background: var(--pastel-lavender);
+            border: 2px solid var(--pastel-lavender-deep);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           NAVIGATION BREADCRUMBS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+        }
+
+        .breadcrumb-item {
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color var(--duration-fast);
+        }
+
+        .breadcrumb-item:hover {
+            color: var(--text-primary);
+        }
+
+        .breadcrumb-item.current {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .breadcrumb-sep {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           PAGE TITLE SECTION
+           ═══════════════════════════════════════════════════════════════ */
+
+        .page-title-section {
+            background: linear-gradient(135deg, #2D2B55 0%, #4A478A 50%, #6B65C0 100%);
+            padding: var(--space-16) var(--space-8);
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-title-section::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            right: -100px;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .page-title-section::after {
+            content: '';
+            position: absolute;
+            bottom: -80px;
+            left: -60px;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.04);
+        }
+
+        .page-title {
+            font-family: var(--font-heading);
+            font-size: var(--text-4xl);
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .page-subtitle {
+            font-size: var(--text-lg);
+            opacity: 0.7;
+            margin-top: var(--space-3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .page-meta {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-6);
+            margin-top: var(--space-6);
+            position: relative;
+            z-index: 1;
+        }
+
+        .page-meta-item {
+            font-size: var(--text-sm);
+            opacity: 0.6;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           COMPONENT GRID LAYOUT HELPER
+           ═══════════════════════════════════════════════════════════════ */
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-6);
+        }
+
+        .three-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--space-6);
+        }
+
+        .showcase-panel {
+            background: var(--bg-page);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+        }
+
+        .demo-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            align-items: center;
+        }
+
+        .demo-label {
+            font-size: var(--text-xs);
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: var(--space-2);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           NOTIFICATION PANEL
+           ═══════════════════════════════════════════════════════════════ */
+
+        .notif-panel {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg);
+            max-width: 380px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .notif-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .notif-header-title {
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: var(--text-md);
+        }
+
+        .notif-item {
+            display: flex;
+            gap: var(--space-3);
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--border-light);
+            transition: background var(--duration-fast);
+            cursor: pointer;
+        }
+
+        .notif-item:hover {
+            background: var(--bg-page);
+        }
+
+        .notif-item.unread {
+            background: rgba(45, 43, 85, 0.02);
+        }
+
+        .notif-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .notif-content { flex: 1; min-width: 0; }
+        .notif-text { font-size: var(--text-sm); color: var(--text-primary); }
+        .notif-text strong { font-weight: 600; }
+        .notif-time { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
+
+        .notif-dot-unread {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-info);
+            flex-shrink: 0;
+            margin-top: 6px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ANIMATION CLASSES
+           ═══════════════════════════════════════════════════════════════ */
+
+        .fade-in {
+            animation: fadeIn var(--duration-normal) var(--ease-out);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-in-left {
+            animation: slideInLeft var(--duration-normal) var(--ease-out);
+        }
+
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-16px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════════ */
+
+        @media (max-width: 1024px) {
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .two-col  { grid-template-columns: 1fr; }
+            .three-col { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-content { margin-left: 0; border-radius: 0; }
+            .kpi-grid { grid-template-columns: 1fr; }
+            .content-body { padding: var(--space-5); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PAGE TITLE — DESIGN SYSTEM HERO
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div class="page-title-section">
+    <div class="page-title">KDPS Design System</div>
+    <div class="page-subtitle">Clothing Brand · Retail Chain ERP · Design Language Kit v1.0</div>
+    <div class="page-meta">
+        <span class="page-meta-item">Outfit + Work Sans</span>
+        <span class="page-meta-item">·</span>
+        <span class="page-meta-item">Frosted Glass · Pastel Palette</span>
+        <span class="page-meta-item">·</span>
+        <span class="page-meta-item">Phosphor Icons</span>
+    </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     FULL APP LAYOUT DEMO — Sidebar + Header + Content
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<div class="showcase-wrapper" id="app-layout">
+
+    <!-- FROSTED GLASS SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-logo">K</div>
+            <div>
+                <div class="brand-name">KDPS</div>
+                <div class="brand-tag">Retail ERP</div>
+            </div>
+        </div>
+
+        <div class="sidebar-section-label">Main Menu</div>
+        <nav class="sidebar-nav">
+            <a class="sidebar-item active" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+                </span>
+                Dashboard
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+                </span>
+                Orders
+                <span class="nav-badge">12</span>
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+                </span>
+                Inventory
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z"/></svg>
+                </span>
+                Products
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                </span>
+                Customers
+            </a>
+
+            <div class="sidebar-section-label">Management</div>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
+                </span>
+                Stores
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.136-.504 1.059-1.12l-1.07-9.58a1.745 1.745 0 00-1.714-1.55H5.468a1.745 1.745 0 00-1.714 1.55L2.69 16.38c-.077.616.438 1.12 1.059 1.12H5.25m0-3h13.5m-13.5 0V8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v3m-4.5 0h4.5m0 0V8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v3"/></svg>
+                </span>
+                Supply Chain
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+                </span>
+                Reports
+            </a>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+                </span>
+                Calendar
+            </a>
+
+            <div class="sidebar-section-label">Settings</div>
+            <a class="sidebar-item" href="#">
+                <span class="nav-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </span>
+                Settings
+            </a>
+        </nav>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-user">
+            <div class="user-avatar">AK</div>
+            <div class="user-info">
+                <div class="user-name">Anand K.</div>
+                <div class="user-role">Admin</div>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: var(--text-muted)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"/></svg>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- HEADER -->
+        <header class="content-header">
+            <div class="header-breadcrumb">
+                KDPS <span class="separator">›</span> <span>Design System</span>
+            </div>
+            <div class="header-actions">
+                <div class="header-search">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                    <span>Search anything…</span>
+                    <kbd>⌘K</kbd>
+                </div>
+                <button class="header-icon-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+                    <span class="notif-dot"></span>
+                </button>
+                <button class="header-icon-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="content-body">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 1: DASHBOARD DEMO
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="dashboard">
+                <div class="section-title">📊 Dashboard Overview</div>
+                <div class="section-description">A real ERP dashboard layout showing how all components work together in context.</div>
+
+                <!-- Welcome Banner -->
+                <div class="dashboard-hero">
+                    <div class="dashboard-hero-title">Good afternoon, Anand 👋</div>
+                    <div class="dashboard-hero-sub">Here's what's happening with your stores today — Tuesday, 29 July 2026</div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="kpi-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--pastel-mint);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#2D6A4F" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div class="stat-label">Today's Revenue</div>
+                        <div class="stat-value">₹4,82,350</div>
+                        <span class="stat-change positive">↑ 12.5%</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--pastel-sky);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1E4D8C" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+                        </div>
+                        <div class="stat-label">Total Orders</div>
+                        <div class="stat-value">284</div>
+                        <span class="stat-change positive">↑ 8.2%</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--pastel-peach);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#8B4513" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+                        </div>
+                        <div class="stat-label">Low Stock Items</div>
+                        <div class="stat-value">18</div>
+                        <span class="stat-change negative">↑ 3 items</span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--pastel-lavender);">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#4A2D8C" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                        </div>
+                        <div class="stat-label">Active Customers</div>
+                        <div class="stat-value">1,247</div>
+                        <span class="stat-change positive">↑ 5.1%</span>
+                    </div>
+                </div>
+
+                <!-- Recent Activity + Calendar -->
+                <div class="two-col">
+                    <div>
+                        <div class="subsection-title">Recent Activity</div>
+                        <div class="event-list">
+                            <div class="event-list-item event-lavender">
+                                <div class="event-list-content">
+                                    <div class="event-list-title">New order placed</div>
+                                    <div class="event-list-sub">Order #4821 · ₹12,500 · 3 items</div>
+                                </div>
+                                <div class="event-list-badge">2 min ago</div>
+                            </div>
+                            <div class="event-list-item event-mint">
+                                <div class="event-list-content">
+                                    <div class="event-list-title">Stock replenished</div>
+                                    <div class="event-list-sub">Warehouse A · 450 units · Summer Collection</div>
+                                </div>
+                                <div class="event-list-badge">15 min ago</div>
+                            </div>
+                            <div class="event-list-item event-butter">
+                                <div class="event-list-content">
+                                    <div class="event-list-title">Return processed</div>
+                                    <div class="event-list-sub">Order #4798 · ₹3,200 · Size exchange</div>
+                                </div>
+                                <div class="event-list-badge">1 hr ago</div>
+                            </div>
+                            <div class="event-list-item event-blush">
+                                <div class="event-list-content">
+                                    <div class="event-list-title">New customer registered</div>
+                                    <div class="event-list-sub">Priya Sharma · Delhi Store · Walk-in</div>
+                                </div>
+                                <div class="event-list-badge">2 hrs ago</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="subsection-title">July 2026</div>
+                        <div class="calendar-widget" style="max-width: 100%;">
+                            <div class="calendar-header">
+                                <div class="calendar-month">July 2026</div>
+                                <div style="display: flex; gap: 4px;">
+                                    <button class="month-nav"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>
+                                    <button class="month-nav"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg></button>
+                                </div>
+                            </div>
+                            <div class="calendar-grid">
+                                <div class="calendar-day-name">Mo</div>
+                                <div class="calendar-day-name">Tu</div>
+                                <div class="calendar-day-name">We</div>
+                                <div class="calendar-day-name">Th</div>
+                                <div class="calendar-day-name">Fr</div>
+                                <div class="calendar-day-name">Sa</div>
+                                <div class="calendar-day-name">Su</div>
+                                <div class="calendar-day other-month">29</div>
+                                <div class="calendar-day other-month">30</div>
+                                <div class="calendar-day">1</div>
+                                <div class="calendar-day">2</div>
+                                <div class="calendar-day">3</div>
+                                <div class="calendar-day">4</div>
+                                <div class="calendar-day">5</div>
+                                <div class="calendar-day">6</div>
+                                <div class="calendar-day">7</div>
+                                <div class="calendar-day">8</div>
+                                <div class="calendar-day">9</div>
+                                <div class="calendar-day">10</div>
+                                <div class="calendar-day">11</div>
+                                <div class="calendar-day">12</div>
+                                <div class="calendar-day">13</div>
+                                <div class="calendar-day">14</div>
+                                <div class="calendar-day">15</div>
+                                <div class="calendar-day">16</div>
+                                <div class="calendar-day">17</div>
+                                <div class="calendar-day">18</div>
+                                <div class="calendar-day">19</div>
+                                <div class="calendar-day">20</div>
+                                <div class="calendar-day">21</div>
+                                <div class="calendar-day">22</div>
+                                <div class="calendar-day">23</div>
+                                <div class="calendar-day">24</div>
+                                <div class="calendar-day">25</div>
+                                <div class="calendar-day">26</div>
+                                <div class="calendar-day">27</div>
+                                <div class="calendar-day">28</div>
+                                <div class="calendar-day today">29</div>
+                                <div class="calendar-day">30</div>
+                                <div class="calendar-day">31</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 2: COLOR PALETTE
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="colors">
+                <div class="section-title">🎨 Color Palette</div>
+                <div class="section-description">Our pastel-forward palette brings softness while maintaining professional authority. Every color has a purpose.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Brand & Core</div>
+                    <div class="color-grid">
+                        <div class="color-swatch"><div class="swatch-block" style="background: #2D2B55;"></div><div class="swatch-info"><div class="swatch-name">Primary</div><div class="swatch-hex">#2D2B55</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #4A478A;"></div><div class="swatch-info"><div class="swatch-name">Primary Light</div><div class="swatch-hex">#4A478A</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #1E1C3D;"></div><div class="swatch-info"><div class="swatch-name">Primary Dark</div><div class="swatch-hex">#1E1C3D</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #F8F7FC;"></div><div class="swatch-info"><div class="swatch-name">Page BG</div><div class="swatch-hex">#F8F7FC</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #FFFFFF; border: 1px solid #eee;"></div><div class="swatch-info"><div class="swatch-name">Main BG</div><div class="swatch-hex">#FFFFFF</div></div></div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Pastel Palette <span class="tag">Signature</span></div>
+                    <div class="color-grid">
+                        <div class="color-swatch"><div class="swatch-block" style="background: #E8E0F0;"></div><div class="swatch-info"><div class="swatch-name">Lavender</div><div class="swatch-hex">#E8E0F0</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #FDDCCD;"></div><div class="swatch-info"><div class="swatch-name">Peach</div><div class="swatch-hex">#FDDCCD</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #C5EBE0;"></div><div class="swatch-info"><div class="swatch-name">Mint</div><div class="swatch-hex">#C5EBE0</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #C4DEF6;"></div><div class="swatch-info"><div class="swatch-name">Sky</div><div class="swatch-hex">#C4DEF6</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #F8D0D8;"></div><div class="swatch-info"><div class="swatch-name">Blush</div><div class="swatch-hex">#F8D0D8</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #FBE9C7;"></div><div class="swatch-info"><div class="swatch-name">Butter</div><div class="swatch-hex">#FBE9C7</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #D4E5D0;"></div><div class="swatch-info"><div class="swatch-name">Sage</div><div class="swatch-hex">#D4E5D0</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #DDD0F0;"></div><div class="swatch-info"><div class="swatch-name">Lilac</div><div class="swatch-hex">#DDD0F0</div></div></div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Semantic</div>
+                    <div class="color-grid">
+                        <div class="color-swatch"><div class="swatch-block" style="background: #43B581;"></div><div class="swatch-info"><div class="swatch-name">Success</div><div class="swatch-hex">#43B581</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #E8A838;"></div><div class="swatch-info"><div class="swatch-name">Warning</div><div class="swatch-hex">#E8A838</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #E55050;"></div><div class="swatch-info"><div class="swatch-name">Danger</div><div class="swatch-hex">#E55050</div></div></div>
+                        <div class="color-swatch"><div class="swatch-block" style="background: #5B8DEF;"></div><div class="swatch-info"><div class="swatch-name">Info</div><div class="swatch-hex">#5B8DEF</div></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 3: TYPOGRAPHY
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="typography">
+                <div class="section-title">✏️ Typography</div>
+                <div class="section-description">Outfit for headings (geometric, modern), Work Sans for body text (clean readability at small sizes).</div>
+
+                <div class="type-showcase">
+                    <div class="type-row">
+                        <div class="type-label">text-4xl / 36px</div>
+                        <div class="type-sample" style="font-family: var(--font-heading); font-size: var(--text-4xl); font-weight: 700;">Store Performance</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-3xl / 30px</div>
+                        <div class="type-sample" style="font-family: var(--font-heading); font-size: var(--text-3xl); font-weight: 600;">Inventory Report</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-2xl / 24px</div>
+                        <div class="type-sample" style="font-family: var(--font-heading); font-size: var(--text-2xl); font-weight: 600;">Order Management</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-xl / 20px</div>
+                        <div class="type-sample" style="font-family: var(--font-heading); font-size: var(--text-xl); font-weight: 600;">Customer Details</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-lg / 18px</div>
+                        <div class="type-sample" style="font-family: var(--font-heading); font-size: var(--text-lg); font-weight: 500;">Section Heading</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-md / 16px</div>
+                        <div class="type-sample" style="font-family: var(--font-body); font-size: var(--text-md); font-weight: 400;">Body text at standard size. The quick brown fox jumps over the lazy dog.</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-base / 14px</div>
+                        <div class="type-sample" style="font-family: var(--font-body); font-size: var(--text-base); font-weight: 400;">Default body text for most content. Clean and readable at dashboard density.</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-sm / 13px</div>
+                        <div class="type-sample" style="font-family: var(--font-body); font-size: var(--text-sm); font-weight: 400; color: var(--text-secondary);">Secondary text, descriptions, table cells, metadata.</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">text-xs / 12px</div>
+                        <div class="type-sample" style="font-family: var(--font-body); font-size: var(--text-xs); font-weight: 400; color: var(--text-muted);">LABELS, TIMESTAMPS, CAPTIONS — SMALLEST READABLE SIZE</div>
+                    </div>
+                    <div class="type-row">
+                        <div class="type-label">Monospace</div>
+                        <div class="type-sample" style="font-family: var(--font-mono); font-size: var(--text-base); color: var(--brand-primary);">SKU-2026-SUMR-0451 · ₹12,500.00</div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 4: BUTTONS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="buttons">
+                <div class="section-title">🔘 Buttons</div>
+                <div class="section-description">Frosted, muted, and pastel buttons — no harsh solid fills. Soft to touch, clear in intent.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Primary Variants</div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                            New Order
+                        </button>
+                        <button class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                            Export
+                        </button>
+                        <button class="btn btn-ghost">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/></svg>
+                            Filter
+                        </button>
+                        <button class="btn btn-ghost btn-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Pastel Buttons <span class="tag">Signature</span></div>
+                    <div class="btn-row">
+                        <button class="btn btn-pastel-peach">Peach Action</button>
+                        <button class="btn btn-pastel-mint">Mint Action</button>
+                        <button class="btn btn-pastel-sky">Sky Action</button>
+                        <button class="btn btn-pastel-blush">Blush Action</button>
+                        <button class="btn btn-pastel-butter">Butter Action</button>
+                        <button class="btn btn-pastel-lilac">Lilac Action</button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Semantic</div>
+                    <div class="btn-row">
+                        <button class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                            Confirm
+                        </button>
+                        <button class="btn btn-danger">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Sizes</div>
+                    <div class="btn-row">
+                        <button class="btn btn-secondary btn-xs">Extra Small</button>
+                        <button class="btn btn-secondary btn-sm">Small</button>
+                        <button class="btn btn-secondary">Default</button>
+                        <button class="btn btn-secondary btn-lg">Large</button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Pill Buttons</div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary btn-pill">Save Changes</button>
+                        <button class="btn btn-secondary btn-pill">Cancel</button>
+                        <button class="btn btn-pastel-mint btn-pill">Approve</button>
+                        <button class="btn btn-ghost btn-pill">Learn More</button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Disabled</div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary" disabled>Disabled Primary</button>
+                        <button class="btn btn-secondary" disabled>Disabled Secondary</button>
+                        <button class="btn btn-ghost" disabled>Disabled Ghost</button>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 5: FORM ELEMENTS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="forms">
+                <div class="section-title">📝 Form Elements</div>
+                <div class="section-description">Clean inputs with soft backgrounds. Labels always visible. Gentle focus rings.</div>
+
+                <div class="two-col">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Product Name</label>
+                            <input class="form-input" type="text" placeholder="Enter product name…">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SKU</label>
+                            <input class="form-input" type="text" value="SKU-2026-SUMR-0451" style="font-family: var(--font-mono);">
+                            <div class="form-hint">Auto-generated. You can edit manually.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select class="form-input form-select">
+                                <option>Men's Clothing</option>
+                                <option>Women's Clothing</option>
+                                <option>Kids</option>
+                                <option>Accessories</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Price (₹)</label>
+                            <input class="form-input error" type="number" value="-50">
+                            <div class="form-error">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                                Price cannot be negative
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-input" placeholder="Product description…"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Options</label>
+                            <label class="form-check">
+                                <input type="checkbox" checked>
+                                <span class="form-check-label">Available for online sale</span>
+                            </label>
+                            <label class="form-check">
+                                <input type="checkbox">
+                                <span class="form-check-label">Show in catalogue</span>
+                            </label>
+                            <label class="form-check">
+                                <input type="checkbox" checked>
+                                <span class="form-check-label">Track inventory</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Store Availability</label>
+                            <label class="form-check">
+                                <input type="radio" name="store" checked>
+                                <span class="form-check-label">All stores</span>
+                            </label>
+                            <label class="form-check">
+                                <input type="radio" name="store">
+                                <span class="form-check-label">Selected stores only</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Features</label>
+                            <div class="toggle-wrapper">
+                                <button class="toggle active"></button>
+                                <span class="toggle-label">Enable express delivery</span>
+                            </div>
+                            <div style="height: 8px;"></div>
+                            <div class="toggle-wrapper">
+                                <button class="toggle"></button>
+                                <span class="toggle-label">Gift wrapping available</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 6: BADGES & TAGS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="badges">
+                <div class="section-title">🏷️ Badges & Tags</div>
+                <div class="section-description">Status indicators and category labels in our pastel palette.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Status Badges</div>
+                    <div class="btn-row">
+                        <span class="badge badge-success"><span class="badge-dot"></span> In Stock</span>
+                        <span class="badge badge-warning"><span class="badge-dot"></span> Low Stock</span>
+                        <span class="badge badge-danger"><span class="badge-dot"></span> Out of Stock</span>
+                        <span class="badge badge-info"><span class="badge-dot"></span> Pre-order</span>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Category Tags</div>
+                    <div class="btn-row">
+                        <span class="badge badge-lavender">Summer '26</span>
+                        <span class="badge badge-peach">New Arrival</span>
+                        <span class="badge badge-mint">Eco-Friendly</span>
+                        <span class="badge badge-sky">Premium</span>
+                        <span class="badge badge-blush">Limited Edition</span>
+                        <span class="badge badge-butter">Best Seller</span>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 7: DATA TABLE
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="table">
+                <div class="section-title">📋 Data Table</div>
+                <div class="section-description">Clean, readable tables with pastel avatars, badges, and row hover states.</div>
+
+                <div class="table-wrapper">
+                    <div class="table-toolbar">
+                        <div class="table-toolbar-left">
+                            <span class="table-toolbar-title">Product Inventory</span>
+                            <span class="badge badge-lavender">128 items</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-ghost btn-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/></svg>
+                                Filter
+                            </button>
+                            <button class="btn btn-primary btn-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                                Add Product
+                            </button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <div class="table-cell-flex">
+                                        <div class="table-avatar" style="background: var(--pastel-lavender); color: #4A2D8C;">SL</div>
+                                        <div>
+                                            <div class="table-cell-name">Silk Linen Blazer</div>
+                                            <div class="table-cell-sub">Men's Outerwear</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted);">SKU-4521</td>
+                                <td><span class="badge badge-lavender">Summer '26</span></td>
+                                <td style="font-weight: 500;">₹8,499</td>
+                                <td>42</td>
+                                <td><span class="badge badge-success"><span class="badge-dot"></span> In Stock</span></td>
+                                <td>
+                                    <button class="btn btn-ghost btn-icon btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="table-cell-flex">
+                                        <div class="table-avatar" style="background: var(--pastel-blush); color: #8B2252;">CD</div>
+                                        <div>
+                                            <div class="table-cell-name">Cotton Midi Dress</div>
+                                            <div class="table-cell-sub">Women's Dresses</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted);">SKU-4522</td>
+                                <td><span class="badge badge-peach">New Arrival</span></td>
+                                <td style="font-weight: 500;">₹3,299</td>
+                                <td>5</td>
+                                <td><span class="badge badge-warning"><span class="badge-dot"></span> Low Stock</span></td>
+                                <td>
+                                    <button class="btn btn-ghost btn-icon btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="table-cell-flex">
+                                        <div class="table-avatar" style="background: var(--pastel-mint); color: #2D6A4F;">DT</div>
+                                        <div>
+                                            <div class="table-cell-name">Denim Trucker Jacket</div>
+                                            <div class="table-cell-sub">Men's Outerwear</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted);">SKU-4523</td>
+                                <td><span class="badge badge-butter">Best Seller</span></td>
+                                <td style="font-weight: 500;">₹4,999</td>
+                                <td>0</td>
+                                <td><span class="badge badge-danger"><span class="badge-dot"></span> Out of Stock</span></td>
+                                <td>
+                                    <button class="btn btn-ghost btn-icon btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="table-cell-flex">
+                                        <div class="table-avatar" style="background: var(--pastel-sky); color: #1E4D8C;">KP</div>
+                                        <div>
+                                            <div class="table-cell-name">Kids Polo T-Shirt</div>
+                                            <div class="table-cell-sub">Kids' Tops</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted);">SKU-4524</td>
+                                <td><span class="badge badge-mint">Eco-Friendly</span></td>
+                                <td style="font-weight: 500;">₹899</td>
+                                <td>210</td>
+                                <td><span class="badge badge-success"><span class="badge-dot"></span> In Stock</span></td>
+                                <td>
+                                    <button class="btn btn-ghost btn-icon btn-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="table-pagination">
+                        <span>Showing 1-4 of 128 products</span>
+                        <div class="pagination-btns">
+                            <button class="pagination-btn">‹</button>
+                            <button class="pagination-btn active">1</button>
+                            <button class="pagination-btn">2</button>
+                            <button class="pagination-btn">3</button>
+                            <button class="pagination-btn">…</button>
+                            <button class="pagination-btn">32</button>
+                            <button class="pagination-btn">›</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 8: CARDS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="cards">
+                <div class="section-title">🃏 Cards</div>
+                <div class="section-description">Cards with pastel accents, hover lift effects, and clean structure.</div>
+
+                <div class="card-grid" style="margin-bottom: var(--space-6);">
+                    <div class="card card-accent-lavender">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Store: Connaught Place</div>
+                                <div class="card-subtitle">Delhi · Flagship</div>
+                            </div>
+                            <span class="badge badge-success"><span class="badge-dot"></span> Open</span>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Today's Sales</span>
+                                <span style="font-weight: 600;">₹1,24,500</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Orders</span>
+                                <span style="font-weight: 600;">47</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="avatar-group">
+                                <div class="avatar avatar-sm" style="background: var(--pastel-peach); color: #8B4513;">RS</div>
+                                <div class="avatar avatar-sm" style="background: var(--pastel-sky); color: #1E4D8C;">PK</div>
+                                <div class="avatar avatar-sm" style="background: var(--pastel-mint); color: #2D6A4F;">AM</div>
+                                <div class="avatar avatar-sm avatar-overflow">+4</div>
+                            </div>
+                            <button class="btn btn-ghost btn-xs">View Details →</button>
+                        </div>
+                    </div>
+
+                    <div class="card card-accent-peach">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Store: Phoenix Mall</div>
+                                <div class="card-subtitle">Mumbai · Premium</div>
+                            </div>
+                            <span class="badge badge-success"><span class="badge-dot"></span> Open</span>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Today's Sales</span>
+                                <span style="font-weight: 600;">₹2,08,750</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Orders</span>
+                                <span style="font-weight: 600;">63</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="avatar-group">
+                                <div class="avatar avatar-sm" style="background: var(--pastel-lavender); color: #4A2D8C;">NK</div>
+                                <div class="avatar avatar-sm" style="background: var(--pastel-blush); color: #8B2252;">SR</div>
+                                <div class="avatar avatar-sm avatar-overflow">+6</div>
+                            </div>
+                            <button class="btn btn-ghost btn-xs">View Details →</button>
+                        </div>
+                    </div>
+
+                    <div class="card card-accent-mint">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Store: Indiranagar</div>
+                                <div class="card-subtitle">Bengaluru · Standard</div>
+                            </div>
+                            <span class="badge badge-warning"><span class="badge-dot"></span> Closing Soon</span>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Today's Sales</span>
+                                <span style="font-weight: 600;">₹89,200</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-muted); font-size: var(--text-sm);">Orders</span>
+                                <span style="font-weight: 600;">28</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="avatar-group">
+                                <div class="avatar avatar-sm" style="background: var(--pastel-butter); color: #8B6914;">VG</div>
+                                <div class="avatar avatar-sm avatar-overflow">+2</div>
+                            </div>
+                            <button class="btn btn-ghost btn-xs">View Details →</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 9: TABS & NAVIGATION
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="tabs">
+                <div class="section-title">📑 Tabs & Navigation</div>
+                <div class="section-description">Underline tabs, pill tabs, and month-style selectors inspired by the references.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Underline Tabs</div>
+                    <div class="tabs">
+                        <div class="tab active">All Products</div>
+                        <div class="tab">Men's</div>
+                        <div class="tab">Women's</div>
+                        <div class="tab">Kids</div>
+                        <div class="tab">Accessories</div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Pill Tabs</div>
+                    <div class="tabs-pill">
+                        <div class="tab-pill active">Overview</div>
+                        <div class="tab-pill">Sales</div>
+                        <div class="tab-pill">Inventory</div>
+                        <div class="tab-pill">Returns</div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Month Selector <span class="tag">From Reference</span></div>
+                    <div class="month-selector">
+                        <button class="month-nav"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>
+                        <span class="month-pill">Jan</span>
+                        <span class="month-pill">Feb</span>
+                        <span class="month-pill">Mar</span>
+                        <span class="month-pill">Apr</span>
+                        <span class="month-pill">May</span>
+                        <span class="month-pill">Jun</span>
+                        <span class="month-pill active">Jul</span>
+                        <button class="month-nav"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg></button>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Breadcrumb</div>
+                    <div class="breadcrumb">
+                        <span class="breadcrumb-item">KDPS</span>
+                        <span class="breadcrumb-sep">›</span>
+                        <span class="breadcrumb-item">Inventory</span>
+                        <span class="breadcrumb-sep">›</span>
+                        <span class="breadcrumb-item">Men's Clothing</span>
+                        <span class="breadcrumb-sep">›</span>
+                        <span class="breadcrumb-item current">Silk Linen Blazer</span>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 10: EVENT CHIPS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="chips">
+                <div class="section-title">💊 Event Chips & Activity Tags</div>
+                <div class="section-description">Inspired by the Techerly activity calendar — pastel-backed chips for events, tasks, and log entries.</div>
+
+                <div class="event-chips-row">
+                    <div class="event-chip event-chip-lavender">
+                        <div class="event-chip-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                        </div>
+                        Order Created · 6:45 am
+                    </div>
+                    <div class="event-chip event-chip-peach">
+                        <div class="event-chip-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
+                        </div>
+                        Stock Updated · 9:00 am
+                    </div>
+                    <div class="event-chip event-chip-mint">
+                        <div class="event-chip-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                        </div>
+                        Delivery Confirmed · 2:30 pm
+                    </div>
+                    <div class="event-chip event-chip-blush">
+                        <div class="event-chip-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+                        </div>
+                        Return Initiated · 4:15 pm
+                    </div>
+                    <div class="event-chip event-chip-butter">
+                        <div class="event-chip-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        Payment Received · 5:00 pm
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 11: ALERTS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="alerts">
+                <div class="section-title">⚡ Alerts & Toasts</div>
+                <div class="section-description">Contextual alerts for system feedback. Soft backgrounds with matching accents.</div>
+
+                <div style="max-width: 600px;">
+                    <div class="alert alert-success">
+                        <svg class="alert-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div class="alert-content">
+                            <div class="alert-title">Order confirmed!</div>
+                            Order #4821 has been placed successfully and is being processed.
+                        </div>
+                    </div>
+                    <div class="alert alert-warning">
+                        <svg class="alert-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                        <div class="alert-content">
+                            <div class="alert-title">Low stock alert</div>
+                            5 products have fallen below the minimum stock threshold. Review inventory.
+                        </div>
+                    </div>
+                    <div class="alert alert-danger">
+                        <svg class="alert-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                        <div class="alert-content">
+                            <div class="alert-title">Payment failed</div>
+                            Transaction for Order #4819 was declined. Please retry or contact support.
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <svg class="alert-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/></svg>
+                        <div class="alert-content">
+                            <div class="alert-title">Seasonal sale starting</div>
+                            Monsoon Sale prices will be effective from August 1, 2026. Update pricing.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 12: MODAL
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="modal">
+                <div class="section-title">📦 Modal Dialog</div>
+                <div class="section-description">Modals for confirmations, forms, and detail views. Smooth enter animation.</div>
+
+                <div class="modal-demo-container">
+                    <div class="modal-demo-backdrop"></div>
+                    <div class="modal-card">
+                        <div class="modal-header">
+                            <div class="modal-title">Add New Product</div>
+                            <button class="modal-close">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label class="form-label">Product Name</label>
+                                <input class="form-input" type="text" placeholder="e.g. Oversized Linen Shirt">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Price (₹)</label>
+                                <input class="form-input" type="number" placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Initial Stock</label>
+                                <input class="form-input" type="number" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost">Cancel</button>
+                            <button class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                                Add Product
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 13: SELECT MODAL / PICKER
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="select-modal">
+                <div class="section-title">🔍 Select Modal / Picker</div>
+                <div class="section-description">Inspired by Techerly's student selector — searchable, grouped list with selection states.</div>
+
+                <div class="modal-demo-container">
+                    <div class="modal-demo-backdrop"></div>
+                    <div class="select-modal" style="position: relative;">
+                        <div class="select-modal-header">
+                            <div class="select-modal-title">Select Store</div>
+                            <div class="select-modal-sub">Choose a store to view details</div>
+                        </div>
+                        <div class="select-modal-filters">
+                            <div class="filter-chip">All Regions <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg></div>
+                            <div class="filter-chip">Active Stores <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg></div>
+                        </div>
+                        <div class="select-modal-search">
+                            <input type="text" placeholder="Search for Store…">
+                        </div>
+                        <div class="select-list">
+                            <div class="select-group-header">
+                                <span>North India <span class="select-group-count">· 4 stores</span></span>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+                            </div>
+                            <div class="select-list-item">
+                                <div class="select-avatar" style="background: var(--pastel-lavender); color: #4A2D8C;">CP</div>
+                                <div class="select-info">
+                                    <div class="select-name">Connaught Place</div>
+                                    <div class="select-sub">Delhi · Flagship</div>
+                                </div>
+                                <div class="select-check checked">✓</div>
+                            </div>
+                            <div class="select-list-item">
+                                <div class="select-avatar" style="background: var(--pastel-peach); color: #8B4513;">SC</div>
+                                <div class="select-info">
+                                    <div class="select-name">Select City Walk</div>
+                                    <div class="select-sub">Delhi · Premium</div>
+                                </div>
+                                <div class="select-check"></div>
+                            </div>
+                            <div class="select-list-item">
+                                <div class="select-avatar" style="background: var(--pastel-mint); color: #2D6A4F;">EW</div>
+                                <div class="select-info">
+                                    <div class="select-name">Elante Walk</div>
+                                    <div class="select-sub">Chandigarh · Standard</div>
+                                </div>
+                                <div class="select-check"></div>
+                            </div>
+
+                            <div class="select-group-header" style="margin-top: 8px;">
+                                <span>South India <span class="select-group-count">· 3 stores</span></span>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            </div>
+                            <div class="select-list-item">
+                                <div class="select-avatar" style="background: var(--pastel-sky); color: #1E4D8C;">IR</div>
+                                <div class="select-info">
+                                    <div class="select-name">Indiranagar</div>
+                                    <div class="select-sub">Bengaluru · Standard</div>
+                                </div>
+                                <div class="select-check"></div>
+                            </div>
+                            <div class="select-list-item">
+                                <div class="select-avatar" style="background: var(--pastel-blush); color: #8B2252;">PM</div>
+                                <div class="select-info">
+                                    <div class="select-name">Phoenix Mall</div>
+                                    <div class="select-sub">Mumbai · Premium</div>
+                                </div>
+                                <div class="select-check"></div>
+                            </div>
+                        </div>
+                        <div class="select-modal-footer">
+                            <button class="btn btn-primary btn-lg" style="border-radius: var(--radius-md);">Select</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 14: DROPDOWN
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="dropdown">
+                <div class="section-title">📋 Dropdown Menu</div>
+                <div class="section-description">Context menus and action dropdowns with clean separators.</div>
+
+                <div class="two-col">
+                    <div class="dropdown-demo">
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                View Details
+                            </div>
+                            <div class="dropdown-item">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
+                                Edit
+                            </div>
+                            <div class="dropdown-item">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.5a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-2.865-1.174-5.464-3.073-7.327a10.168 10.168 0 00-.927-.851"/></svg>
+                                Duplicate
+                            </div>
+                            <div class="dropdown-separator"></div>
+                            <div class="dropdown-item">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                                Export CSV
+                            </div>
+                            <div class="dropdown-separator"></div>
+                            <div class="dropdown-item danger">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                                Delete
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notification Panel -->
+                    <div class="notif-panel">
+                        <div class="notif-header">
+                            <span class="notif-header-title">Notifications</span>
+                            <button class="btn btn-ghost btn-xs">Mark all read</button>
+                        </div>
+                        <div class="notif-item unread">
+                            <div class="notif-icon" style="background: var(--pastel-mint);">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#2D6A4F" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+                            </div>
+                            <div class="notif-content">
+                                <div class="notif-text"><strong>New order</strong> #4821 placed from CP Store</div>
+                                <div class="notif-time">2 minutes ago</div>
+                            </div>
+                            <div class="notif-dot-unread"></div>
+                        </div>
+                        <div class="notif-item unread">
+                            <div class="notif-icon" style="background: var(--pastel-peach);">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#8B4513" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                            </div>
+                            <div class="notif-content">
+                                <div class="notif-text"><strong>Low stock:</strong> Cotton Midi Dress (5 remaining)</div>
+                                <div class="notif-time">15 minutes ago</div>
+                            </div>
+                            <div class="notif-dot-unread"></div>
+                        </div>
+                        <div class="notif-item">
+                            <div class="notif-icon" style="background: var(--pastel-sky);">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#1E4D8C" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                            </div>
+                            <div class="notif-content">
+                                <div class="notif-text"><strong>Priya Sharma</strong> registered as new customer</div>
+                                <div class="notif-time">2 hours ago</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 15: PROGRESS & LOADING
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="progress">
+                <div class="section-title">⏳ Progress & Loading</div>
+                <div class="section-description">Progress bars, circular indicators, and skeleton loaders.</div>
+
+                <div class="two-col">
+                    <div>
+                        <div class="subsection-title">Progress Bars</div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-label">
+                                <span>Sales Target</span>
+                                <span style="font-weight: 600;">78%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill lavender" style="width: 78%;"></div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-label">
+                                <span>Inventory Filled</span>
+                                <span style="font-weight: 600;">92%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill mint" style="width: 92%;"></div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-label">
+                                <span>Returns Rate</span>
+                                <span style="font-weight: 600;">15%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill peach" style="width: 15%;"></div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-label">
+                                <span>Customer Satisfaction</span>
+                                <span style="font-weight: 600;">64%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill sky" style="width: 64%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="subsection-title">Circular Progress</div>
+                        <div style="display: flex; gap: var(--space-8); align-items: center; margin-bottom: var(--space-8);">
+                            <div class="progress-circle">
+                                <svg width="64" height="64" viewBox="0 0 64 64">
+                                    <circle class="progress-track" cx="32" cy="32" r="28"/>
+                                    <circle class="progress-value" cx="32" cy="32" r="28"
+                                            stroke="var(--brand-primary)"
+                                            stroke-dasharray="175.9"
+                                            stroke-dashoffset="38.7"/>
+                                </svg>
+                                <span class="progress-text" style="color: var(--brand-primary);">78%</span>
+                            </div>
+                            <div class="progress-circle">
+                                <svg width="64" height="64" viewBox="0 0 64 64">
+                                    <circle class="progress-track" cx="32" cy="32" r="28"/>
+                                    <circle class="progress-value" cx="32" cy="32" r="28"
+                                            stroke="var(--color-success)"
+                                            stroke-dasharray="175.9"
+                                            stroke-dashoffset="14.1"/>
+                                </svg>
+                                <span class="progress-text" style="color: var(--color-success);">92%</span>
+                            </div>
+                            <div class="progress-circle">
+                                <svg width="64" height="64" viewBox="0 0 64 64">
+                                    <circle class="progress-track" cx="32" cy="32" r="28"/>
+                                    <circle class="progress-value" cx="32" cy="32" r="28"
+                                            stroke="var(--color-info)"
+                                            stroke-dasharray="175.9"
+                                            stroke-dashoffset="63.3"/>
+                                </svg>
+                                <span class="progress-text" style="color: var(--color-info);">64%</span>
+                            </div>
+                        </div>
+
+                        <div class="subsection-title">Skeleton Loader</div>
+                        <div style="background: white; padding: var(--space-5); border-radius: var(--radius-lg); border: 1px solid var(--border-light);">
+                            <div style="display: flex; gap: var(--space-3); margin-bottom: var(--space-4);">
+                                <div class="skeleton skeleton-avatar"></div>
+                                <div style="flex: 1;">
+                                    <div class="skeleton skeleton-text" style="width: 40%;"></div>
+                                    <div class="skeleton skeleton-text" style="width: 25%;"></div>
+                                </div>
+                            </div>
+                            <div class="skeleton skeleton-heading"></div>
+                            <div class="skeleton skeleton-text" style="width: 90%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 75%;"></div>
+                            <div class="skeleton skeleton-text" style="width: 80%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 16: AVATARS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="avatars">
+                <div class="section-title">👤 Avatars</div>
+                <div class="section-description">Avatar sizes, groups, and pastel color assignments.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Sizes</div>
+                    <div class="demo-row">
+                        <div class="avatar avatar-xs" style="background: var(--pastel-lavender); color: #4A2D8C;">XS</div>
+                        <div class="avatar avatar-sm" style="background: var(--pastel-peach); color: #8B4513;">SM</div>
+                        <div class="avatar avatar-md" style="background: var(--pastel-mint); color: #2D6A4F;">MD</div>
+                        <div class="avatar avatar-lg" style="background: var(--pastel-sky); color: #1E4D8C;">LG</div>
+                        <div class="avatar avatar-xl" style="background: var(--pastel-blush); color: #8B2252;">XL</div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Avatar Group</div>
+                    <div class="avatar-group">
+                        <div class="avatar avatar-md" style="background: var(--pastel-lavender); color: #4A2D8C;">AK</div>
+                        <div class="avatar avatar-md" style="background: var(--pastel-peach); color: #8B4513;">RS</div>
+                        <div class="avatar avatar-md" style="background: var(--pastel-mint); color: #2D6A4F;">PK</div>
+                        <div class="avatar avatar-md" style="background: var(--pastel-sky); color: #1E4D8C;">AM</div>
+                        <div class="avatar avatar-md" style="background: var(--pastel-blush); color: #8B2252;">NK</div>
+                        <div class="avatar avatar-md avatar-overflow">+8</div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 17: SHADOWS & RADIUS
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="elevation">
+                <div class="section-title">🎚️ Elevation & Radius</div>
+                <div class="section-description">Our shadow and border-radius scales for visual depth and softness.</div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Shadows</div>
+                    <div class="shadow-grid">
+                        <div class="shadow-box" style="box-shadow: var(--shadow-xs);">shadow-xs</div>
+                        <div class="shadow-box" style="box-shadow: var(--shadow-sm);">shadow-sm</div>
+                        <div class="shadow-box" style="box-shadow: var(--shadow-md);">shadow-md</div>
+                        <div class="shadow-box" style="box-shadow: var(--shadow-lg);">shadow-lg</div>
+                        <div class="shadow-box" style="box-shadow: var(--shadow-xl);">shadow-xl</div>
+                        <div class="shadow-box" style="box-shadow: var(--shadow-glass);">shadow-glass</div>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <div class="subsection-title">Border Radius</div>
+                    <div class="radius-grid">
+                        <div class="radius-box" style="border-radius: var(--radius-xs);">4px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-sm);">8px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-md);">12px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-lg);">16px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-xl);">20px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-2xl);">24px</div>
+                        <div class="radius-box" style="border-radius: var(--radius-pill);">Pill</div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 18: EMPTY STATE
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="empty-state">
+                <div class="section-title">📭 Empty State</div>
+                <div class="section-description">Friendly empty states for zero-data scenarios.</div>
+
+                <div style="background: var(--bg-page); border-radius: var(--radius-lg); border: 1px dashed var(--border-medium);">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+                        </div>
+                        <div class="empty-state-title">No products found</div>
+                        <div class="empty-state-text">Get started by adding your first product to the inventory. You can import from CSV or add manually.</div>
+                        <div class="btn-row">
+                            <button class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                                Add Product
+                            </button>
+                            <button class="btn btn-ghost">Import CSV</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr style="border: none; border-top: 1px solid var(--border-light); margin: var(--space-8) 0;">
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 19: DESIGN TOKENS REFERENCE
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="tokens">
+                <div class="section-title">🧬 Design Tokens Reference</div>
+                <div class="section-description">Complete CSS custom properties for implementation.</div>
+
+                <div class="table-wrapper">
+                    <table class="tokens-table">
+                        <thead>
+                            <tr>
+                                <th>Token</th>
+                                <th>Value</th>
+                                <th>Usage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>--brand-primary</code></td>
+                                <td><span class="token-preview" style="background: #2D2B55;"></span> #2D2B55</td>
+                                <td>Primary buttons, active states, brand identity</td>
+                            </tr>
+                            <tr>
+                                <td><code>--bg-page</code></td>
+                                <td><span class="token-preview" style="background: #F8F7FC;"></span> #F8F7FC</td>
+                                <td>Page background behind main content</td>
+                            </tr>
+                            <tr>
+                                <td><code>--glass-bg</code></td>
+                                <td>rgba(255,255,255,0.55)</td>
+                                <td>Frosted glass sidebar & floating panels</td>
+                            </tr>
+                            <tr>
+                                <td><code>--glass-blur</code></td>
+                                <td>20px</td>
+                                <td>Backdrop blur intensity for glass elements</td>
+                            </tr>
+                            <tr>
+                                <td><code>--font-heading</code></td>
+                                <td>Outfit</td>
+                                <td>All headings, card titles, section labels</td>
+                            </tr>
+                            <tr>
+                                <td><code>--font-body</code></td>
+                                <td>Work Sans</td>
+                                <td>Body text, form inputs, table cells</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-lg</code></td>
+                                <td>16px</td>
+                                <td>Cards, panels, major containers</td>
+                            </tr>
+                            <tr>
+                                <td><code>--radius-md</code></td>
+                                <td>12px</td>
+                                <td>Buttons, inputs, sidebar items</td>
+                            </tr>
+                            <tr>
+                                <td><code>--ease-out</code></td>
+                                <td>cubic-bezier(0.16, 1, 0.3, 1)</td>
+                                <td>All UI transitions (Expo.out feel)</td>
+                            </tr>
+                            <tr>
+                                <td><code>--duration-fast</code></td>
+                                <td>150ms</td>
+                                <td>Hovers, toggles, quick interactions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SECTION 20: COMPONENT MAP
+                 ═══════════════════════════════════════════════════════ -->
+
+            <section class="section" id="component-map">
+                <div class="section-title">🗺️ Component Map</div>
+                <div class="section-description">Every UI component needed for the KDPS Retail ERP, and where they appear.</div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Status</th>
+                                <th>Used In</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td style="font-weight: 500;">Frosted Glass Sidebar</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Global navigation shell</td></tr>
+                            <tr><td style="font-weight: 500;">Sticky Header</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>All pages — breadcrumb, search, actions</td></tr>
+                            <tr><td style="font-weight: 500;">KPI Stat Cards</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Dashboard, Store overview, Reports</td></tr>
+                            <tr><td style="font-weight: 500;">Data Table</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Inventory, Orders, Customers, Products</td></tr>
+                            <tr><td style="font-weight: 500;">Buttons (All Variants)</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Everywhere</td></tr>
+                            <tr><td style="font-weight: 500;">Form Inputs</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Product forms, Order entry, Customer edit</td></tr>
+                            <tr><td style="font-weight: 500;">Badges & Tags</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Tables, Cards, Order statuses</td></tr>
+                            <tr><td style="font-weight: 500;">Modal Dialog</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Add/Edit forms, Confirmations</td></tr>
+                            <tr><td style="font-weight: 500;">Select Modal / Picker</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Store selector, Customer picker</td></tr>
+                            <tr><td style="font-weight: 500;">Dropdown Menu</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Row actions, User menu, Bulk actions</td></tr>
+                            <tr><td style="font-weight: 500;">Tabs (Underline + Pill)</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Product details, Reports, Settings</td></tr>
+                            <tr><td style="font-weight: 500;">Month Selector</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Calendar, Sales reports, Activity</td></tr>
+                            <tr><td style="font-weight: 500;">Calendar Widget</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Dashboard sidebar, Scheduling</td></tr>
+                            <tr><td style="font-weight: 500;">Event Chips</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Activity log, Timeline, Calendar</td></tr>
+                            <tr><td style="font-weight: 500;">Alerts / Toasts</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>System feedback, Notifications</td></tr>
+                            <tr><td style="font-weight: 500;">Notification Panel</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Header bell icon dropdown</td></tr>
+                            <tr><td style="font-weight: 500;">Avatars & Groups</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>User profiles, Team members, Cards</td></tr>
+                            <tr><td style="font-weight: 500;">Progress Bars</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>KPIs, Targets, File uploads</td></tr>
+                            <tr><td style="font-weight: 500;">Circular Progress</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Dashboard stats, Completion %</td></tr>
+                            <tr><td style="font-weight: 500;">Skeleton Loader</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Loading states everywhere</td></tr>
+                            <tr><td style="font-weight: 500;">Empty States</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Zero-data tables, Empty searches</td></tr>
+                            <tr><td style="font-weight: 500;">Breadcrumbs</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Header — page hierarchy</td></tr>
+                            <tr><td style="font-weight: 500;">Store Cards</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Store overview, Dashboard</td></tr>
+                            <tr><td style="font-weight: 500;">Toggles / Switches</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Settings, Feature flags, Product options</td></tr>
+                            <tr><td style="font-weight: 500;">Checkboxes / Radios</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Forms, Bulk select in tables</td></tr>
+                            <tr><td style="font-weight: 500;">Welcome Banner</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Dashboard hero section</td></tr>
+                            <tr><td style="font-weight: 500;">Pagination</td><td><span class="badge badge-success"><span class="badge-dot"></span> Designed</span></td><td>Tables, Product listings</td></tr>
+                            <tr><td style="font-weight: 500;">Tooltip</td><td><span class="badge badge-info"><span class="badge-dot"></span> Spec'd</span></td><td>Icon buttons, Truncated text</td></tr>
+                            <tr><td style="font-weight: 500;">Charts (Bar/Line/Pie)</td><td><span class="badge badge-warning"><span class="badge-dot"></span> Next Phase</span></td><td>Reports, Dashboard analytics</td></tr>
+                            <tr><td style="font-weight: 500;">Date Picker</td><td><span class="badge badge-warning"><span class="badge-dot"></span> Next Phase</span></td><td>Reports filter, Order date range</td></tr>
+                            <tr><td style="font-weight: 500;">Drawer / Side Panel</td><td><span class="badge badge-warning"><span class="badge-dot"></span> Next Phase</span></td><td>Quick-view order/product details</td></tr>
+                            <tr><td style="font-weight: 500;">Command Palette (⌘K)</td><td><span class="badge badge-warning"><span class="badge-dot"></span> Next Phase</span></td><td>Global quick search & actions</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div><!-- /content-body -->
+    </main>
+</div><!-- /showcase-wrapper -->
+
+<!-- Interactive toggle behaviors -->
+<script>
+    // Toggle switches
+    document.querySelectorAll('.toggle').forEach(toggle => {
+        toggle.addEventListener('click', () => {
+            toggle.classList.toggle('active');
+        });
+    });
+
+    // Active sidebar item
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+        });
+    });
+
+    // Active tabs
+    document.querySelectorAll('.tabs').forEach(tabGroup => {
+        tabGroup.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+    });
+
+    // Pill tabs
+    document.querySelectorAll('.tabs-pill').forEach(tabGroup => {
+        tabGroup.querySelectorAll('.tab-pill').forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabGroup.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+    });
+
+    // Month selector
+    document.querySelectorAll('.month-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            document.querySelectorAll('.month-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+        });
+    });
+
+    // Calendar day selection
+    document.querySelectorAll('.calendar-day:not(.other-month)').forEach(day => {
+        day.addEventListener('click', () => {
+            document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('today'));
+            day.classList.add('today');
+        });
+    });
+
+    // Select list items
+    document.querySelectorAll('.select-list-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const check = item.querySelector('.select-check');
+            if (check) {
+                check.classList.toggle('checked');
+                check.textContent = check.classList.contains('checked') ? '✓' : '';
+            }
+        });
+    });
+
+    // Pagination
+    document.querySelectorAll('.pagination-btn:not(:first-child):not(:last-child)').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.pagination-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+</script>
+
+</body>
+</html>

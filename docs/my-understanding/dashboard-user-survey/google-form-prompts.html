@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS · Google Form prompts · Daily-work survey (6 roles)</title>
+<style>
+  :root {
+    --navy: #1b2a4a;
+    --accent: #b8860b;
+    --paper: #faf8f4;
+    --card: #ffffff;
+    --line: #e3ded4;
+    --muted: #6b6555;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--navy);
+    line-height: 1.55;
+    padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { border-bottom: 3px solid var(--navy); padding-bottom: 18px; margin-bottom: 10px; }
+  header h1 { font-size: 26px; letter-spacing: 0.3px; }
+  header p.sub { color: #6b6555; font-size: 14px; margin-top: 6px; }
+  .howto {
+    background: #fdf6e3; border: 1px solid #e8d9a0; border-radius: 8px;
+    padding: 14px 18px; margin: 22px 0 34px; font-size: 14.5px;
+  }
+  .howto strong { color: var(--accent); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 34px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(27,42,74,0.06);
+  }
+  .card h2 {
+    background: var(--navy); color: #fff; font-size: 16px;
+    padding: 10px 18px; font-weight: normal; letter-spacing: 0.5px;
+  }
+  .card h2 span.role { font-weight: bold; }
+  .card .note {
+    padding: 10px 18px; font-size: 13.5px; color: #6b6555;
+    border-bottom: 1px dashed var(--line); font-style: italic;
+  }
+  pre.prompt {
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 12.5px; line-height: 1.6;
+    white-space: pre-wrap; word-wrap: break-word;
+    padding: 18px 20px; color: #2a2a24;
+    user-select: all;
+  }
+  footer { margin-top: 40px; font-size: 12.5px; color: #6b6555; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Google Form prompts · KDPS daily-work survey</h1>
+  <p class="sub">Six ready-to-paste prompts for the Google Forms AI builder · one form per role · English · 27 July 2026</p>
+</header>
+
+<div class="howto">
+  <strong>How to use:</strong> In Google Forms, start a new form and choose <em>"Help me create a form"</em> (the Gemini option).
+  Paste one prompt below, let it generate, then review the questions and publish.
+  Repeat for each of the six roles. Each prompt is fully self-contained.
+  <br><br>
+  <strong>Confidentiality:</strong> None of the prompts mention any new system, software, app, or dashboard.
+  The survey is framed only as management wanting to understand daily work to improve operations.
+</div>
+
+<!-- ─────────────────────────── 1 · OWNER ─────────────────────────── -->
+<div class="card">
+  <h2>1 · <span class="role">Owner</span></h2>
+  <div class="note">For the owners / directors. Focus: what they track across all stores, approvals, targets, and how they want information delivered.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Owner / Director".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations and reporting. Please answer honestly about your real routine. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "Which businesses or areas do you personally look after? (e.g. all stores, specific brands, finance)"
+3. Paragraph, required: "When your work day starts, what is the FIRST information you check or ask for? Where do you get it from today (phone call, WhatsApp, Excel, visiting the store)?"
+4. Checkboxes, required, title "Which of these do you personally track or review during a normal day?" with options: "Total sale of each store", "Cash position", "Discounts given", "Stock arriving from brands", "Stock transfers between stores", "Staff attendance", "Vendor payments due", "Customer complaints", "Expenses", "Other"
+5. Multiple choice, required: "How many times a day do you check sales figures?" with options: "Once a day", "2-3 times a day", "Every few hours", "Constantly through the day", "Only when someone reports to me"
+6. Checkboxes, required, title "If you could see only FIVE numbers every morning, which five would you pick?" with options: "Yesterday's total sale (all stores)", "Month-to-date sale vs target", "Today's sale so far", "Cash in hand at each store", "Total discount given yesterday", "Number of bills / customers yesterday", "Average bill value", "Stock value in each store", "Goods received from brands this week", "Payments due to vendors", "Slow-moving / old stock value", "Store-wise comparison (best vs worst store)"
+7. Paragraph, required: "Which decisions come to YOU for approval in a normal week? (e.g. extra discount, price change, stock transfer, big expense) How do people reach you for these approvals today?"
+8. Multiple choice, required: "How do you prefer to receive daily business updates?" with options: "WhatsApp message", "Phone call from staff", "Printed / written report", "I check Excel myself", "I visit stores and see"
+9. Paragraph, required: "What do you review at MONTH END or month start? Which reports do you wait for, who prepares them, and how long do they take to reach you?"
+10. Paragraph, required: "Is there any information about the business you WISH you could get instantly, but today it takes hours or days to get? What is it?"
+11. Paragraph, optional: "Think of the last time a problem in a store was found late (wrong stock, missing cash, too much discount, anything). What was it, and how was it discovered?"
+12. Linear scale 1 to 5, required, title "How much do you trust the sales and stock figures you receive today?" with 1 labelled "I always double-check" and 5 labelled "I trust them fully"
+13. Paragraph, optional: "Anything else about your daily or monthly routine you want to share?"</pre>
+</div>
+
+<!-- ─────────────────────────── 2 · STORE PERSON ─────────────────────────── -->
+<div class="card">
+  <h2>2 · <span class="role">Store person (billing / POS)</span></h2>
+  <div class="note">For store managers and billing staff. Focus: the billing day, cash, customers, stock questions, what they report upward.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Store Staff".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations. Please answer about your real routine at the store. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "Which store do you work at?"
+3. Multiple choice, required: "What is your main job at the store?" with options: "Store manager", "Billing / cashier", "Sales floor staff", "I do everything", "Other"
+4. Paragraph, required: "Describe your normal day from opening the store to closing it. What do you do first, what takes most of your time, what do you do before leaving?"
+5. Checkboxes, required, title "Which of these tasks do you do on a normal day?" with options: "Billing customers", "Handling returns or exchanges", "Counting cash", "Checking stock for a customer's size or colour", "Receiving goods at the store", "Sending or receiving stock transfer", "Noting expenses", "Reporting the day's sale to office or owner", "Handling customer complaints", "Arranging / folding stock", "Other"
+6. Multiple choice, required: "How do you report your store's daily sale today?" with options: "WhatsApp message to owner or office", "Phone call", "Written in a register", "Excel sheet", "The POS does it automatically", "I don't report daily"
+7. Paragraph, required: "When a customer asks for a size or colour you don't see on the floor, what exactly do you do to find out if it is available? How long does it take?"
+8. Checkboxes, required, title "Which information do you need MOST often during the day?" with options: "Today's sale total so far", "Price of an item", "Whether an offer or discount applies", "Stock of a size or colour in my store", "Stock available in other stores or warehouse", "Cash in the drawer", "My store's monthly target and where we are", "Pending goods coming to my store", "Customer's previous purchases"
+9. Multiple choice, required: "How do you come to know about a new offer or discount scheme?" with options: "Owner or office tells us on WhatsApp", "Phone call", "Brand person tells us", "Written note in store", "Sometimes we find out late"
+10. Paragraph, required: "What do you do at month end or month start that is different from normal days? (counting stock, making reports, targets, anything)"
+11. Paragraph, required: "What is the SLOWEST or most irritating part of your daily work? What takes longer than it should?"
+12. Paragraph, required: "If every morning you could see one screen with the most useful information for running your store that day, what would you want on it?"
+13. Linear scale 1 to 5, required, title "How often does the stock on the shelf match what the records say?" with 1 labelled "Often different" and 5 labelled "Always matches"
+14. Paragraph, optional: "Anything else about your daily work you want to share?"</pre>
+</div>
+
+<!-- ─────────────────────────── 3 · WAREHOUSE ─────────────────────────── -->
+<div class="card">
+  <h2>3 · <span class="role">Warehouse</span></h2>
+  <div class="note">For warehouse staff (Ranchi). Focus: receiving goods, PT entry, distribution to stores, brand returns, counting.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Warehouse Team".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations. Please answer about your real routine at the warehouse. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "What is your role at the warehouse?"
+3. Paragraph, required: "Describe your normal working day from start to finish. What do you do first, what takes the most time, and what must be finished before you leave?"
+4. Checkboxes, required, title "Which of these tasks do you do in a normal week?" with options: "Receiving cartons from brands / transporters", "Checking goods against the brand's papers (invoice / packing list)", "Making entries of received goods", "Putting price tags / barcodes on items", "Deciding which store gets which stock", "Packing and dispatching stock to stores", "Receiving stock back from stores", "Preparing goods to return to a brand", "Counting stock", "Other"
+5. Paragraph, required: "When a brand's shipment arrives, walk us through what happens step by step, from the truck arriving to the goods being ready to send to stores. Roughly how long does one shipment take?"
+6. Paragraph, required: "What goes WRONG most often when receiving goods? (short quantity, wrong items, damaged pieces, papers not matching, prices missing, anything) What do you do when it happens?"
+7. Checkboxes, required, title "Which information do you need most often during the day?" with options: "What shipments are expected to arrive and when", "What is pending to be entered or tagged", "Which store needs which stock", "Stock lying in the warehouse of a particular item", "What has to be dispatched today", "What has to be returned to which brand and by when", "Transport / courier details"
+8. Multiple choice, required: "How do you currently keep track of what has arrived but is not yet entered or tagged?" with options: "Register / notebook", "Excel", "In my head / memory", "The cartons themselves are the record", "Other"
+9. Paragraph, required: "How do you decide, or how are you told, which store gets which goods? Who decides and how does the instruction reach you?"
+10. Paragraph, required: "What do you do at month end or during stock counting time that is different from normal days?"
+11. Paragraph, required: "What is the slowest or most frustrating part of warehouse work today?"
+12. Paragraph, required: "If every morning you could see one page showing the most useful information for your warehouse day, what would be on it?"
+13. Linear scale 1 to 5, required, title "How often do the goods received match exactly what the brand's papers say?" with 1 labelled "Rarely match exactly" and 5 labelled "Almost always match"
+14. Paragraph, optional: "Anything else about your work you want to share?"</pre>
+</div>
+
+<!-- ─────────────────────────── 4 · BRAND MANAGER ─────────────────────────── -->
+<div class="card">
+  <h2>4 · <span class="role">Brand Manager</span></h2>
+  <div class="note">For staff who look after specific brands. Focus: brand performance, orders, pending receipts, offers, return deadlines.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Brand Manager".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations. Please answer about your real routine. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "Which brands do you look after?"
+3. Paragraph, required: "Describe your normal working day. What do you check first, who do you talk to (brand companies, stores, warehouse, owners), and what takes most of your time?"
+4. Checkboxes, required, title "Which of these tasks do you do in a normal week?" with options: "Talking to brand companies about orders / supply", "Placing or following up orders (bookings) with brands", "Chasing goods that are ordered but not yet delivered", "Checking how my brands are selling in each store", "Recommending discounts or offers", "Planning stock returns to the brand", "Checking claims / credit notes from brands", "Visiting stores", "Preparing reports for owners", "Other"
+5. Paragraph, required: "How do you find out how your brands sold yesterday or this month? Describe the actual steps and how long it takes."
+6. Checkboxes, required, title "Which numbers about your brands matter MOST to you?" with options: "Sale of each brand, store-wise", "This month's sale vs last month / last year", "Discount given on my brands", "Stock lying in stores and warehouse of my brands", "How fast new stock is selling (sell-through)", "Old / slow stock that is not moving", "Goods ordered but not yet received", "Return window deadlines (what must go back to the brand and by when)", "Margin I am earning per brand"
+7. Paragraph, required: "How do you keep track of the time limit for returning unsold goods to each brand? What happens if the date is missed?"
+8. Multiple choice, required: "When you recommend a discount or offer on your brand, who approves it and how?" with options: "Owner approves on WhatsApp / call", "Office approves", "I can decide small ones myself", "The brand company decides", "It varies, no fixed way"
+9. Paragraph, required: "What do you do at month start or month end? (brand-wise reports, reconciling with the brand company, targets, claims, anything)"
+10. Paragraph, required: "What information do you WISH you could get instantly about your brands, but today takes a long time or many phone calls to collect?"
+11. Paragraph, required: "If every morning you could see one page with the most useful information about your brands, what would be on it?"
+12. Linear scale 1 to 5, required, title "How confident are you in the brand-wise stock figures you have today?" with 1 labelled "Not confident" and 5 labelled "Fully confident"
+13. Paragraph, optional: "Anything else about your work you want to share?"</pre>
+</div>
+
+<!-- ─────────────────────────── 5 · ACCOUNTS ─────────────────────────── -->
+<div class="card">
+  <h2>5 · <span class="role">Accounts</span></h2>
+  <div class="note">For the accounts team. Focus: cash and bank, vendor payments, expenses, Tally, GST, month-end close.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Accounts Team".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations. Please answer about your real routine. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "What is your role in the accounts team?"
+3. Paragraph, required: "Describe your normal working day. What do you do first, what takes most of your time, and what must be completed daily without fail?"
+4. Checkboxes, required, title "Which of these tasks do you do in a normal week?" with options: "Recording daily sales of stores", "Tallying cash received from stores", "Bank reconciliation", "Entering purchase bills from brands / vendors", "Making vendor payments", "Recording expenses", "Working in Tally", "GST work (returns, checking tax on bills)", "Salary / staff payments", "Preparing reports for owners", "Chasing stores for missing information", "Other"
+5. Paragraph, required: "How does a store's daily sale and cash information reach you today? Describe the steps and what problems come up (late info, mismatch, missing details)."
+6. Checkboxes, required, title "Which information do you need most often during the day?" with options: "Store-wise sale and cash collected", "Bank balances", "Payments due to vendors and when", "Expenses recorded by stores", "Pending bills not yet entered", "GST details of purchases and sales", "Credit notes / claims pending from brands", "Cash discrepancies to follow up"
+7. Paragraph, required: "What mismatches or errors do you catch most often? (cash short, bill amount wrong, discount not matching, tax wrong, anything) How do you catch them today?"
+8. Multiple choice, required: "How much of your work involves re-entering the same information in a second place (e.g. from paper or Excel into Tally)?" with options: "Most of my day", "A few hours daily", "Occasionally", "Rarely"
+9. Paragraph, required: "Describe your MONTH-END work. What has to be closed, reconciled, filed, or reported, and how many days does it take?"
+10. Paragraph, required: "Which report or figure do owners ask you for most often, and how long does it take you to produce it?"
+11. Paragraph, required: "What is the slowest or most painful part of accounts work today?"
+12. Paragraph, required: "If every morning you could see one page with the most useful information for your accounts work, what would be on it?"
+13. Linear scale 1 to 5, required, title "How much do you trust the figures that come from the stores before you verify them?" with 1 labelled "Always need checking" and 5 labelled "Fully reliable"
+14. Paragraph, optional: "Anything else about your work you want to share?"</pre>
+</div>
+
+<!-- ─────────────────────────── 6 · ADMIN ─────────────────────────── -->
+<div class="card">
+  <h2>6 · <span class="role">Admin / IT</span></h2>
+  <div class="note">For admin / IT staff. Focus: what they set up and maintain, who calls them, what breaks, monitoring.</div>
+  <pre class="prompt">Create a survey form titled "KDPS Daily Work Survey - Admin / IT".
+
+Form description: "KDPS is studying how each of us works day to day so we can improve our operations. Please answer about your real routine. There are no right or wrong answers. Takes about 10 minutes."
+
+Create these questions in order:
+
+1. Short answer, required: "Your name"
+2. Short answer, required: "What is your role? (admin, IT support, back office, etc.)"
+3. Paragraph, required: "Describe your normal working day. What do you do first, and what takes most of your time?"
+4. Checkboxes, required, title "Which of these tasks do you handle in a normal week?" with options: "Adding new products / items into the billing system", "Setting or changing prices", "Setting up offers / discount schemes in the system", "Creating logins or IDs for staff", "Fixing POS / billing computer problems at stores", "Fixing printer / barcode / hardware problems", "Taking backups", "Helping staff who are stuck with the software", "Preparing data or reports when asked", "Other"
+5. Paragraph, required: "When a new product or new stock has to be made billable at a store, what are the steps today and how long does it take?"
+6. Paragraph, required: "Who calls you most often for help, and what are the top 3 problems they call about?"
+7. Checkboxes, required, title "Which information do you need most often during the day?" with options: "Whether all store systems are running fine", "Which items are missing prices or details", "Pending requests from stores", "Who has which login and what they can do", "Whether daily data from stores has come in", "Backup status"
+8. Multiple choice, required: "When staff make a mistake in the system (wrong entry, wrong price, wrong bill), how does it usually get fixed?" with options: "They call me and I correct it", "Store corrects it themselves", "It goes to accounts to fix", "Often it stays wrong", "Depends on the mistake"
+9. Paragraph, required: "What do you do at month end that is different from normal days?"
+10. Paragraph, required: "What is the most repetitive or time-wasting part of your work today?"
+11. Paragraph, required: "If every morning you could see one page with the most useful information for your work, what would be on it?"
+12. Linear scale 1 to 5, required, title "How well do current systems at KDPS handle a normal day without your help?" with 1 labelled "Need constant help" and 5 labelled "Run on their own"
+13. Paragraph, optional: "Anything else about your work you want to share?"</pre>
+</div>
+
+<footer>
+  KDPS · internal · prepared 27 July 2026 · source: ERP_DASHBOARD_V1.xlsx (roles + dashboard requirement) · survey wording intentionally does not reveal any ongoing build
+</footer>
+
+</div>
+</body>
+</html>

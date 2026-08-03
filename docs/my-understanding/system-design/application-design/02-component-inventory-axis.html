@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS - Component Inventory in the Axis design language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   AXIS tokens - taken verbatim from styleui.dev/r/axis.json (globals.css),
+   then extended where KDPS needs colours Axis does not ship.
+   Axis-original values are marked [axis]; KDPS extensions are marked [ext].
+   ========================================================================= */
+:root {
+  /* [axis] */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --primary: oklch(0.5054 0.067 81.91);          /* bronze / dark khaki */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.8403 0.1724 84.08);       /* gold */
+  --secondary-foreground: oklch(0.28 0.05 84);
+  --hero-start: oklch(0.4431 0.0681 83.13);
+  --hero-mid: oklch(0.7188 0.0267 85.39);
+  --hero-end: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.441 0.01 0);
+  --accent: oklch(0.97 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+
+  /* [ext] six semantic status tones, tuned to Axis's low-chroma discipline.
+     Axis's own badge idiom is a 10% tint of the tone, no border. */
+  --ok:      oklch(0.505 0.098 152);
+  --warn:    oklch(0.505 0.098 75);
+  --danger:  oklch(0.505 0.145 27);
+  --info:    oklch(0.505 0.105 252);
+  --ai:      oklch(0.505 0.125 300);
+  --neutral: oklch(0.441 0.01 0);
+
+  /* [ext] five architecture-layer accents */
+  --layer-master:  oklch(0.60 0.012 250);
+  --layer-doc:     oklch(0.5054 0.067 81.91);
+  --layer-ledger:  oklch(0.505 0.098 75);
+  --layer-control: oklch(0.505 0.098 152);
+  --layer-intel:   oklch(0.505 0.125 300);
+
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-3xl: 1.5rem;
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / .05);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / .08);
+  --shadow-xl: 0 20px 40px -12px rgb(0 0 0 / .18);
+  --ring-hairline: oklch(0.145 0 0 / .10);
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+html.dark {
+  /* [axis] */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --primary: oklch(0.5054 0.067 81.91);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.8403 0.1724 84.08);
+  --secondary-foreground: oklch(0.20 0.03 84);
+  --hero-end: oklch(0.145 0 0);
+  --muted: oklch(0.21 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.21 0 0);
+  --destructive: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  /* [ext] status tones lift for contrast on near-black */
+  --ok:      oklch(0.74 0.13 152);
+  --warn:    oklch(0.79 0.13 80);
+  --danger:  oklch(0.70 0.17 27);
+  --info:    oklch(0.74 0.12 252);
+  --ai:      oklch(0.75 0.14 300);
+  --neutral: oklch(0.708 0 0);
+  --layer-master:  oklch(0.72 0.015 250);
+  --layer-doc:     oklch(0.74 0.07 82);
+  --layer-ledger:  oklch(0.79 0.13 80);
+  --layer-control: oklch(0.74 0.13 152);
+  --layer-intel:   oklch(0.75 0.14 300);
+  --ring-hairline: oklch(0.985 0 0 / .10);
+  --shadow-xl: 0 20px 40px -12px rgb(0 0 0 / .6);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+  transition: background .18s ease, color .18s ease;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 120px; }
+
+/* ---------- Axis typography: medium weight, tight tracking, no bold ------ */
+h1 { font-size: 40px; font-weight: 500; letter-spacing: -.035em; margin: 0; line-height: 1.08; }
+h2 { font-size: 26px; font-weight: 500; letter-spacing: -.025em; margin: 0; }
+h3 { font-size: 16px; font-weight: 500; letter-spacing: -.01em; margin: 0; }
+p  { margin: 0; }
+.muted { color: var(--muted-foreground); }
+.small { font-size: 13px; }
+.xs { font-size: 12px; }
+.mono { font-family: var(--mono); font-size: .92em; font-variant-numeric: tabular-nums; }
+code {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--muted); border-radius: 4px; padding: 1.5px 5px;
+  color: var(--foreground);
+}
+a { color: inherit; }
+
+/* Axis's kicker: not a coloured eyebrow, a small tracked uppercase label */
+.kicker {
+  font-size: 11px; font-weight: 500; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted-foreground);
+}
+
+/* ---------- sticky top bar ---------------------------------------------- */
+.topnav {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.topnav-in {
+  max-width: 1180px; margin: 0 auto; padding: 0 28px;
+  height: 60px; display: flex; align-items: center; gap: 14px;
+}
+.wordmark { display: flex; align-items: center; gap: 9px; font-weight: 500; letter-spacing: -.02em; }
+.wordmark i {
+  width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+  background: var(--foreground); color: var(--background);
+  font-style: normal; font-size: 13px; font-weight: 600;
+}
+.spacer { flex: 1; }
+.navlink { font-size: 13px; color: var(--muted-foreground); text-decoration: none; }
+.navlink:hover { color: var(--foreground); }
+
+/* ---------- section framing --------------------------------------------- */
+section.blk { padding-top: 76px; scroll-margin-top: 0px; }
+.icn { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sec-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 22px; }
+.sec-num {
+  font-family: var(--mono); font-size: 12px; color: var(--muted-foreground);
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; flex: none;
+}
+
+/* ---------- Axis hairline grid (the signature layout idiom) ------------- */
+.grid-rule { border-left: 1px solid var(--border); border-top: 1px solid var(--border); display: grid; }
+.grid-rule > * { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.g2 { grid-template-columns: repeat(2, 1fr); }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 860px) { .g3, .g4 { grid-template-columns: repeat(2, 1fr); } }
+.cell { padding: 20px 22px; }
+.cell .lbl { font-size: 12px; color: var(--muted-foreground); }
+.cell .val { font-size: 28px; font-weight: 500; letter-spacing: -.03em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Axis card: rounded-3xl + 1px ring + shadow-xs --------------- */
+.card {
+  background: var(--card); color: var(--card-foreground);
+  border-radius: var(--radius-3xl);
+  box-shadow: 0 0 0 1px var(--ring-hairline), var(--shadow-xs);
+  overflow: hidden;
+}
+.card-pad { padding: 24px; }
+.card-sm { border-radius: var(--radius-xl); }
+.card-head { padding: 20px 24px 0; }
+.card-body { padding: 20px 24px; }
+.card-foot { padding: 16px 24px; border-top: 1px solid var(--border); }
+
+/* ---------- demo surface (where live samples sit) ----------------------- */
+.demo {
+  background: var(--muted); border-radius: var(--radius-xl);
+  padding: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+}
+.demo.col { flex-direction: column; align-items: stretch; }
+.demo-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); width: 100%; margin-bottom: -2px; }
+
+/* ---------- BUTTON (Axis: h-9, rounded-md, bg-foreground default) ------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 16px; border-radius: var(--radius-md);
+  border: 1px solid transparent; background-clip: padding-box;
+  font: inherit; font-size: 13.5px; font-weight: 500; white-space: nowrap;
+  cursor: pointer; transition: all .15s ease; outline: none; user-select: none;
+}
+.btn:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }
+.btn-default   { background: var(--foreground); color: var(--background); }
+.btn-default:hover { background: color-mix(in oklab, var(--primary) 80%, transparent); }
+.btn-outline   { border-color: var(--border); background: var(--background); color: var(--foreground); box-shadow: var(--shadow-xs); }
+.btn-outline:hover { background: var(--muted); }
+.btn-secondary { background: var(--secondary); color: var(--secondary-foreground); }
+.btn-secondary:hover { filter: brightness(.94); }
+.btn-ghost     { background: transparent; color: var(--foreground); }
+.btn-ghost:hover { background: var(--muted); }
+.btn-destructive { background: color-mix(in oklab, var(--danger) 10%, transparent); color: var(--danger); }
+.btn-destructive:hover { background: color-mix(in oklab, var(--danger) 20%, transparent); }
+.btn-link { background: none; color: var(--primary); text-decoration: underline; text-underline-offset: 4px; padding: 0; height: auto; }
+.btn-pill { border-radius: 999px; padding: 0 20px; }
+.btn-sm { height: 32px; padding: 0 10px; font-size: 12.5px; }
+.btn-xs { height: 24px; padding: 0 8px; font-size: 11.5px; border-radius: 6px; }
+.btn-lg { height: 40px; padding: 0 18px; }
+.btn-icon { width: 36px; padding: 0; }
+.btn[disabled] { opacity: .5; pointer-events: none; }
+
+/* ---------- INPUT (Axis: h-9, rounded-md, border, shadow-xs) ------------ */
+.input {
+  height: 36px; width: 100%; min-width: 0;
+  border: 1px solid var(--input); border-radius: var(--radius-md);
+  background: transparent; color: var(--foreground);
+  padding: 0 10px; font: inherit; font-size: 13.5px;
+  box-shadow: var(--shadow-xs); outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.input::placeholder { color: var(--muted-foreground); }
+.input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }
+html.dark .input { background: color-mix(in oklab, var(--input) 30%, transparent); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label { font-size: 12.5px; font-weight: 500; color: var(--foreground); }
+select.input { padding-right: 26px; }
+
+/* ---------- BADGE / chip (Axis: h-5, rounded-sm, tint fill, no border) -- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px;
+  padding: 0 8px; border-radius: 4px; border: 1px solid transparent;
+  font-size: 11.5px; font-weight: 500; white-space: nowrap; letter-spacing: -.005em;
+}
+.badge-default   { background: var(--primary); color: var(--primary-foreground); }
+.badge-secondary { background: var(--secondary); color: var(--secondary-foreground); }
+.badge-outline   { border-color: var(--border); color: var(--foreground); }
+.badge-ok      { background: color-mix(in oklab, var(--ok) 12%, transparent);      color: var(--ok); }
+.badge-warn    { background: color-mix(in oklab, var(--warn) 14%, transparent);    color: var(--warn); }
+.badge-danger  { background: color-mix(in oklab, var(--danger) 12%, transparent);  color: var(--danger); }
+.badge-info    { background: color-mix(in oklab, var(--info) 12%, transparent);    color: var(--info); }
+.badge-ai      { background: color-mix(in oklab, var(--ai) 12%, transparent);      color: var(--ai); }
+.badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+.badge-dot::before { content:""; width:5px; height:5px; border-radius:999px; background: currentColor; }
+
+/* ---------- TABLE -------------------------------------------------------- */
+.tbl-wrap { border-radius: var(--radius-xl); box-shadow: 0 0 0 1px var(--ring-hairline); overflow: hidden; background: var(--card); }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.tbl th {
+  text-align: left; padding: 10px 16px; font-weight: 500; font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border); background: transparent;
+}
+table.tbl td { padding: 11px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.tbl tr:last-child td { border-bottom: none; }
+table.tbl tbody tr:hover td { background: var(--muted); }
+.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.doc-tbl th, .doc-tbl td { font-size: 13px; }
+.doc-tbl th:first-child, .doc-tbl td:first-child { padding-left: 22px; }
+
+/* ---------- NOTES / callouts (Axis has none - derived) ------------------- */
+.note {
+  border-radius: var(--radius-lg); padding: 12px 14px; font-size: 13px;
+  display: flex; gap: 10px; align-items: flex-start;
+  border-left: 2px solid currentColor;
+}
+.note b { font-weight: 500; }
+.note-warn   { background: color-mix(in oklab, var(--warn) 8%, transparent);   color: var(--warn); }
+.note-ok     { background: color-mix(in oklab, var(--ok) 8%, transparent);     color: var(--ok); }
+.note-ai     { background: color-mix(in oklab, var(--ai) 8%, transparent);     color: var(--ai); }
+.note-danger { background: color-mix(in oklab, var(--danger) 8%, transparent); color: var(--danger); }
+.note span { color: color-mix(in oklab, currentColor 88%, var(--foreground)); }
+
+/* ---------- swatches ----------------------------------------------------- */
+.sw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px,1fr)); gap: 0; border-left: 1px solid var(--border); border-top: 1px solid var(--border); }
+.sw { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 0 0 10px; }
+.sw i { display: block; height: 54px; }
+.sw b { display: block; font-size: 12px; font-weight: 500; padding: 9px 12px 0; }
+.sw em { display: block; font-family: var(--mono); font-size: 10.5px; font-style: normal; color: var(--muted-foreground); padding: 1px 12px 0; }
+
+/* ---------- SHELL MOCKUP -------------------------------------------------- */
+.mock {
+  border-radius: var(--radius-3xl); overflow: hidden;
+  box-shadow: 0 0 0 1px var(--ring-hairline), var(--shadow-md);
+  background: var(--background);
+}
+.mock-bar { display: flex; align-items: center; gap: 7px; padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.mock-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--border); }
+.mock-url { margin-left: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted-foreground); }
+.app { display: grid; grid-template-columns: 232px 1fr; min-height: 520px; }
+@media (max-width: 780px) { .app { grid-template-columns: 1fr; } .side { display: none; } }
+
+.side { border-right: 1px solid var(--border); background: var(--background); padding: 16px 12px; }
+.side-brand { display: flex; align-items: center; gap: 9px; padding: 4px 8px 18px; font-weight: 500; letter-spacing: -.02em; }
+.side-brand i { width: 26px; height: 26px; border-radius: 7px; background: var(--foreground); color: var(--background); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 600; }
+.side-sec { font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted-foreground); padding: 16px 8px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px;
+  border-radius: var(--radius-md); font-size: 13px; color: var(--muted-foreground);
+  cursor: default; position: relative;
+}
+.nav-item:hover { background: var(--muted); color: var(--foreground); }
+.nav-item.on { background: var(--muted); color: var(--foreground); font-weight: 500; }
+.nav-item.on::before { content:""; position: absolute; left: -6px; top: 7px; bottom: 7px; width: 2px; border-radius: 999px; background: var(--foreground); }
+.nav-dot { width: 6px; height: 6px; border-radius: 2px; flex: none; }
+
+.top { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+.unit-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 11px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; box-shadow: var(--shadow-xs);
+}
+.search-pill {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; min-width: 210px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; color: var(--muted-foreground); box-shadow: var(--shadow-xs);
+}
+.kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; margin-left: auto; color: var(--muted-foreground); }
+.avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--foreground); color: var(--background); display: grid; place-items: center; font-size: 11px; font-weight: 500; }
+.bell { position: relative; width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; color: var(--muted-foreground); }
+.bell b { position: absolute; top: -1px; right: -1px; min-width: 15px; height: 15px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 9.5px; font-weight: 500; display: grid; place-items: center; padding: 0 3px; }
+.page { padding: 26px 28px 34px; }
+.page-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+.page-head h2 { font-size: 24px; }
+.crumb { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 6px; }
+
+/* ---------- misc component demos ----------------------------------------- */
+.seg { display: inline-flex; background: var(--muted); border-radius: var(--radius-md); padding: 3px; gap: 2px; }
+.seg-btn { border: none; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); padding: 5px 12px; border-radius: calc(var(--radius-md) - 2px); cursor: pointer; }
+.seg-btn.on { background: var(--background); color: var(--foreground); box-shadow: var(--shadow-xs); }
+
+.stepper { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted-foreground); }
+.step i { width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--border); display: grid; place-items: center; font-style: normal; font-size: 10.5px; }
+.step.done i { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+.step.done { color: var(--foreground); }
+.step.now i { border-color: var(--foreground); color: var(--foreground); }
+.step.now { color: var(--foreground); font-weight: 500; }
+.step-line { width: 34px; height: 1px; background: var(--border); margin: 0 12px; }
+
+.qty { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xs); overflow: hidden; }
+.qty button { width: 34px; height: 34px; border: none; background: none; font: inherit; font-size: 16px; color: var(--muted-foreground); cursor: pointer; }
+.qty button:hover { background: var(--muted); color: var(--foreground); }
+.qty span { width: 46px; text-align: center; font-family: var(--mono); font-size: 13.5px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); line-height: 34px; }
+
+.dropzone { border: 1px dashed var(--border); border-radius: var(--radius-xl); padding: 28px; text-align: center; color: var(--muted-foreground); font-size: 13px; width: 100%; background: var(--background); }
+.dropzone:hover { border-color: var(--foreground); color: var(--foreground); }
+
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px,1fr)); gap: 10px; width: 100%; }
+.mode {
+  text-align: left; border: 1px solid var(--border); background: var(--background);
+  border-radius: var(--radius-xl); padding: 15px 16px; cursor: pointer; font: inherit;
+  color: var(--foreground); box-shadow: var(--shadow-xs);
+}
+.mode:hover { background: var(--muted); }
+.mode.on { border-color: var(--foreground); box-shadow: 0 0 0 1px var(--foreground); }
+.mode b { display: block; font-weight: 500; font-size: 13.5px; }
+.mode span { display: block; color: var(--muted-foreground); font-size: 12px; margin-top: 3px; }
+
+.sku { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.sku b { font-weight: 500; }
+.sku .sep { color: var(--muted-foreground); }
+.sku .attr { font-size: 11px; color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+
+.money { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+.combo { position: relative; width: 260px; }
+.combo-list { margin-top: 6px; border-radius: var(--radius-xl); background: var(--popover); box-shadow: 0 0 0 1px var(--ring-hairline), var(--shadow-md); padding: 5px; }
+.combo-opt { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: var(--radius-md); font-size: 13px; }
+.combo-opt:hover, .combo-opt.on { background: var(--muted); }
+.combo-opt .star { color: var(--secondary); font-size: 11px; }
+
+.trail { display: flex; gap: 0; align-items: stretch; }
+.trail-col { flex: 1; padding: 14px 18px; }
+.trail-col + .trail-col { border-left: 1px solid var(--border); }
+
+.progress { height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--foreground); }
+
+.variance td { background: color-mix(in oklab, var(--warn) 7%, transparent); }
+
+.till {
+  border-radius: var(--radius-3xl); padding: 28px; color: oklch(0.985 0 0);
+  background: linear-gradient(160deg, var(--hero-start), oklch(0.22 0.02 84));
+}
+.till-num { font-family: var(--mono); font-size: 42px; font-weight: 500; letter-spacing: -.04em; }
+.till-chip { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 11px; border-radius: 999px; background: oklch(1 0 0 / .12); font-size: 12px; }
+
+.planned { border: 1px dashed var(--border); border-radius: var(--radius-3xl); padding: 34px; text-align: center; }
+.planned i { width: 40px; height: 40px; border-radius: 12px; background: var(--muted); display: inline-grid; place-items: center; font-style: normal; color: var(--muted-foreground); }
+
+.modal-demo { position: relative; border-radius: var(--radius-xl); overflow: hidden; background: var(--muted); padding: 30px 20px; }
+.modal-demo::before { content:""; position: absolute; inset: 0; background: oklch(0.145 0 0 / .22); }
+html.dark .modal-demo::before { background: oklch(0 0 0 / .5); }
+.modal { position: relative; max-width: 460px; margin: 0 auto; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 780px) { .two { grid-template-columns: 1fr; } }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.hero {
+  border-radius: var(--radius-3xl); padding: 56px 44px;
+  background: linear-gradient(150deg, var(--hero-start) 0%, var(--hero-mid) 55%, var(--hero-end) 100%);
+  color: oklch(0.985 0 0);
+}
+.hero h1 { max-width: 660px; }
+
+.verdict-tbl td:first-child { width: 30%; }
+ul.tick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+ul.tick li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+ul.tick li::before { content: "✓"; color: var(--foreground); font-size: 12px; line-height: 1.5; }
+ul.plain { margin: 0; padding-left: 18px; font-size: 13.5px; }
+ul.plain li { margin: 5px 0; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-in">
+    <div class="wordmark"><i>K</i> KDPS <span class="muted" style="font-weight:400">/ Axis</span></div>
+    <div class="spacer"></div>
+    <a class="navlink" href="#tokens">Tokens</a>
+    <a class="navlink" href="#primitives">Primitives</a>
+    <a class="navlink" href="#shell">Shell</a>
+    <a class="navlink" href="#screens">Screens</a>
+    <a class="navlink" href="#verdict">Verdict</a>
+    <button class="btn btn-outline btn-sm btn-pill" onclick="document.documentElement.classList.toggle('dark')">Light / Dark</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- ==================== HERO ==================== -->
+  <section style="padding-top:56px;">
+    <div class="hero">
+      <p class="kicker" style="color:oklch(0.985 0 0 / .7)">KDPS Operating System · Design exploration · 31 July 2026</p>
+      <h1 style="margin-top:16px;">The component inventory,<br>redrawn in Axis.</h1>
+      <p style="max-width:560px;margin-top:18px;font-size:16px;color:oklch(0.985 0 0 / .8)">
+        Same components, same rules, same screens as <code style="background:oklch(1 0 0 / .15);color:inherit">01-component-inventory.html</code>.
+        Only the design language changed: from the warm navy/rust system to StyleUI's <b style="font-weight:500">Axis</b> -
+        near-monochrome, bronze primary, hairline grids, quiet type.
+      </p>
+      <div class="row" style="margin-top:26px;">
+        <button class="btn btn-pill" style="background:oklch(0.985 0 0);color:oklch(0.145 0 0)">Everything below is live</button>
+        <button class="btn btn-outline btn-pill" style="background:transparent;border-color:oklch(1 0 0 / .3);color:oklch(0.985 0 0)" onclick="document.documentElement.classList.toggle('dark')">Try dark mode</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== WHAT CHANGED ==================== -->
+  <section class="blk" id="translation">
+    <div class="sec-head"><span class="sec-num">00</span><h2>What Axis changes</h2></div>
+    <p class="muted" style="max-width:720px;margin-bottom:22px;">
+      Axis ships a landing-page template, not an ERP kit. What it really gives us is a
+      <b style="font-weight:500;color:var(--foreground)">token set and a set of habits</b>.
+      Those habits translate cleanly onto KDPS; six things visibly change.
+    </p>
+    <div class="tbl-wrap">
+      <table class="tbl verdict-tbl">
+        <thead><tr><th>Dimension</th><th>KDPS "Warm" today</th><th>Axis</th></tr></thead>
+        <tbody>
+          <tr><td>Canvas</td><td>Warm paper <span class="mono">#faf7f2</span>, beige sidebar rail</td><td>Pure white / near-black. No warm cast, no tinted rail - the sidebar is the page, separated by one hairline.</td></tr>
+          <tr><td>Brand colour</td><td>Navy + rust + brand red, three roles</td><td>One bronze primary <span class="mono">oklch(.505 .067 82)</span> + a gold secondary. Buttons fill with <i>foreground</i> (near-black), not brand.</td></tr>
+          <tr><td>Type</td><td>700-weight headings, 30px h1</td><td>500-weight, tight tracking (<span class="mono">-.03em</span>), Inter. Nothing shouts.</td></tr>
+          <tr><td>Shape</td><td>16px cards, 11px controls</td><td>24px cards (<span class="mono">rounded-3xl</span>), 8px controls. Bigger outside, tighter inside.</td></tr>
+          <tr><td>Elevation</td><td>Two real shadows</td><td>Almost none. A 1px <span class="mono">ring-foreground/10</span> does the work; shadow is a hairline hint.</td></tr>
+          <tr><td>Chips</td><td>Pastel fill + coloured border, 999px</td><td>12% tint of the tone, no border, 4px radius. Reads as a label, not a sticker.</td></tr>
+          <tr><td>Structure</td><td>Cards floating on paper</td><td>Hairline grids: cells divided by 1px rules, no gaps. The signature Axis look.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note note-warn" style="margin-top:16px;">
+      <span><b>Axis does not ship what KDPS needs most.</b> It has no status colours, no layer accents, no data table,
+      no sidebar, no form density. Everything below marked <span class="mono">[ext]</span> is an extension I authored
+      in Axis's own idiom - low chroma, tint-not-border, hairline separation. That extension is the real design decision here, not the palette swap.</span>
+    </div>
+  </section>
+
+  <!-- ==================== TOKENS ==================== -->
+  <section class="blk" id="tokens">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Design tokens</h2></div>
+    <p class="muted" style="max-width:720px;margin-bottom:20px;">
+      Axis defines colour in <b style="font-weight:500;color:var(--foreground)">oklch</b>, not hex - perceptually even, so a
+      status palette derived at one lightness stays balanced. Toggle dark above and watch every swatch re-value from the single <code>.dark</code> block.
+    </p>
+
+    <h3 style="margin-bottom:10px;">Base <span class="muted" style="font-weight:400">[axis, verbatim]</span></h3>
+    <div class="sw-grid">
+      <div class="sw"><i style="background:var(--background);box-shadow:inset 0 0 0 1px var(--border)"></i><b>background</b><em>oklch(1 0 0)</em></div>
+      <div class="sw"><i style="background:var(--foreground)"></i><b>foreground</b><em>oklch(.145 0 0)</em></div>
+      <div class="sw"><i style="background:var(--primary)"></i><b>primary</b><em>oklch(.5054 .067 81.9)</em></div>
+      <div class="sw"><i style="background:var(--secondary)"></i><b>secondary</b><em>oklch(.8403 .1724 84)</em></div>
+      <div class="sw"><i style="background:var(--muted)"></i><b>muted</b><em>oklch(.97 0 0)</em></div>
+      <div class="sw"><i style="background:var(--muted-foreground)"></i><b>muted-foreground</b><em>oklch(.441 .01 0)</em></div>
+      <div class="sw"><i style="background:var(--border)"></i><b>border</b><em>oklch(.922 0 0)</em></div>
+      <div class="sw"><i style="background:var(--destructive)"></i><b>destructive</b><em>oklch(.577 .245 27)</em></div>
+      <div class="sw"><i style="background:linear-gradient(90deg,var(--hero-start),var(--hero-mid),var(--hero-end))"></i><b>hero gradient</b><em>start / mid / end</em></div>
+    </div>
+
+    <h3 style="margin:30px 0 10px;">Six semantic status tones <span class="muted" style="font-weight:400">[ext]</span></h3>
+    <div class="sw-grid">
+      <div class="sw"><i style="background:var(--ok)"></i><b>ok</b><em>open · matched · posted</em></div>
+      <div class="sw"><i style="background:var(--warn)"></i><b>warn</b><em>pending · SOR · variance</em></div>
+      <div class="sw"><i style="background:var(--danger)"></i><b>danger</b><em>blocked · overdue · rejected</em></div>
+      <div class="sw"><i style="background:var(--info)"></i><b>info</b><em>informational · correction</em></div>
+      <div class="sw"><i style="background:var(--ai)"></i><b>ai</b><em>AI-touched (Rule 6)</em></div>
+      <div class="sw"><i style="background:var(--neutral)"></i><b>neutral</b><em>not required</em></div>
+    </div>
+    <p class="small muted" style="margin-top:10px;">
+      All six sit at <span class="mono">L .505</span> in light and <span class="mono">L ~.75</span> in dark, so no tone ever
+      out-shouts another. Purple stays reserved for AI - the rule survives the retheme.
+    </p>
+
+    <h3 style="margin:30px 0 10px;">Five layer accents <span class="muted" style="font-weight:400">[ext]</span></h3>
+    <div class="grid-rule g4" style="margin-bottom:8px;">
+      <div class="cell"><span class="nav-dot" style="background:var(--layer-master);display:inline-block"></span> <span class="small">Master data</span></div>
+      <div class="cell"><span class="nav-dot" style="background:var(--layer-doc);display:inline-block"></span> <span class="small">Documents</span></div>
+      <div class="cell"><span class="nav-dot" style="background:var(--layer-ledger);display:inline-block"></span> <span class="small">Ledgers</span></div>
+      <div class="cell"><span class="nav-dot" style="background:var(--layer-control);display:inline-block"></span> <span class="small">Controls</span></div>
+      <div class="cell"><span class="nav-dot" style="background:var(--layer-intel);display:inline-block"></span> <span class="small">Intelligence</span></div>
+      <div class="cell" style="grid-column: span 3;"><span class="small muted">In Axis these shrink from icon medallions to 6px squares. The architecture stays legible; it stops being decorative.</span></div>
+    </div>
+
+    <h3 style="margin:30px 0 10px;">Shape, elevation, type</h3>
+    <div class="grid-rule g3">
+      <div class="cell"><div class="lbl">Radius base</div><div class="val">10<span style="font-size:15px">px</span></div><p class="xs muted">--radius .625rem · cards 24px · badges 4px · pills 999px</p></div>
+      <div class="cell"><div class="lbl">Control height</div><div class="val">36<span style="font-size:15px">px</span></div><p class="xs muted">h-9 for button, input, select. sm 32 · xs 24 · lg 40</p></div>
+      <div class="cell"><div class="lbl">Elevation</div><div class="val">1<span style="font-size:15px">px ring</span></div><p class="xs muted">ring-foreground/10 + shadow-xs. Dialogs get shadow-xl. That is all.</p></div>
+      <div class="cell"><div class="lbl">Heading weight</div><div class="val">500</div><p class="xs muted">Never 700. Emphasis comes from size and tracking, not weight.</p></div>
+      <div class="cell"><div class="lbl">Tracking</div><div class="val">-.03<span style="font-size:15px">em</span></div><p class="xs muted">Headings tighten; body stays at 0; uppercase labels open to +.12em</p></div>
+      <div class="cell"><div class="lbl">Mono</div><div class="val" style="font-family:var(--mono)">₹4,72,120</div><p class="xs muted">SF Mono for vouchers, barcodes, money. Rule kept.</p></div>
+    </div>
+  </section>
+
+  <!-- ==================== PRIMITIVES ==================== -->
+  <section class="blk" id="primitives">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Core primitives</h2></div>
+
+    <h3 style="margin-bottom:10px;">Buttons <span class="muted" style="font-weight:400">[axis Button, 6 variants × 8 sizes]</span></h3>
+    <div class="demo">
+      <span class="demo-label">Variants</span>
+      <button class="btn btn-default">Default</button>
+      <button class="btn btn-outline">Outline</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-destructive">Destructive</button>
+      <button class="btn btn-link">Link</button>
+      <button class="btn btn-default" disabled>Disabled</button>
+    </div>
+    <div class="demo" style="margin-top:10px;">
+      <span class="demo-label">Sizes &amp; the pill form Axis uses for calls to action</span>
+      <button class="btn btn-default btn-xs">xs</button>
+      <button class="btn btn-default btn-sm">sm</button>
+      <button class="btn btn-default">default</button>
+      <button class="btn btn-default btn-lg">lg</button>
+      <button class="btn btn-outline btn-icon"><svg class="icn" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      <button class="btn btn-default btn-pill">Post GRN</button>
+      <button class="btn btn-outline btn-pill">Save draft</button>
+    </div>
+    <p class="small muted" style="margin-top:10px;">
+      KDPS's <code>.btn-cta</code> in brand red has no home in Axis. The one-key-action-per-screen rule survives as the
+      single <b style="font-weight:500;color:var(--foreground)">filled</b> button; everything else is outline or ghost.
+      That is a stricter rule than today's and worth keeping.
+    </p>
+
+    <h3 style="margin:30px 0 10px;">Form controls</h3>
+    <div class="demo" style="align-items:flex-end;">
+      <div class="field" style="width:220px;"><label>Vendor</label><input class="input" placeholder="Search vendors"></div>
+      <div class="field" style="width:180px;"><label>Commercial model</label><select class="input"><option>Outright</option><option>SOR</option></select></div>
+      <div class="field" style="width:140px;"><label>Quantity</label><div class="qty"><button>-</button><span>24</span><button>+</button></div></div>
+      <div class="field" style="width:170px;"><label>Landed value</label><input class="input mono" value="₹4,72,120"></div>
+    </div>
+    <div class="demo" style="margin-top:10px;"><div class="dropzone">Drop the brand PT file here, or <span style="text-decoration:underline;text-underline-offset:3px">browse</span><br><span class="xs">XLSX or CSV · up to 10 MB</span></div></div>
+
+    <h3 style="margin:30px 0 10px;">Badges <span class="muted" style="font-weight:400">(the one status primitive)</span></h3>
+    <div class="demo">
+      <span class="demo-label">Axis variants</span>
+      <span class="badge badge-default">Default</span>
+      <span class="badge badge-secondary">Secondary</span>
+      <span class="badge badge-outline">Outline</span>
+      <span class="badge badge-neutral">Neutral</span>
+    </div>
+    <div class="demo" style="margin-top:10px;">
+      <span class="demo-label">[ext] the KDPS status set, rendered as Axis tint badges</span>
+      <span class="badge badge-ok badge-dot">Matched</span>
+      <span class="badge badge-warn badge-dot">Pending approval</span>
+      <span class="badge badge-danger badge-dot">Rejected</span>
+      <span class="badge badge-info badge-dot">Correction</span>
+      <span class="badge badge-ai badge-dot">AI mapped</span>
+      <span class="badge badge-neutral">No approval needed</span>
+      <span class="badge badge-outline">Outright</span>
+      <span class="badge badge-warn">SOR</span>
+    </div>
+
+    <h3 style="margin:30px 0 10px;">Card</h3>
+    <div class="two">
+      <div class="card">
+        <div class="card-head"><p class="kicker">Goods receipt</p><h3 style="margin-top:6px;">26-27/RAN/GRN/112</h3></div>
+        <div class="card-body">
+          <div class="row" style="gap:8px;"><span class="badge badge-ok badge-dot">Matched</span><span class="badge badge-outline">Outright</span></div>
+          <div class="between" style="margin-top:16px;"><span class="small muted">ARROW · 3 boxes · 148 pieces</span><span class="money" style="font-size:16px;">₹4,72,120</span></div>
+          <div class="progress" style="margin-top:14px;"><i style="width:72%"></i></div>
+          <p class="xs muted" style="margin-top:7px;">106 of 148 mapped to PT</p>
+        </div>
+        <div class="card-foot row"><button class="btn btn-default btn-sm">Open PT</button><button class="btn btn-ghost btn-sm">History</button></div>
+      </div>
+      <div class="card card-pad">
+        <p class="kicker">Section card</p>
+        <h3 style="margin:8px 0 6px;">The unit every form is stacked from</h3>
+        <p class="small muted">130 uses across the app. In Axis it loses its shadow and gains a 24px radius plus a 1px ring - which reads much quieter when eight of them stack down a column.</p>
+        <div class="grid-rule g2" style="margin-top:16px;">
+          <div class="cell" style="padding:14px 16px;"><div class="lbl">Open GRNs</div><div class="val" style="font-size:22px;">7</div></div>
+          <div class="cell" style="padding:14px 16px;"><div class="lbl">Awaiting PT</div><div class="val" style="font-size:22px;">3</div></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:30px 0 10px;">Data table <span class="muted" style="font-weight:400">[ext - Axis ships none]</span></h3>
+    <div class="tbl-wrap">
+      <table class="tbl doc-tbl">
+        <thead><tr><th>Voucher</th><th>Vendor / brand</th><th>Status</th><th>Model</th><th class="num">Value</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">26-27/RAN/GRN/112</td><td>Arvind Lifestyle · ARROW</td><td><span class="badge badge-ok badge-dot">Matched</span></td><td><span class="badge badge-outline">Outright</span></td><td class="num">₹4,72,120</td></tr>
+          <tr><td class="mono">26-27/DEO/TRF/19</td><td>Deoghar → Ranchi WH</td><td><span class="badge badge-warn badge-dot">Pending</span></td><td><span class="badge badge-neutral">-</span></td><td class="num">₹88,400</td></tr>
+          <tr class="variance"><td class="mono">26-27/RAN/GRN/113</td><td>Madura · LOUIS PHILIPPE</td><td><span class="badge badge-warn badge-dot">Variance 4 pcs</span></td><td><span class="badge badge-warn">SOR</span></td><td class="num">₹2,14,900</td></tr>
+          <tr><td class="mono">26-27/DEO/SAL/74</td><td>Vaishnavi Deoghar</td><td><span class="badge badge-ai badge-dot">AI mapped</span></td><td><span class="badge badge-outline">Outright</span></td><td class="num">₹28,50,000</td></tr>
+          <tr><td class="mono">26-27/RAN/GRN/109</td><td>Raymond</td><td><span class="badge badge-danger badge-dot">Rejected</span></td><td><span class="badge badge-outline">Outright</span></td><td class="num">₹1,02,600</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted" style="margin-top:10px;">
+      Amber row wash for variance survives at 7% - flagged, never blocked (Rule 5). Money columns stay right-aligned mono.
+    </p>
+
+    <h3 style="margin:30px 0 10px;">Notes <span class="muted" style="font-weight:400">[ext]</span></h3>
+    <div class="demo col">
+      <div class="note note-warn"><span><b>Variance flagged.</b> 4 pieces short against the booking. The GRN posts anyway - a human decides later.</span></div>
+      <div class="note note-ok"><span><b>Posted.</b> Stock ledger and value GL both written, trial balance balanced.</span></div>
+      <div class="note note-ai"><span><b>AI mapped 106 of 148 lines.</b> Confidence below 80% on 12 rows - they are in the review queue, unposted.</span></div>
+      <div class="note note-danger"><span><b>Refused.</b> This store is outside your scope.</span></div>
+    </div>
+  </section>
+
+  <!-- ==================== SHELL ==================== -->
+  <section class="blk" id="shell">
+    <div class="sec-head"><span class="sec-num">03</span><h2>The application shell</h2></div>
+    <p class="muted" style="max-width:720px;margin-bottom:20px;">
+      The biggest single change. The beige rail goes; the sidebar becomes the same white as the page, separated by one hairline,
+      with layer accents reduced to 6px squares and the active item marked by a 2px foreground bar. Everything in the top bar becomes a pill.
+    </p>
+
+    <div class="mock">
+      <div class="mock-bar"><i class="mock-dot"></i><i class="mock-dot"></i><i class="mock-dot"></i><span class="mock-url">kdps.app / inbound / goods-receipts</span></div>
+      <div class="app">
+        <aside class="side">
+          <div class="side-brand"><i>K</i> KDPS</div>
+          <div class="side-sec">Documents</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-doc)"></span> Bookings</div>
+          <div class="nav-item on"><span class="nav-dot" style="background:var(--layer-doc)"></span> Goods receipts</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-doc)"></span> PT mapper</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-doc)"></span> Transfers</div>
+          <div class="side-sec">Store</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-control)"></span> Sell</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-control)"></span> Stock on hand</div>
+          <div class="side-sec">Ledgers</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-ledger)"></span> Stock ledger</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-ledger)"></span> Vendor ledger</div>
+          <div class="side-sec">Intelligence</div>
+          <div class="nav-item"><span class="nav-dot" style="background:var(--layer-intel)"></span> Insights</div>
+        </aside>
+        <main>
+          <div class="top">
+            <div class="unit-pill">Ranchi warehouse <span class="badge badge-neutral mono">20AAB…1Z5</span> <span class="muted"><svg class="icn" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 9l6 6 6-6"/></svg></span></div>
+            <div class="search-pill"><svg class="icn" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg> Search everything <span class="kbd">⌘K</span></div>
+            <div class="spacer"></div>
+            <div class="bell"><svg class="icn" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><b>3</b></div>
+            <div class="avatar">AK</div>
+          </div>
+          <div class="page">
+            <div class="page-head">
+              <div>
+                <div class="crumb">Inbound · Goods receipts</div>
+                <h2>Goods receipts</h2>
+                <p class="small muted" style="margin-top:6px;">Everything that arrived at this unit, and what it still owes the PT.</p>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn btn-outline btn-sm">Export</button>
+              <button class="btn btn-default btn-sm">New receipt</button>
+            </div>
+
+            <div class="row" style="margin-bottom:16px;">
+              <div class="seg"><button class="seg-btn on">All</button><button class="seg-btn">Awaiting PT</button><button class="seg-btn">Variance</button><button class="seg-btn">Posted</button></div>
+              <div class="search-pill" style="min-width:200px;"><svg class="icn" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg> Filter this list</div>
+              <div class="spacer"></div>
+              <span class="badge badge-neutral">5 of 112</span>
+            </div>
+
+            <div class="tbl-wrap">
+              <table class="tbl doc-tbl">
+                <thead><tr><th>Voucher</th><th>Brand</th><th>Status</th><th class="num">Pieces</th><th class="num">Value</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">26-27/RAN/GRN/112</td><td>ARROW</td><td><span class="badge badge-ok badge-dot">Matched</span></td><td class="num">148</td><td class="num">₹4,72,120</td></tr>
+                  <tr class="variance"><td class="mono">26-27/RAN/GRN/113</td><td>LOUIS PHILIPPE</td><td><span class="badge badge-warn badge-dot">Variance</span></td><td class="num">92</td><td class="num">₹2,14,900</td></tr>
+                  <tr><td class="mono">26-27/RAN/GRN/111</td><td>PETER ENGLAND</td><td><span class="badge badge-ai badge-dot">AI mapped</span></td><td class="num">210</td><td class="num">₹3,88,000</td></tr>
+                  <tr><td class="mono">26-27/RAN/GRN/109</td><td>RAYMOND</td><td><span class="badge badge-danger badge-dot">Rejected</span></td><td class="num">44</td><td class="num">₹1,02,600</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="grid-rule g3" style="margin-top:22px;">
+      <div class="cell"><div class="lbl">Sidebar</div><p class="small" style="margin-top:6px;">Same background as the page. One hairline, uppercase section labels at +.13em, 6px layer squares, 2px active bar. Drag-reorder and resize unchanged.</p></div>
+      <div class="cell"><div class="lbl">Top bar</div><p class="small" style="margin-top:6px;">Unit switcher, global search, bell and avatar all become pills. GSTIN rides as a mono badge inside the switcher.</p></div>
+      <div class="cell"><div class="lbl">Page header</div><p class="small" style="margin-top:6px;">The rust left-bar goes. Crumb becomes a tracked uppercase label above a 24px medium title; actions sit right.</p></div>
+    </div>
+  </section>
+
+  <!-- ==================== SHARED COMPONENTS ==================== -->
+  <section class="blk" id="shared">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Shared components</h2></div>
+
+    <div class="two">
+      <div class="stack">
+        <div>
+          <h3 style="margin-bottom:10px;">Combobox <span class="muted" style="font-weight:400">(select-only, the Excel-validation control)</span></h3>
+          <div class="demo col">
+            <div class="combo">
+              <input class="input" value="ARR" style="width:100%">
+              <div class="combo-list">
+                <div class="combo-opt on"><span class="star">★</span> ARROW <span class="muted xs">· suggested</span></div>
+                <div class="combo-opt"><span class="star">★</span> ARROW SPORT</div>
+                <div class="combo-opt" style="padding-left:26px;">ARROW NEW YORK</div>
+                <div class="combo-opt" style="padding-left:26px;">ARROW WOMAN</div>
+              </div>
+            </div>
+            <p class="xs muted">Typing filters; only a listed value commits. Starred suggestions float to the top. 60-option window kept.</p>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="margin-bottom:10px;">Approval trail <span class="muted" style="font-weight:400">(maker · checker)</span></h3>
+          <div class="card">
+            <div class="trail">
+              <div class="trail-col"><p class="kicker">Maker</p><p style="margin-top:6px;font-weight:500;">Ravi Kumar</p><p class="xs muted">Store manager · 1 Aug, 5:30 pm</p></div>
+              <div class="trail-col"><p class="kicker">Checker</p><p style="margin-top:6px;font-weight:500;">Awaiting</p><p class="xs muted">Operations head</p></div>
+            </div>
+            <div class="card-foot row"><span class="badge badge-warn badge-dot">Pending approval</span><div class="spacer"></div><button class="btn btn-ghost btn-sm">Reject</button><button class="btn btn-default btn-sm">Approve</button></div>
+          </div>
+          <div class="stepper" style="margin-top:14px;">
+            <span class="step done"><i>✓</i> Raised</span><span class="step-line"></span>
+            <span class="step now"><i>2</i> Store manager</span><span class="step-line"></span>
+            <span class="step"><i>3</i> Ops head</span><span class="step-line"></span>
+            <span class="step"><i>4</i> Posted</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div>
+          <h3 style="margin-bottom:10px;">Mode toggle <span class="muted" style="font-weight:400">(choose a flow)</span></h3>
+          <div class="demo"><div class="mode-grid">
+            <button class="mode on"><b>Against a booking</b><span>Lines pre-filled, variance flagged</span></button>
+            <button class="mode"><b>Direct receipt</b><span>No booking exists for this brand</span></button>
+          </div></div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:10px;">Stage stepper &amp; pager</h3>
+          <div class="demo col">
+            <div class="stepper">
+              <span class="step done"><i>✓</i> Uploaded</span><span class="step-line"></span>
+              <span class="step done"><i>✓</i> Mapped</span><span class="step-line"></span>
+              <span class="step now"><i>3</i> Review</span><span class="step-line"></span>
+              <span class="step"><i>4</i> Posted</span>
+            </div>
+            <div class="row" style="justify-content:flex-end;">
+              <span class="xs muted">21-40 of 112</span>
+              <button class="btn btn-outline btn-sm">Previous</button>
+              <button class="btn btn-outline btn-sm">Next</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:10px;">Modal</h3>
+          <div class="modal-demo">
+            <div class="card modal" style="box-shadow:0 0 0 1px var(--ring-hairline), var(--shadow-xl)">
+              <div class="card-head"><h3>Post this receipt?</h3><p class="small muted" style="margin-top:6px;">148 pieces enter stock at Ranchi warehouse. Quantity posts now; value posts when the PT lands.</p></div>
+              <div class="card-body"><div class="note note-warn"><span>4 pieces short against the booking. This will be recorded as a variance.</span></div></div>
+              <div class="card-foot row"><div class="spacer"></div><button class="btn btn-ghost btn-sm">Cancel</button><button class="btn btn-default btn-sm">Post receipt</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== DOMAIN PRIMITIVES ==================== -->
+  <section class="blk" id="domain">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Domain primitives</h2></div>
+    <p class="muted" style="max-width:720px;margin-bottom:18px;">These carry domain law. A retheme may restyle them; it may not reshape them.</p>
+    <div class="grid-rule g2">
+      <div class="cell">
+        <div class="lbl">Money</div>
+        <div class="val money">₹28,50,000</div>
+        <p class="xs muted" style="margin-top:6px;">Integer paise in, Indian Lakh/Crore grouping out, tabular mono. Short form <span class="mono">₹2.41 Cr</span> · <span class="mono">₹3.5 L</span>. Display only - no float touches a write path.</p>
+      </div>
+      <div class="cell">
+        <div class="lbl">SKU line</div>
+        <div style="margin-top:8px;"><span class="sku"><b>ARROW</b><span class="sep">/</span>SH-4471<span class="attr">Blue</span><span class="attr">M</span></span></div>
+        <p class="xs muted" style="margin-top:8px;">Brand · Style · Colour · Size. Never style-only. The attribute chips shed their pill shape and become 4px outline tags.</p>
+      </div>
+      <div class="cell">
+        <div class="lbl">Status chip</div>
+        <div class="row" style="margin-top:8px;"><span class="badge badge-ok badge-dot">Open</span><span class="badge badge-warn badge-dot">Pending</span><span class="badge badge-danger badge-dot">Overdue</span><span class="badge badge-ai badge-dot">AI</span></div>
+        <p class="xs muted" style="margin-top:8px;">Tone auto-mapped from the status word, same mapping as today.</p>
+      </div>
+      <div class="cell">
+        <div class="lbl">Commercial badge</div>
+        <div class="row" style="margin-top:8px;"><span class="badge badge-outline">Outright</span><span class="badge badge-warn">SOR</span><span class="badge badge-info">Correction</span></div>
+        <p class="xs muted" style="margin-top:8px;">The two-axis ownership × return-terms model, made visible. Outright loses navy and becomes plain outline - the quiet default.</p>
+      </div>
+      <div class="cell">
+        <div class="lbl">Stat</div>
+        <div class="val">₹1,42,300</div><p class="xs muted">Today's sale · Deoghar</p>
+      </div>
+      <div class="cell">
+        <div class="lbl">Sync light</div>
+        <div class="row" style="margin-top:10px;"><span class="badge badge-ok badge-dot">Synced</span><span class="badge badge-warn badge-dot">3 waiting</span><span class="badge badge-danger badge-dot">Bill refused</span></div>
+        <p class="xs muted" style="margin-top:8px;">Word plus number, never colour alone. The rule holds - Axis's tint badges keep the word dominant.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ONE-OFF SURFACES ==================== -->
+  <section class="blk" id="screens">
+    <div class="sec-head"><span class="sec-num">06</span><h2>One-off surfaces</h2></div>
+
+    <h3 style="margin-bottom:10px;">Login</h3>
+    <div class="mock">
+      <div style="display:grid;grid-template-columns:1.05fr 1fr;min-height:420px;">
+        <div style="background:linear-gradient(155deg,var(--hero-start),oklch(0.24 0.03 84));color:oklch(0.985 0 0);padding:44px 40px;display:flex;flex-direction:column;">
+          <div class="wordmark" style="color:inherit"><i style="background:oklch(0.985 0 0);color:oklch(0.145 0 0)">K</i> KDPS</div>
+          <div style="flex:1"></div>
+          <p style="font-size:30px;font-weight:500;letter-spacing:-.035em;max-width:340px;line-height:1.15;">One system from the booking to the books.</p>
+          <ul class="tick" style="margin-top:26px;color:oklch(0.985 0 0 / .78);">
+            <li>Master data that every document snapshots</li>
+            <li>Documents that write the ledgers, never the reverse</li>
+            <li>Ledgers that reconcile to Tally</li>
+            <li>Controls that flag, not block</li>
+            <li>Intelligence at the edges only</li>
+          </ul>
+        </div>
+        <div style="padding:44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px;">
+          <div><h3 style="font-size:22px;">Sign in</h3><p class="small muted" style="margin-top:5px;">Use your KDPS account.</p></div>
+          <div class="field"><label>Username</label><input class="input" placeholder="ravi.kumar"></div>
+          <div class="field"><label>Password</label><input class="input" type="password" value="password"></div>
+          <button class="btn btn-default btn-pill" style="width:100%;margin-top:4px;">Sign in</button>
+          <div class="row" style="gap:6px;margin-top:6px;"><span class="xs muted">Demo:</span><span class="badge badge-outline">owner</span><span class="badge badge-outline">store manager</span><span class="badge badge-outline">cashier</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:30px 0 10px;">Home - the five layer bands</h3>
+    <div class="card card-pad">
+      <div class="between" style="margin-bottom:18px;"><div><p class="kicker">Wednesday, 31 July</p><h3 style="font-size:22px;margin-top:6px;">Good evening, Anand</h3></div><button class="btn btn-outline btn-sm btn-pill">Configure tiles</button></div>
+      <div class="grid-rule g4">
+        <div class="cell"><div class="lbl">Sale today</div><div class="val">₹1,42,300</div></div>
+        <div class="cell"><div class="lbl">Waiting on you</div><div class="val">3</div></div>
+        <div class="cell"><div class="lbl">Stock value</div><div class="val">₹2.41 Cr</div></div>
+        <div class="cell"><div class="lbl">SOR due &lt; 30d</div><div class="val" style="color:var(--warn)">₹18.4 L</div></div>
+      </div>
+      <div style="margin-top:22px;display:flex;flex-direction:column;gap:0;border-top:1px solid var(--border)">
+        <div style="display:flex;gap:14px;align-items:center;padding:14px 2px;border-bottom:1px solid var(--border)"><span class="nav-dot" style="background:var(--layer-master)"></span><b style="font-weight:500;font-size:13.5px;width:120px;">Master data</b><span class="small muted">Items · Vendors · Stores · Users</span></div>
+        <div style="display:flex;gap:14px;align-items:center;padding:14px 2px;border-bottom:1px solid var(--border)"><span class="nav-dot" style="background:var(--layer-doc)"></span><b style="font-weight:500;font-size:13.5px;width:120px;">Documents</b><span class="small muted">Bookings · Receipts · Transfers · Sales</span><span class="spacer"></span><span class="badge badge-warn badge-dot">3 pending</span></div>
+        <div style="display:flex;gap:14px;align-items:center;padding:14px 2px;border-bottom:1px solid var(--border)"><span class="nav-dot" style="background:var(--layer-ledger)"></span><b style="font-weight:500;font-size:13.5px;width:120px;">Ledgers</b><span class="small muted">Stock · Vendor · Cash · Books health</span><span class="spacer"></span><span class="badge badge-ok badge-dot">Balanced</span></div>
+        <div style="display:flex;gap:14px;align-items:center;padding:14px 2px;border-bottom:1px solid var(--border)"><span class="nav-dot" style="background:var(--layer-control)"></span><b style="font-weight:500;font-size:13.5px;width:120px;">Controls</b><span class="small muted">Approvals · Access · Stocktake</span></div>
+        <div style="display:flex;gap:14px;align-items:center;padding:14px 2px;"><span class="nav-dot" style="background:var(--layer-intel)"></span><b style="font-weight:500;font-size:13.5px;width:120px;">Intelligence</b><span class="small muted">Insights · Digest · Dead stock</span><span class="spacer"></span><span class="badge badge-ai badge-dot">AI</span></div>
+      </div>
+    </div>
+
+    <div class="two" style="margin-top:22px;">
+      <div>
+        <h3 style="margin-bottom:10px;">Till / POS <span class="muted" style="font-weight:400">(a device screen, not a form)</span></h3>
+        <div class="till">
+          <p class="kicker" style="color:oklch(0.985 0 0 / .6)">Deoghar · Till 2</p>
+          <div class="till-num" style="margin-top:10px;">₹4,780</div>
+          <p class="small" style="color:oklch(0.985 0 0 / .7);margin-top:4px;">3 items · ARROW, LP</p>
+          <div class="row" style="margin-top:20px;">
+            <span class="till-chip">● Synced</span>
+            <span class="till-chip">Bill 26-27/DEO/SAL/74</span>
+          </div>
+          <div class="row" style="margin-top:20px;">
+            <button class="btn btn-pill btn-lg" style="background:oklch(0.985 0 0);color:oklch(0.145 0 0)">Take payment</button>
+            <button class="btn btn-outline btn-pill btn-lg" style="background:transparent;border-color:oklch(1 0 0 / .3);color:oklch(0.985 0 0)">Hold</button>
+          </div>
+        </div>
+        <p class="xs muted" style="margin-top:10px;">Axis's hero gradient becomes the till's surface. It stays the darkest thing in the app, which is what a counter screen wants.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px;">Planned stub <span class="muted" style="font-weight:400">(~20 screens)</span></h3>
+        <div class="planned">
+          <i>◷</i>
+          <h3 style="margin-top:14px;">Tally sync</h3>
+          <p class="small muted" style="margin-top:8px;max-width:340px;margin-inline:auto;">Designed, not built. When it lands it will push posted vouchers to Tally as the statutory book of record, and reconcile back.</p>
+          <span class="badge badge-neutral" style="margin-top:14px;">Design locked · 20 Jun 2026</span>
+        </div>
+        <h3 style="margin:24px 0 10px;">Access matrix</h3>
+        <div class="tbl-wrap">
+          <table class="tbl doc-tbl">
+            <thead><tr><th>Capability</th><th>Cashier</th><th>Store mgr</th><th>Ops head</th></tr></thead>
+            <tbody>
+              <tr><td>Sell</td><td><span class="badge badge-ok">Yes</span></td><td><span class="badge badge-ok">Yes</span></td><td><span class="badge badge-neutral">-</span></td></tr>
+              <tr><td>Approve transfer</td><td><span class="badge badge-neutral">-</span></td><td><span class="badge badge-neutral">-</span></td><td><span class="badge badge-ok">Yes</span></td></tr>
+              <tr><td>See cost</td><td><span class="badge badge-neutral">-</span></td><td><span class="badge badge-ok">Yes</span></td><td><span class="badge badge-ok">Yes</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VERDICT ==================== -->
+  <section class="blk" id="verdict">
+    <div class="sec-head"><span class="sec-num">07</span><h2>Verdict, honestly</h2></div>
+    <div class="two">
+      <div class="card card-pad">
+        <p class="kicker">What Axis buys us</p>
+        <ul class="tick" style="margin-top:14px;">
+          <li>A calmer, more current surface. Nothing competes for attention, so status colour lands harder when it appears.</li>
+          <li>oklch tokens. Deriving a balanced status palette becomes arithmetic rather than taste, and dark mode falls out of one block.</li>
+          <li>A stricter button rule: one filled button per screen. That is better than today's "brand red is the CTA" convention.</li>
+          <li>Hairline grids give dense ERP data a natural home - KPI rows and matrices read better with rules than with gaps.</li>
+          <li>It is a shadcn registry, so if the PWA ever adopts shadcn primitives, Button/Badge/Card/Input arrive as real code.</li>
+        </ul>
+      </div>
+      <div class="card card-pad">
+        <p class="kicker">What it costs</p>
+        <ul class="plain" style="margin-top:14px;">
+          <li><b style="font-weight:500">Axis is a marketing template.</b> Hero, pricing, testimonials, a logo cloud. Of ~90 files, only 6 are components KDPS uses. The ERP layer - table, sidebar, dialog, form density, the six statuses, the layer accents - is all extension work.</li>
+          <li><b style="font-weight:500">It is not currently a KDPS-shaped stack.</b> The registry expects Next.js + Tailwind v4 + Base UI. The PWA is Vite + React + hand-written CSS. Adopting the components (not just the look) is a front-end stack decision, not a restyle.</li>
+          <li><b style="font-weight:500">Brand identity thins out.</b> Navy, rust and brand red all disappear into near-black plus bronze. KDPS reads more like a SaaS tool and less like KDPS.</li>
+          <li><b style="font-weight:500">The warm canvas is doing quiet work.</b> Store staff stare at these screens all day under tube light; pure white at full brightness is harsher than <span class="mono">#faf7f2</span>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:16px;">
+      <p class="kicker">If you want this</p>
+      <p style="margin-top:10px;max-width:800px;">
+        Two routes, and they are genuinely different sizes.
+      </p>
+      <div class="grid-rule g2" style="margin-top:16px;">
+        <div class="cell">
+          <b style="font-weight:500">Route A - retheme only</b>
+          <p class="small muted" style="margin-top:6px;">Keep every component and class name. Re-value <code>index.css</code> to these tokens, drop the shadows, widen the radii, restyle badges as tints. The app looks like this page; no component is rewritten. Touches one file plus the shell CSS.</p>
+          <div class="row" style="margin-top:12px;"><span class="badge badge-ok">Low risk</span><span class="badge badge-neutral">Reversible</span></div>
+        </div>
+        <div class="cell">
+          <b style="font-weight:500">Route B - adopt the primitives</b>
+          <p class="small muted" style="margin-top:6px;">Bring in Tailwind v4 + shadcn/Base UI properly, replace <code>.btn</code>/<code>.chip</code>/<code>.card</code>/<code>.input</code> with real components, then migrate ~30 screens. Clears the <code>Booking.css</code> debt by construction, because there is no longer a page stylesheet to hide in.</p>
+          <div class="row" style="margin-top:12px;"><span class="badge badge-warn">Stack decision</span><span class="badge badge-neutral">Weeks, not days</span></div>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:16px;">
+        My read: this is worth seeing, and Route A is cheap enough to try on a branch and judge in the real app.
+        But before either, the honest question is whether KDPS should look like a generic modern SaaS tool or like itself.
+        The warm system was chosen deliberately for people who live in it eight hours a day. Axis is prettier at first glance; the warm one may be kinder by hour six.
+      </p>
+    </div>
+  </section>
+
+  <p class="small muted" style="margin-top:60px;text-align:center;">
+    Design language: <span class="mono">styleui.dev/r/axis.json</span> · tokens verbatim, ERP layer extended.
+    Component set: <span class="mono">01-component-inventory.html</span>, unchanged in substance.
+  </p>
+
+</div>
+</body>
+</html>

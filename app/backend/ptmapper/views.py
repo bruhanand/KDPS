@@ -21,7 +21,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.actor_policies import user_may_act
+from accounts.permissions import require_section
+from accounts.sections import CAP_APPROVE, CAP_VIEW
 from core.documents import DocStatus
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
 from masters.models import CategoryMargin, GstSlab, Store
@@ -125,29 +129,44 @@ def _parse_context(data: Any) -> tuple[dict, Response | None]:
     return ctx, None
 
 
-# Pushing a PT into the system (post) and reversing it write the stock ledger and
-# raise vendor liability — a Patna/HO accounts action, never the warehouse. Resolving
-# review items grows the master lookup tables — a mapping-steward action.
-PATNA_ROLES = {"accounts", "owner", "it_admin"}
-MAPPING_STEWARD_ROLES = {"warehouse", "data_steward", "ho_ops", "owner", "it_admin"}
-
-
-def _role_code(user: Any) -> str:
-    return getattr(getattr(user, "role", None), "code", "")
+PT_INWARD_ACTION = "ptmapper.post_and_reverse_pt"
+MAPPING_STEWARDSHIP_ACTION = "ptmapper.mapping_stewardship"
 
 
 def _forbidden(detail: str) -> Response:
     return Response({"detail": detail}, status=status.HTTP_403_FORBIDDEN)
 
 
+#: PT Files (#106) — the file's own name, the brand the engine read off it, and
+#: its review status.
+PT_FILE_SEARCH_FIELDS = ("original_filename", "brand_guess", "status")
+
+#: Reading a PT and making one are different rights (#119): the list opens at
+#: whatever `receive_goods` rung the caller holds, making one needs `approve` —
+#: the rung PT-making rose to when it moved off the store. A store keeps
+#: `operate` and can still see this list; it can no longer write to it.
+#:
+#: This view carried no section gate at all before #119 (bare `IsAuthenticated`,
+#: recorded in `UNGATED_VIEWS`) — closing it closes both halves, list included,
+#: which is `require_section`'s only shape for "one view that both lists and
+#: creates". The one role this newly shuts out of the list is `data_steward`
+#: (`receive_goods: none` on the ratified sheet); its actual work — proposal and
+#: correction review — is `ReviewListView`/`ReviewResolveView`, neither touched
+#: here.
+CanReadOrMakePtFile = require_section("receive_goods", CAP_VIEW, write_minimum=CAP_APPROVE)
+
+
 class PtFileListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadOrMakePtFile]
 
     def get_queryset(self) -> Any:
         # Fail-closed store scoping by the linked GRN's store, mirroring /inbound/grns.
         # An unrestricted user (scope=all) is unaffected; a scoped user never sees
         # another store's PT (a NULL-grn legacy upload has no store → out of scope).
-        return scope_by_store(PtFile.objects.all(), self.request.user, "grn__store_id")
+        qs = scope_by_store(PtFile.objects.all(), self.request.user, "grn__store_id")
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope above already allows.
+        return text_filter(qs, search_term(self.request), PT_FILE_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         return PtFileListSerializer
@@ -221,7 +240,7 @@ class PtFileFromGrnView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, grn_id: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only warehouse/HO mapping stewards can make a PT from a GRN.")
         with transaction.atomic():
             # The row lock serialises concurrent make-PT clicks on one arrival
@@ -565,9 +584,10 @@ class PtRowsUpdateView(APIView):
 def _invoice_send_blocks(pt: PtFile) -> list[dict]:
     """The hard gates before an authored PT may leave the warehouse (invoice source
     only — the brand path is untouched): every row needs a BARCODE (keep-if-present;
-    else the warehouse generates in POS and types it — manual v1, Ten Software API
-    pending) and a SEASON (the canonical-season block, Q39 — the editor already
-    restricts the cell to Master-Sheet seasons, this refuses blanks)."""
+    else the warehouse generates it in the counter software and types it — manual for
+    now; generation moves in-house with the KDPS-built POS) and a SEASON (the
+    canonical-season block, Q39 — the editor already restricts the cell to
+    Master-Sheet seasons, this refuses blanks)."""
     problems: list[dict] = []
     for row in pt.rows.all():
         missing = [c for c in ("BARCODE", "SEASON") if not str(row.data.get(c) or "").strip()]
@@ -633,8 +653,8 @@ class PtFilePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden("Only Patna HO (accounts/owner) can post a PT into the system.")
+        if not user_may_act(request.user, PT_INWARD_ACTION):
+            return _forbidden("Only Accounts or Owner can post a PT into the system.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -677,8 +697,8 @@ class PtFileReverseView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden("Only Patna HO (accounts/owner) can reverse a posted PT.")
+        if not user_may_act(request.user, PT_INWARD_ACTION):
+            return _forbidden("Only Accounts or Owner can reverse a posted PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -721,7 +741,7 @@ class PtFilePriceView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only warehouse/HO mapping stewards can price an authored PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
@@ -860,6 +880,13 @@ class PtFileExportView(APIView):
         return resp
 
 
+#: Review queue (#106) — this model carries no file name or brand column (those
+#: live inside the JSON `context` blob, which `text_filter` cannot safely
+#: traverse); the nearest stand-ins are the raw value a person recognises and
+#: the dimension/status they're triaging by.
+REVIEW_ITEM_SEARCH_FIELDS = ("dimension", "raw_value", "resolved_value", "status")
+
+
 class ReviewListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ReviewItemSerializer
@@ -872,7 +899,8 @@ class ReviewListView(generics.ListAPIView):
         dim = self.request.query_params.get("dimension")
         if dim:
             qs = qs.filter(dimension=dim)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), REVIEW_ITEM_SEARCH_FIELDS)
 
 
 class ReviewResolveView(APIView):
@@ -963,10 +991,8 @@ class ReviewResolveView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
-            return _forbidden(
-                "Only mapping stewards (warehouse/data steward/HO ops) can resolve review items."
-            )
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
+            return _forbidden("Only Warehouse or the HO Data Steward can resolve review items.")
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)
@@ -994,6 +1020,12 @@ class ReviewResolveView(APIView):
         return Response(ReviewItemSerializer(item).data)
 
 
+#: Proposals (#106) — this model has no file name column either; `source_key` is
+#: the raw value a proposal was mined from, the closest thing a steward
+#: half-remembers, alongside the brand it's scoped to and its status.
+LOOKUP_PROPOSAL_SEARCH_FIELDS = ("source_key", "target_value", "brand", "status")
+
+
 class LookupProposalListView(generics.ListAPIView):
     """The staged-learning queue. ``?status=`` (default ``proposed``) filters by status;
     ``all`` returns every proposal, newest first."""
@@ -1006,7 +1038,8 @@ class LookupProposalListView(generics.ListAPIView):
         st = self.request.query_params.get("status", "proposed")
         if st != "all":
             qs = qs.filter(status=st)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), LOOKUP_PROPOSAL_SEARCH_FIELDS)
 
 
 class LookupProposalDecideView(APIView):
@@ -1018,7 +1051,7 @@ class LookupProposalDecideView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only mapping stewards can decide learning proposals.")
         proposal = LookupProposal.objects.filter(pk=pk).first()
         if not proposal:

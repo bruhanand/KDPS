@@ -17,13 +17,21 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_VIEW
 from core.documents import DocStatus, VoucherSeries
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
 from masters.models import Store
-from masters.scoping import scope_by_store, visible_store_ids
+from masters.scoping import (
+    actionable_store_ids,
+    active_store_ids,
+    scope_by_store,
+    scope_by_store_many,
+)
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
 
@@ -49,7 +57,9 @@ class PendingBookingsView(APIView):
         qs = Booking.objects.select_related(
             "vendor", "brand", "season", "destination_store"
         ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
-        ids = visible_store_ids(request.user)
+        # A read, so it follows the unit the person is *acting in* (#88), not
+        # their whole entitlement — switch to Deoghar and you see Deoghar's queue.
+        ids = active_store_ids(request.user)
         if ids is not None:  # store-scoped user → bookings with a line landing at their store
             # A booking spans several stores: a line's effective destination is its own
             # store, or (if unset) the booking's default. Visible if ANY line lands here.
@@ -94,7 +104,7 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
     store_id = data.get("store_id") or data.get("store")
     if not store_id:
         return None, Response({"detail": "store_id is required."}, status=400)
-    ids = visible_store_ids(user)
+    ids = actionable_store_ids(user)
     if ids is not None and int(store_id) not in ids:
         return None, Response({"detail": "You may not receive at this store."}, status=403)
     return Store.objects.get(pk=store_id), None
@@ -192,7 +202,22 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
     booking = Booking.objects.filter(pk=booking_id).first()
     if booking is None:
         return None, Response({"detail": "Booking not found."}, status=400)
-    ids = visible_store_ids(user)
+    # A booking that has been short-closed or cancelled is a decision somebody
+    # took with a reason on the record. Receiving against it would quietly
+    # reverse that decision — the pending list already hides it, and a stale
+    # tab or a direct call must get the same answer.
+    if not booking.is_open:
+        return None, Response(
+            {
+                "detail": (
+                    f"Booking {booking.number} is {booking.get_status_display().lower()}"
+                    f"{f' — {booking.close_reason}' if booking.close_reason else ''}. "
+                    "Receive it as a direct arrival, or have the booking reopened."
+                )
+            },
+            status=409,
+        )
+    ids = actionable_store_ids(user)
     if ids is not None and not _booking_touches_stores(booking, ids):
         return None, Response({"detail": "You may not receive against this booking."}, status=403)
     return booking, None
@@ -211,19 +236,27 @@ def _booking_touches_stores(booking: Any, ids: list[int]) -> bool:
     return bool(effective & id_set)
 
 
+#: Receive/GRN (#106) — GRN number, who it was received from, whose goods they
+#: are. `booking__brand__name`, not `vendor__brands__name` — the latter is a
+#: to-many relation and `text_filter` must not span one.
+GRN_SEARCH_FIELDS = ("doc_number", "vendor__name", "booking__brand__name")
+
+
 class GrnListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
 
     def get_queryset(self) -> Any:
-        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related(
-            "lines", "pt_files"
-        )
+        qs = Grn.objects.select_related(
+            "store", "booking", "booking__brand", "vendor"
+        ).prefetch_related("lines", "pt_files")
         qs = scope_by_store(qs, self.request.user, "store_id")
         kind = self.request.query_params.get("kind")
         if kind in Grn.Kind.values:  # honour ?kind=branded|non_branded (else unfiltered)
             qs = qs.filter(kind=kind)
-        return qs
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope + filters above already allow.
+        return text_filter(qs, search_term(self.request), GRN_SEARCH_FIELDS)
 
     @transaction.atomic
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -261,41 +294,44 @@ class GrnDetailView(generics.RetrieveAPIView):
         return scope_by_store(qs, self.request.user, "store_id")
 
 
-# The queue serves the people who act on arrivals: the warehouse (makes the PT) and
-# Patna/HO (reviews & posts). Store roles have no queue duty — fail-closed 403.
-QUEUE_ROLES = {"warehouse", "data_steward", "ho_ops", "accounts", "owner", "it_admin"}
-
-
 class InboundQueueView(APIView):
     """The inbound work queue (Q9: in-app is the system of record; WhatsApp nudge is
     a later phase). Derived, never stored: an arrival is *awaiting* while it has no
     live PT (a reversed PT re-opens it); a PT in the warehouse/Patna pipeline shows
-    as in-progress. GET only."""
+    as in-progress. GET only.
 
-    permission_classes = [IsAuthenticated]
+    Gated on ``receive_goods: view`` rather than a role list (#94), so the queue
+    opens for exactly the people the sidebar already shows Receive Goods to — the
+    store person included, whose own arrivals are their work. Both halves are then
+    narrowed to the unit in the top-bar switcher, the same gate ``GrnListView``
+    uses, so a store sees its own queue and nobody else's.
+    """
+
+    permission_classes = [IsAuthenticated, require_section("receive_goods", CAP_VIEW)]
 
     def get(self, request: Request) -> Response:
-        role = getattr(getattr(request.user, "role", None), "code", "")
-        if not (getattr(request.user, "is_superuser", False) or role in QUEUE_ROLES):
-            return Response(
-                {"detail": "The inbound queue is a warehouse/HO screen."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         from ptmapper.models import PtFile
 
-        awaiting = (
+        awaiting, in_progress = scope_by_store_many(
+            request.user,
             # Only non-branded arrivals await an authored PT here; branded arrivals
             # wait for the brand's PT via the Mapper instead (D2 split).
-            Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
-            .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
-            .select_related("store", "booking", "vendor")
-            .prefetch_related("lines", "pt_files")
-            .order_by("created_at")  # oldest arrival first — it has waited longest
-        )
-        in_progress = (
-            PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
-            .select_related("grn")
-            .order_by("created_at")
+            (
+                Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
+                .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
+                .select_related("store", "booking", "vendor")
+                .prefetch_related("lines", "pt_files")
+                .order_by("created_at"),  # oldest arrival first — it has waited longest
+                "store_id",
+            ),
+            # A PT has no store of its own — it belongs to the arrival it was made
+            # from, so it is scoped through the GRN's.
+            (
+                PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
+                .select_related("grn")
+                .order_by("created_at"),
+                "grn__store_id",
+            ),
         )
         progress_rows = [
             {

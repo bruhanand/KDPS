@@ -3,16 +3,21 @@ import { useNavigate } from "react-router-dom";
 
 import { apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
+import { KdpsLogo } from "../components/KdpsLogo";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import "./Login.css";
 
 const DEMO: { label: string; username: string; password: string }[] = [
   { label: "Owner", username: "owner", password: "Owner@123" },
-  { label: "HO Ops", username: "ops1", password: "Ops@123" },
+  { label: "Admin", username: "admin", password: "Admin@123" },
   { label: "Accounts", username: "accounts1", password: "Acct@123" },
+  { label: "Brand manager", username: "brand1", password: "Brand@123" },
   { label: "Warehouse", username: "wh.patna", password: "Wh@123" },
   { label: "Store manager", username: "deo.manager", password: "Store@123" },
   { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
+  { label: "HO Ops", username: "ops1", password: "Ops@123" },
+  { label: "Data steward", username: "steward", password: "Steward@123" },
+  { label: "Super admin", username: "superadmin", password: "Super@123" },
 ];
 
 export function Login() {
@@ -45,8 +50,10 @@ export function Login() {
     <div className="login">
       <aside className="login-brand">
         <div className="login-brand-inner">
-          <span className="brand-mark login-mark">K</span>
-          <h1 className="login-title">KDPS Operating System</h1>
+          {/* The hero stays deep navy in both themes, so the lockup's
+              `currentColor` lettering is simply white here. */}
+          <KdpsLogo className="login-logo" />
+          <h1 className="login-title">Operating System</h1>
         </div>
       </aside>
 

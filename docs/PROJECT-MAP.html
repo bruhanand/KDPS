@@ -89,6 +89,7 @@
   <div class="status"><span class="pill done">Designed</span><b>D8 · Master-data &amp; users consolidation</b><span>Every registry in one owned place: edit-rights grid, season calendar, GST slab, configurable roles. Locked 21 Jun 2026.</span></div>
   <div class="status"><span class="pill done">Done 25 Jun</span><b>Review · 16 decisions · reconciliation</b><span>Full design review + India retail-ERP research → 16 locked decisions → canonical doc set in order (build artifacts + ratified ADR chain). Stack ratified (ADR-0001).</span></div>
   <div class="status"><span class="pill paused">Deferred</span><b>D9 · Migration &amp; rollout</b><span>Masters import, opening stock, store-by-store go-live, parallel Tally run. Designed later, before go-live (decided 23 Jun).</span></div>
+  <div class="status"><span class="pill ongoing">Requirements out</span><b>D10 · POS (own-build)</b><span>Store-login POS requirements captured 29 Jul (keep the current screen's shape; scan-first; offline-first; 7 pre-design decisions open). Screen design next.</span></div>
   <div class="status"><span class="pill done">Built · alpha</span><b>Foundation + money layer</b><span>10 Django apps (kernel + masters/inbound/ptmapper/stock+vendor+cash ledgers) + React PWA, merged to <code>main</code>, deployed on a Render alpha. Money path remediated (Phases A–F). Next: selling/POS → offers → payments.</span></div>
   <div class="status"><span class="pill done">Built</span><b>PT-mapper (in-app)</b><span>app/backend/ptmapper — 9 brand profiles + review queue, fed &amp; hardened, seeded on Render. (Standalone code/pdf-to-pt is regenerated weekly.)</span></div>
   <div class="status"><span class="pill ongoing">Every month</span><b>Store dashboards</b><span>Per-store 16-measure business dashboard via the <code>store-dashboard</code> skill (first run: JSL, 2 Jul). See data-from-kdps/store-analysis/.</span></div>
@@ -103,7 +104,7 @@
   <ul class="files">
     <li class="star"><b>00-system-architecture.html</b> — <span>THE constitution: the whole system on one page (5 layers), the 12 rules every module obeys, and "How we build". Read this before any design discussion.</span></li>
     <li class="star"><b>01-vendor-management/Vendor-Management-Module.html</b> — <span>vendors/brands, commercial models, bookings.</span></li>
-    <li class="star"><b>02-inbound/inbound-ingestion-design.html</b> — <span>vendor delivery → data injection → sellable stock.</span> <b>· ten-software-questions.html</b> — <span>POS questions whose answers unblock outbound.</span></li>
+    <li class="star"><b>02-inbound/inbound-ingestion-design.html</b> — <span>vendor delivery → data injection → sellable stock.</span></li>
     <li class="star"><b>03-outbound/outbound.html</b> — <span>sale, exchange, transfer, returns out, EOSS, stocktake.</span></li>
     <li class="star"><b>04-payments/payments.html</b> — <span>vendor payment lifecycle, cash/bank audit, roles.</span></li>
     <li class="star"><b>05-offers/offers.html</b> — <span>the offer rulebook as a data model.</span> <b>· markdown-ai-research.html</b> — <span>research behind markdown/EOSS logic.</span></li>
@@ -115,6 +116,7 @@
     <li class="star"><b>adr/0001–0007</b> — <span>the ratified decision records: stack, repo layout, data scoping, DB conventions, CI gate, posting engine, entity/GSTIN scoping.</span></li>
     <li><b>build-process-and-roadmap.html · erpnext-engineering-study.html · audit-and-build-readiness.html · build-playbook.html</b> — <span>the build companion: foundation + slice roadmap, ERPNext patterns to borrow, readiness checklist.</span></li>
     <li><b>09-migration/</b> — <span>not created yet — the last design discussion (D9) lands here, before go-live.</span></li>
+    <li class="star"><b>10-pos/pos-store-requirements.html</b> — <span>D10: the KDPS-built POS, store-login requirements (29 Jul) — keep-the-shape rule, current-screen anatomy (screenshots in current-pos/), A–I requirements, 7 decisions to close before screen design.</span></li>
   </ul>
   <div class="rule"><b>New design discussion?</b> Make its own numbered folder here (e.g. <code>06-tally-sync/</code>) and end the doc with a locked-decisions table + open-items list.</div>
 </div>
@@ -152,7 +154,15 @@
   <div class="folder-head"><code>04-client-docs/</code><span class="purpose">Polished per-module documents shared with the client for approval. Living — they change while the architecture isn't final.</span></div>
   <ul class="files">
     <li><b>Vendor-Management-Module-Client</b> · <b>Goods-Inward-Module-Client</b> · <b>Outbound-Module-Client</b> · <b>Payments-Module-Client</b> · <b>Offers-Module-Client</b> — <span>the client-facing version of each designed module (.html + .pdf).</span></li>
-    <li><b>POS-Ingestion-Requirements</b> · <b>POS-Integration-Requirements</b> — <span>what the POS (Ten Software) must push/pull for us.</span></li>
+    <li><b>POS-Ingestion-Requirements</b> · <b>POS-Integration-Requirements</b> — <span>what the POS must push/pull — written for an outside vendor, now the spec for our own counter.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">dev</span>features — dev-process artifacts, one folder per feature</h2>
+<div class="folder">
+  <div class="folder-head"><code>features/</code><span class="purpose">Where the phased dev process (<code>docs/agents/dev-process.md</code>) writes its per-feature artifacts: feature analysis, grill decisions, contracts, designs, tickets.</span></div>
+  <ul class="files">
+    <li class="star"><b>pos-store-front/</b> — <span>the D10 store-front feature (sidebar, Dashboard, cross-store request, offline-first Sell/POS): Phase-0 <b>feature-analysis.md</b> + Phase-1 <b>grill-decisions.md</b> (14 locked decisions, 30 Jul 2026).</span></li>
   </ul>
 </div>
 
@@ -186,7 +196,7 @@
 <div class="folder">
   <div class="folder-head"><code>app/</code><span class="purpose">The KDPS Operating System itself — the Emergent build, merged to <code>main</code>, auto-deployed to a Render alpha. Django + React monorepo.</span></div>
   <ul class="files">
-    <li class="star"><b>backend/</b> — <span>Django. Kernel <code>core</code> (paise money, append-only ledgers + DB triggers, docstatus FSM + gap-free numbering, value GL + balanced <code>post_entries</code>, Indian FY) + 9 apps: masters · accounts (RBAC) · files · vendors (booking) · inbound (GRN) · ptmapper · stockledger · finledger · aiagents (Gemini reader).</span></li>
+    <li class="star"><b>backend/</b> — <span>Django. Kernel <code>core</code> (paise money, append-only ledgers + DB triggers, docstatus FSM + gap-free numbering, value GL + balanced <code>post_entries</code>, Indian FY) + 9 apps: masters · accounts (RBAC) · files · vendors (booking) · inbound (GRN) · ptmapper · stockledger · finledger · aiagents (Gemini reader) · <b>mail</b> (each person's Google Workspace inbox in the top bar — a cache, not a book of record: it writes no ledger and no document, scopes by <i>person</i> rather than by store, and is import-fenced off from every domain module in both directions).</span></li>
     <li class="star"><b>frontend/</b> — <span>React + TypeScript PWA (Vite): ~12 wired screens (Bookings, Inbound/GRN, PT-Mapper, Stock/Vendor/Cash ledgers, Master Data) + ~20 "coming soon" stubs; INR Lakh/Crore from paise.</span></li>
     <li><b>root build files:</b> <span>CONTEXT.md (build-context) · README.md (run) · DEPLOY.md (Render steps + seeded logins) · render.yaml · DASHBOARD.html (command centre) · memory/PRD.md (build log) · .github/workflows/ci.yml (pytest on real Postgres).</span></li>
   </ul>
@@ -199,6 +209,7 @@
   <ul class="files">
     <li class="star"><b>pdf-to-pt/</b> — <span>the Invoice → PT file maker. BLUEPRINT.md explains the AI-reader → checker → Excel-writer pipeline. ~150 real invoices in document/ for testing.</span></li>
     <li><b>scripts/generate-pdf.mjs</b> — <span>turns a workflow/design HTML page into a polished A4 PDF.</span></li>
+    <li><b>scripts/trace-logo.py</b> — <span>traces the client's KDPS Lifestyle logo PNG into vector art: writes the app's logo component, the tab icon and the four installed-app icons. Re-run it if the artwork ever changes.</span></li>
   </ul>
 </div>
 
@@ -231,7 +242,7 @@
 <div class="rule"><b>New client deliverable?</b> <code>04-client-docs/</code>. When superseded, move the old one to <code>__archive/</code>.</div>
 <div class="rule"><b>Something stale?</b> Never delete — move it into <code>__archive/</code> so the active folders stay clean.</div>
 
-<footer>KDPS project · updated 2 July 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
+<footer>KDPS project · updated 30 July 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
 </div>
 </body>
 </html>

@@ -10,7 +10,10 @@ onto the booking (Rule 3) and is overridable here.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
+from django.utils import timezone
 
 from core.base import TimeStampedModel
 from core.money import MoneyField
@@ -70,12 +73,59 @@ class Booking(TimeStampedModel):
     created_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
     )
+    # How a commitment ends. Every ERP needs the short-close: the season is over,
+    # 40 of 100 pieces came, and the other 60 never will. Without this the
+    # booking sits at "Partially received" for ever, the open-order report reads
+    # 60 pieces that are not coming, and the only ways out are editing the
+    # quantity (which rewrites history) or ignoring the row. So: an explicit end,
+    # with a reason, an actor and a time. `recompute_status` already refuses to
+    # reopen a closed booking, so a late receipt cannot undo the decision.
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bookings_closed",
+    )
+    close_reason = models.CharField(max_length=200, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
         return self.number
+
+    @property
+    def is_open(self) -> bool:
+        return self.status not in (self.Status.CLOSED, self.Status.CANCELLED)
+
+    @property
+    def received_total(self) -> int:
+        return sum(line.received_qty for line in self.lines.all())
+
+    @property
+    def open_qty(self) -> int:
+        """Pieces ordered and not yet received — what a short-close writes off."""
+        return max(sum(line.booked_qty - line.received_qty for line in self.lines.all()), 0)
+
+    def end(self, *, user: Any, reason: str, cancel: bool = False) -> None:
+        """Short-close (or cancel) the booking. Callers check the rung; this
+        enforces the two facts of the document itself: a cancellation is only
+        honest while nothing has arrived, and an ended booking cannot be ended
+        twice."""
+        if not self.is_open:
+            raise ValueError(f"This booking is already {self.get_status_display().lower()}.")
+        if cancel and self.received_total > 0:
+            raise ValueError(
+                "Goods have already been received against this booking — "
+                "close it (writing off the balance) instead of cancelling it."
+            )
+        self.status = self.Status.CANCELLED if cancel else self.Status.CLOSED
+        self.close_reason = reason.strip()[:200]
+        self.closed_by = user
+        self.closed_at = timezone.now()
+        self.save(update_fields=["status", "close_reason", "closed_by", "closed_at", "updated_at"])
 
     def recompute_status(self) -> None:
         lines = list(self.lines.all())

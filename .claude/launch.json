@@ -6,6 +6,18 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8765"],
       "port": 8765
+    },
+    {
+      "name": "kdps-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd app/backend && exec uv run python manage.py runserver 8001"],
+      "port": 8001
+    },
+    {
+      "name": "kdps-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "cd app/frontend && VITE_LOCAL_DEV=1 exec npm run dev -- --port 3100"],
+      "port": 3100
     }
   ]
 }

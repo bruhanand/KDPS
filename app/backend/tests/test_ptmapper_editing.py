@@ -17,6 +17,7 @@ from datetime import date
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -76,7 +77,12 @@ def vocab(db):
 
 @pytest.fixture
 def client(db):
-    user = User.objects.create_user(username="editor", password=TEST_PASSWORD)
+    # Warehouse: two tests here upload a file (test_upload_rejects_unknown_context_brand,
+    # test_upload_context_is_stored_canonically_and_applied), which needs the
+    # PT-making rung (#119); the row-editing tests it's shared with don't care.
+    user = User.objects.create_user(
+        username="editor", password=TEST_PASSWORD, role=make_role("warehouse")
+    )
     c = APIClient()
     c.force_authenticate(user)
     return c

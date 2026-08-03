@@ -11,7 +11,7 @@
 KDPS Lifestyle Pvt Ltd — a multi-brand Indian fashion retailer (Bihar + Jharkhand, 50+ stores/warehouses, 20,000+ SKUs, 40+ brands) replacing per-store POS + Tally + Excel. We build its operating system: a **deterministic ERP** where documents write append-only ledgers, and GST + Tally stay statutory.
 
 **Two systems, never conflated:**
-- **The builder** — Sandcastle + skills + this context engine + human review gates. An AI system that writes the code; we mostly review.
+- **The builder** — AI coding agents + skills + this context engine + human review gates. An AI system that writes the code; we mostly review. Tool-neutral by design: whichever agent picks up a `ready-for-agent` issue, the loop and the gates are the same.
 - **KDPS ERP** — the deterministic product. **AI lives only at its edges** (analytics, messy-data ingest); it never writes stock, money, or Tally.
 
 **Stack (ADR-0001):** React/TypeScript PWA + Python/Django + PostgreSQL. Not Frappe — re-implement ERPNext's *contracts* as plain Django. No backend-as-a-service.
@@ -24,7 +24,7 @@ KDPS Lifestyle Pvt Ltd — a multi-brand Indian fashion retailer (Bihar + Jharkh
 2. **Documents write ledgers; ledgers are never hand-edited.** Fix with a correction document, never an edit.
 3. **Master data lives in one place; documents copy (snapshot) it.** A later master edit never rewrites yesterday's document.
 4. **Every fact has exactly one owner.** Stock→stock ledger; sale→POS; accounting/GST→Tally; offers→offer rulebook.
-5. **Flag, never block.** A mismatch raises a problem item for its owner; the counter keeps working unless truly dangerous.
+5. **Flag, never block.** A mismatch raises a problem item for its owner; the counter keeps working unless truly dangerous. *For money, "truly dangerous" is defined:* a stock movement the books cannot price **or cannot count** is **refused**, never posted at zero - a flag is a visible approximation, a zero-value or zero-quantity posting is an invisible wrong answer. (The quantity half was ruled in on 27 Jul 2026, issue #122: the same decision extended to the same document.)
 6. **Calculated numbers are not typed by hand.** Profit, age, MRP come from formulas.
 7. **Outside systems need written rules + daily checks.** POS, Tally, banks, WhatsApp: documented contract + matching key + daily reconcile.
 8. **AI only reads and suggests.** Never writes stock, vendor balance, cash, or Tally.
@@ -95,7 +95,8 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Barcode** — a **non-unique scan-alias** pointing to a cohort, *not* the identity; a scan decrements the cohort count by one.
 - **Season** — the selling period (a **name, never a date**); half the cohort key; drives age; calendar Open → EOSS → Closed.
 - **Color tier (P/M/E)** — Premium/Medium/Economy colour stand-in when a brand doesn't track exact colour.
-- **EOSS** — End-of-Season Sale; markdown phase; trigger for the **V-flip** (settle unsold brand-owned stock, flip ownership to KDPS, sell as clearance).
+- **EOSS** — End-of-Season Sale; markdown phase; the usual trigger for the **V-flip**.
+- **V-flip** — an ownership **label change on stock that stays where it is**. Brand-owned (SOR/consignment) pieces that have not sold become KDPS-owned, so the brand can report them as sold and close its target. Nothing moves, no customer buys anything — the piece is still on the shelf, now on our books, and sells on as clearance. It is an **action on Stock, never a module or its own sidebar tab**; it runs for a few months around the season end. (Settled 25 Jul 2026.)
 
 **Documents & ledgers**
 - **Document** — numbered record of one event with a docstatus lifecycle; the only thing that writes a ledger.
@@ -124,10 +125,14 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Tally** — the statutory book of record; KDPS feeds it one-way via a deterministic voucher number.
 
 **POS & edges**
-- **Sale** — the **source-agnostic** sale document (`source ∈ {Ten Software, KDPS POS, manual}`); posting logic lives on the Sale, not the adapter.
-- **Ten Software** — the existing third-party POS, behind a swappable adapter (reader first). **KDPS POS** — own-built parallel writer of the same Sale; offline-first, idempotent.
-- **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till.
+- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson per line (defaulting to the last picked; D10, 30 Jul 2026), distinct from the till login (#107).
+- **KDPS POS** — our own counter, and the only writer of a Sale. Offline-first, idempotent. **Decided 26 Jul 2026: KDPS builds its own POS; the third-party-POS route is dropped**, so there is no external sales feed to ingest or reconcile against. The source-agnostic Sale shape is kept anyway — it costs nothing and keeps a future importer (or a migration load) from touching posting logic.
+- **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till. Tie-break (locked 30 Jul 2026, closes D5's O3): three layers - one brand offer per item by best-deal-wins (B2G1 groups dearest-first, cheapest free), then storewide, then bank/tender offers, each stacking only when explicitly flagged; new offers default non-combining; same cart always prices the same.
 - **Idempotency key** — client-UUID per sale; retries return the same Sale-ID.
+- **Hold Bill** - a till-local parked cart (30 Jul 2026): holds no stock or money, shows on the store Dashboard, flagged at day close for the store to keep or expire; a multi-day set-aside is a Booking, not a hold.
+- **Register handover** - the deliberate recovery action when a till device dies or is replaced: the new till resumes from the last server-synced bill number; unsynced bills are re-entered from their printed copies under their original numbers (the paper-bill F3 muscle). The till owns its store's gap-free counter; the server verifies continuity at sync.
+- **Sold-before-inward** - a billed line the books cannot yet price: the sale proceeds (manual line, MRP from the tag), the stock/money postings wait in the exception queue until GRN/PT prices the piece. No zero-cost posting ever; the GST-recognition side stays CA-gated (sold-before-PT).
+- **Customer exchange (counter)** - the only counter return path: pieces coming back stay tied to the original bill and the customer must take pieces of equal or greater paid value. Money never leaves KDPS, a short exchange is refused, and the counter issues no credit note. (Supersedes the earlier plain-return / credit-note glossary entry; POS counter redesign grill Q3/Q3b, 2 Aug 2026.)
 
 ---
 
@@ -148,9 +153,11 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Build order:** kernel K0→K9 first, then vertical slices in spine order — booking → inbound (GRN→PT→stock+vendor) → vendor liability → selling → offers → payments → Tally → SOR → analytics.
 - **Two speeds.** **FREE** (scaffold, screens, seed, reports): AI writes, human reviews after — K0, K4, K5, K9. **SUPERVISED** (money/ledger/GST/RBAC): human reads *every line*, golden-file tested — K1, K2, K3, K6, K7, K8 + every business money slice.
 - **The gate:** `npm run ci` must be green on real Postgres before merge. SQLite is rejected at settings load.
-- **Loop:** one slice → one spec → one labelled issue → build (Sandcastle, branch only) → human review → merge. **The issue is the memory between chats.** Sandcastle has no merge phase — only a human reaches `main`.
+- **Loop:** one slice → one spec → one issue labelled `ready-for-agent` → build (any AI agent, branch only) → human review → merge. **The issue is the memory between chats.** No agent has a merge phase — only a human reaches `main`.
 - **Corrections never edit.** Every fix is a new dated reversing event.
 - **Variation is data (Rule 12).** Build the *mechanism*; the brand's actual rate/rule/slab is a configuration row.
+- **One gate for access (25 Jul 2026, issue #94).** Every API permission is a **section + minimum capability** resolved from the role's stored `section_access` — the same data that shapes the sidebar, so the menu and the API can never tell different stories. A hand-kept role list is an **exception**: allowed only where the ladder provably cannot express the rule, and only with the reason written next to it and registered. A contract test fails when a gate and the matrix disagree. The screen's declared section+rung in the nav manifest is the published pair the server mirrors.
+- **The access matrix is not ratified design.** It was transcribed from a client spreadsheet in July to unblock the sidebar; the design corpus names actors almost nowhere (V-flip, returns, transfers have none). Treat the matrix as the working authority for *code*, not as a settled design — the actor model is a deferred design discussion, not a lookup.
 
 ## Where to look (canonical depth)
 

@@ -1,11 +1,40 @@
-# Local Postgres for KDPS dev + CI, so `npm run ci` is reproducible on any
-# machine — no Homebrew/host assumption. Host port 55432 is a KDPS-specific,
-# high port chosen to avoid clashing with a local Homebrew Postgres (5432) or
-# other projects' dev databases (which commonly grab 5433/5434).
+# Local KDPS stack: Postgres. That is the whole file, and deliberately so.
 #
-#   docker compose up -d db
-#   export DATABASE_URL=postgres://kdps:kdps@localhost:55432/kdps_dev
-#   npm run ci
+# Postgres so `npm run ci` is reproducible on any machine — no Homebrew/host
+# assumption.
+#
+#   npm run dev                      # the normal path: this DB + API + PWA
+#   ./scripts/dev.sh --setup-only    # DB + deps + seed, no servers
+#
+# ONE DATABASE PER WORKSPACE. Never run `docker compose` against this file by
+# hand — go through `scripts/dev.sh`, which sources `scripts/workspace-env.sh`
+# first and therefore passes a per-workspace project name (`-p kdps-<workspace>`)
+# and a per-workspace host port ($KDPS_PG_PORT). Omit `-p` and Compose names the
+# project after the *directory*, which is how this file used to fail: two
+# Conductor worktrees each got their own container and volume, then both tried to
+# publish the same fixed host port, so the second one sat in `Created` forever.
+#
+# The port default below is the pre-workspace fixed port. It applies only when
+# nothing has sourced workspace-env.sh — a bare clone, or CI. Inside Conductor
+# the port is CONDUCTOR_PORT+2, so every workspace gets a different one.
+#
+# The volume is named, so Compose namespaces it by project:
+# `kdps-<workspace>_kdps_pgdata`. That is what lets the archive hook in
+# `.conductor/settings.toml` delete a workspace's database — and only that
+# workspace's — when the workspace is archived.
+#
+# NO API SERVICE HERE (retired 26 Jul 2026, issue #93). There used to be one,
+# publishing :8001 from an image built off whatever the checkout looked like at
+# build time. It outlived the code it was built from: for weeks it answered on
+# :8001 with pre-#85 code against a schema this repo had since migrated, so the
+# live-API tests and every browser click reached a backend that existed in no
+# branch - and it *answered*, so nothing looked broken.
+#
+# The rule now: the only local API is the one `scripts/dev.sh` starts from the
+# working tree being edited, so a server can never be older than the code under
+# test. `app/backend/tests/conftest.py` enforces the same rule from the other
+# side - it compares the target server's migration set against this checkout's
+# and skips the live suites when they disagree.
 services:
   db:
     image: postgres:16
@@ -14,7 +43,7 @@ services:
       POSTGRES_PASSWORD: kdps
       POSTGRES_DB: kdps_dev
     ports:
-      - "55432:5432"
+      - "${KDPS_PG_PORT:-55432}:5432"
     volumes:
       - kdps_pgdata:/var/lib/postgresql/data
     healthcheck:

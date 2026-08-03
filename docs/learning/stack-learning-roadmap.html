@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS Stack — Engineer Learning Roadmap</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a22; --panel2:#1c222c; --ink:#e8ecf2; --muted:#9aa6b8;
+    --line:#2a3140; --accent:#5b9dff; --accent2:#7c5cff; --good:#3ecf8e; --warn:#ffb84d;
+    --bad:#ff6b6b; --chip:#232a36;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  header.hero{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+  header.hero .kicker{color:var(--accent2);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+  header.hero h1{font-size:34px;line-height:1.2;margin:10px 0 6px;letter-spacing:-.02em}
+  header.hero .meta{color:var(--muted);font-size:14px}
+  .layout{display:grid;grid-template-columns:250px 1fr;gap:36px;align-items:start}
+  @media(max-width:920px){.layout{grid-template-columns:1fr}.toc{position:static!important;max-height:none!important}}
+  nav.toc{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 14px;font-size:13.5px}
+  nav.toc h4{margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:11px}
+  nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:s}
+  nav.toc li{counter-increment:s;margin:2px 0}
+  nav.toc a{display:block;padding:5px 8px;border-radius:7px;color:var(--muted)}
+  nav.toc a:hover{background:var(--chip);color:var(--ink);text-decoration:none}
+  nav.toc a.lead::before{content:"";}
+  main{min-width:0;padding-bottom:80px}
+  section{padding-top:40px;margin-top:8px;scroll-margin-top:16px}
+  h2{font-size:25px;letter-spacing:-.01em;margin:0 0 4px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h2 .num{color:var(--accent2);font-variant-numeric:tabular-nums;margin-right:8px}
+  h3{font-size:18px;margin:26px 0 8px;color:#dbe3f0}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  .lede{color:var(--muted);font-size:15px}
+  code{font-family:var(--mono);font-size:.86em;background:var(--chip);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  .box{border:1px solid var(--line);border-left-width:4px;border-radius:10px;padding:14px 18px;margin:18px 0;background:var(--panel)}
+  .box .t{font-weight:700;letter-spacing:.02em;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .box.keep{border-left-color:var(--good)} .box.keep .t{color:var(--good)}
+  .box.warn{border-left-color:var(--warn);background:#221c10} .box.warn .t{color:var(--warn)}
+  .box.info{border-left-color:var(--accent)} .box.info .t{color:var(--accent)}
+  .box.tldr{border-left-color:var(--accent2);background:var(--panel2)} .box.tldr .t{color:#b6a4ff}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--muted);vertical-align:middle}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd6e5;font-weight:600}
+  tr:nth-child(even) td{background:#12161d}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  /* phase card */
+  .phase{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin:20px 0;overflow:hidden}
+  .phase .head{display:flex;gap:14px;align-items:baseline;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .phase .pn{font-family:var(--mono);font-weight:700;color:var(--accent2);font-size:13px;letter-spacing:.05em;white-space:nowrap}
+  .phase .pt{font-size:18px;font-weight:700;color:#eaf0fa}
+  .phase .pw{color:var(--muted);font-size:13px;margin-left:auto;text-align:right;max-width:44%}
+  .phase .body{padding:6px 20px 18px}
+  .phase h4{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 6px}
+  .cov{columns:2;column-gap:26px}
+  @media(max-width:720px){.cov{columns:1}.phase .pw{max-width:100%;text-align:left;margin:6px 0 0}.phase .head{flex-wrap:wrap}}
+  .cov li{break-inside:avoid;margin:4px 0}
+  .anchor{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .milestone{border-left:3px solid var(--good);padding:8px 0 8px 14px;margin:12px 0 2px;color:#cfe8dc;font-size:14px}
+  .milestone b{color:var(--good)}
+  .ladder{display:flex;flex-direction:column;gap:4px;margin:16px 0}
+  .rung{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px}
+  .rung .n{font-family:var(--mono);color:var(--accent2);font-weight:700;font-size:12px;width:34px}
+  .rung .l{font-weight:600;font-size:14px}
+  .rung .d{color:var(--muted);font-size:12.5px;margin-left:auto;text-align:right}
+  @media(max-width:720px){.rung .d{display:none}}
+  .depth{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid var(--line);margin-left:8px}
+  .depth.read{color:var(--accent);border-color:#2b4a7a}
+  .depth.write{color:var(--good);border-color:#245c45}
+  .depth.deep{color:var(--warn);border-color:#5c4520}
+  .startbtn{display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;padding:10px 22px;border-radius:9px;font-size:14px;margin-top:14px}
+  .startbtn:hover{text-decoration:none;filter:brightness(1.1)}
+  footer{border-top:1px solid var(--line);padding:24px 0 60px;color:var(--muted);font-size:13px}
+  hr.soft{border:none;border-top:1px solid var(--line);margin:26px 0}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Learning Roadmap · Plan Only (no lessons yet)</div>
+    <h1>Becoming an engineer who knows this code in and out</h1>
+    <div class="meta">Prepared for Anand · <strong>2026-07-08</strong> · The KDPS stack as the single learning playground · <span class="muted">This document is the <b>ordering</b> — what to learn, in what order, and where in the repo to practise it. The actual teaching comes after you approve the sequence.</span></div>
+  </div>
+</header>
+
+<div class="wrap">
+<div class="layout">
+<nav class="toc">
+  <h4>The path</h4>
+  <ol>
+    <li><a href="#goal">The goal &amp; the rules</a></li>
+    <li><a href="#stack">The exact stack</a></li>
+    <li><a href="#why">Why this order</a></li>
+    <li><a href="#p0">P0 · Reading code</a></li>
+    <li><a href="#p1">P1 · Python, properly</a></li>
+    <li><a href="#p2">P2 · Data &amp; SQL &amp; Postgres</a></li>
+    <li><a href="#p3">P3 · Django &amp; the ORM</a></li>
+    <li><a href="#p4">P4 · DRF — the API layer</a></li>
+    <li><a href="#p5">P5 · TypeScript &amp; React</a></li>
+    <li><a href="#p6">P6 · How it all connects</a></li>
+    <li><a href="#p7">P7 · The craft (tests, types, CI)</a></li>
+    <li><a href="#p8">P8 · Architecture &amp; system design</a></li>
+    <li><a href="#p9">P9 · Deploy &amp; operate</a></li>
+    <li><a href="#p10">P10 · Reviewing &amp; guiding AI</a></li>
+    <li><a href="#after">What happens after you approve</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="goal">
+  <h2><span class="num">01</span>The goal &amp; the rules</h2>
+  <p class="lede">You already know a lot of concepts from your front-end work. The gap isn't intelligence — it's a systematic path from "I can't read the syntax" to "I can trace any request through this system, judge whether the design is right, and tell an AI where it cut a corner."</p>
+  <div class="box tldr">
+    <div class="t">What "top-level" actually means here</div>
+    <p>Getting code <em>written</em> is now easy. The scarce skill is <strong>judgement</strong> — knowing what correct code, a sound data model, and a defensible architecture look like, and being able to prove an AI's output wrong. This roadmap builds judgement, layer by layer, using KDPS as the one worked example so nothing is abstract.</p>
+  </div>
+  <h3>Four rules for the roadmap</h3>
+  <ul>
+    <li><b>One playground.</b> Every topic is anchored to a real file in <code>app/</code>. You never learn a concept in the abstract — you learn it, then read where KDPS already does it.</li>
+    <li><b>Read before write.</b> For each layer you first reach <span class="depth read">READ</span> (understand the code that exists), then <span class="depth write">WRITE</span> (change it safely), then on the money-critical layers <span class="depth deep">DEEP</span> (defend the design against attack).</li>
+    <li><b>Bottom-up, because the stack is a stack.</b> You can't judge a Django model without SQL; you can't judge an API without Django; you can't judge the React screens without the API. The order below is the dependency order, not a wishlist.</li>
+    <li><b>System design is the summit, not the start.</b> Architecture judgement is earned <em>after</em> you can read every layer — so P8 sits late on purpose. You'll pick up architectural intuition along the way; P8 is where it gets named and formalised.</li>
+  </ul>
+</section>
+
+<section id="stack">
+  <h2><span class="num">02</span>The exact stack you're mastering</h2>
+  <p class="lede">Grounded from <code>app/backend/pyproject.toml</code> and <code>app/frontend/package.json</code> — not generic advice. This is precisely what KDPS runs, and therefore precisely your syllabus. It's deliberately "boring, proven" technology — the best kind to learn deeply.</p>
+  <table>
+    <thead><tr><th>Layer</th><th>What KDPS uses</th><th>What it does for us</th></tr></thead>
+    <tbody>
+      <tr><td>Language (back)</td><td>Python 3.12</td><td>Everything server-side + the AI/analytics code</td></tr>
+      <tr><td>Web framework</td><td>Django 5.1</td><td>Models, ORM, migrations, auth, admin, request cycle</td></tr>
+      <tr><td>API layer</td><td>Django REST Framework + SimpleJWT + drf-spectacular</td><td>JSON API, token login, auto OpenAPI schema</td></tr>
+      <tr><td>Database</td><td>PostgreSQL 16 (via psycopg 3)</td><td>The book of record: ledgers, triggers, constraints, transactions</td></tr>
+      <tr><td>Language (front)</td><td>TypeScript 5.6</td><td>Typed JavaScript — the compiler catches whole classes of bugs</td></tr>
+      <tr><td>UI framework</td><td>React 18 + react-router 7</td><td>The PWA screens and navigation</td></tr>
+      <tr><td>Build / dev</td><td>Vite 6</td><td>Dev server + production bundling</td></tr>
+      <tr><td>API client</td><td>axios + openapi-typescript</td><td>Front-end talks to back-end with types generated <em>from</em> the API</td></tr>
+      <tr><td>Quality gate</td><td>pytest · mypy strict · ruff · import-linter · vitest</td><td>Tests, type-safety, lint, architecture-boundary enforcement</td></tr>
+      <tr><td>Packaging / ops</td><td>uv · gunicorn/uvicorn · WhiteNoise · Render · GitHub Actions · docker-compose</td><td>Install, serve, deploy, CI</td></tr>
+    </tbody>
+  </table>
+  <div class="box info">
+    <div class="t">The shape to hold in your head</div>
+    <p><code>React (TypeScript) PWA</code> &nbsp;→&nbsp; <code>HTTP/JSON</code> &nbsp;→&nbsp; <code>Django REST Framework</code> &nbsp;→&nbsp; <code>Django ORM</code> &nbsp;→&nbsp; <code>PostgreSQL</code>. The whole roadmap is just learning to see clearly at every arrow.</p>
+  </div>
+</section>
+
+<section id="why">
+  <h2><span class="num">03</span>Why this order (the dependency ladder)</h2>
+  <p class="lede">Each rung only makes sense once the rung below it is solid. Climb in order; don't jump to the architecture rung before you can read a model.</p>
+  <div class="ladder">
+    <div class="rung"><span class="n">P0</span><span class="l">Reading code &amp; navigating a repo</span><span class="d">the meta-skill under everything</span></div>
+    <div class="rung"><span class="n">P1</span><span class="l">Python, properly (OOP, types, decorators)</span><span class="d">so Django stops looking like magic</span></div>
+    <div class="rung"><span class="n">P2</span><span class="l">Relational data · SQL · Postgres</span><span class="d">an ERP <em>is</em> its database</span></div>
+    <div class="rung"><span class="n">P3</span><span class="l">Django &amp; the ORM</span><span class="d">models map to the tables from P2</span></div>
+    <div class="rung"><span class="n">P4</span><span class="l">DRF — serializers, views, auth</span><span class="d">the API is a thin skin over P3</span></div>
+    <div class="rung"><span class="n">P5</span><span class="l">TypeScript &amp; React</span><span class="d">the screens that consume P4</span></div>
+    <div class="rung"><span class="n">P6</span><span class="l">Full-stack integration</span><span class="d">how P4 and P5 actually meet</span></div>
+    <div class="rung"><span class="n">P7</span><span class="l">Craft: tests, types, lint, CI, git</span><span class="d">what makes a change trustworthy</span></div>
+    <div class="rung"><span class="n">P8</span><span class="l">Architecture &amp; system design</span><span class="d">judging the whole, not the parts</span></div>
+    <div class="rung"><span class="n">P9</span><span class="l">Deploy &amp; operate</span><span class="d">the code in the real world</span></div>
+    <div class="rung"><span class="n">P10</span><span class="l">Reviewing &amp; guiding AI</span><span class="d">the capstone — the actual job</span></div>
+  </div>
+</section>
+
+<!-- ============ PHASES ============ -->
+
+<section id="p0">
+  <div class="phase">
+    <div class="head"><span class="pn">P0</span><span class="pt">Reading code &amp; navigating a repo</span><span class="pw">The one skill that pays off in every later phase. Before writing a line, learn to <em>find your way</em>.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>How a project is laid out; finding "where does X live?"</li>
+        <li>Tracing one feature end-to-end (URL → view → model → DB → back)</li>
+        <li>Reading top-down: entry points, then follow the calls</li>
+        <li>Search tools (grep/ripgrep) as your primary navigation</li>
+        <li>Git for <em>reading</em>: <code>log</code>, <code>blame</code>, <code>diff</code>, "why is this line here?"</li>
+        <li>Reading a diff / a pull request without running it</li>
+        <li>Reading error messages &amp; stack traces as a map, not noise</li>
+        <li>The habit of asking "what would prove this wrong?"</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">app/backend/masters/{urls,views,serializers,models}.py — trace one booking request through all four files.</p>
+      <div class="milestone"><b>Milestone:</b> you can open any of the 11 backend apps and, without help, say what it's for and where its data lands.</div>
+      <a class="startbtn" href="p0-course.html">▶ Start P0 — the course is live (7 lessons, quizzes, exit exam)</a>
+    </div>
+  </div>
+</section>
+
+<section id="p1">
+  <div class="phase">
+    <div class="head"><span class="pn">P1</span><span class="pt">Python, properly <span class="depth read">READ</span><span class="depth write">WRITE</span></span><span class="pw">You know basic Python. Django is <em>object-oriented</em> Python with heavy use of classes, inheritance, and decorators — close that gap or everything above stays opaque.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Modules, packages, imports, virtual environments (and <code>uv</code>)</li>
+        <li>Classes &amp; objects: <code>self</code>, methods, attributes</li>
+        <li>Inheritance &amp; composition — the backbone of Django</li>
+        <li>Type hints &amp; what <code>mypy --strict</code> is checking for</li>
+        <li>Decorators (<code>@property</code>, <code>@classmethod</code>, DRF's decorators)</li>
+        <li>Context managers (<code>with</code>) — critical for DB transactions</li>
+        <li>Exceptions: raising, catching, custom exception classes</li>
+        <li>Data structures: dict/list/set/tuple, comprehensions</li>
+        <li>Iterators &amp; generators (lazy evaluation, why QuerySets are lazy)</li>
+        <li>Dunder methods (<code>__str__</code>, <code>__eq__</code>) — the data model</li>
+        <li>A first look at <code>async</code> (why uvicorn/ASGI exists)</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">app/backend/core/money.py &amp; core/base.py — real classes, type hints, and dunder methods on the money type you'll come to love.</p>
+      <div class="milestone"><b>Milestone:</b> you can read any <code>.py</code> file in <code>core/</code> and explain every line's syntax — no "what does this symbol mean?" left.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p2">
+  <div class="phase">
+    <div class="head"><span class="pn">P2</span><span class="pt">Relational data · SQL · Postgres <span class="depth deep">DEEP</span></span><span class="pw">This is the heart of an ERP. Get this wrong and money is wrong. This phase goes deeper than the others on purpose.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>The relational model: tables, rows, columns, keys</li>
+        <li>Primary keys, foreign keys, relationships (1-1, 1-many, many-many)</li>
+        <li>SQL you can read &amp; write: <code>SELECT</code>, <code>JOIN</code>, <code>WHERE</code>, <code>GROUP BY</code></li>
+        <li>Aggregations (the raw material of every report)</li>
+        <li>Normalisation — and when to denormalise</li>
+        <li>Constraints: <code>NOT NULL</code>, <code>UNIQUE</code>, <code>CHECK</code>, foreign-key rules</li>
+        <li>Indexes: what they cost, what they buy</li>
+        <li>Transactions &amp; ACID; isolation levels; why "all-or-nothing" matters</li>
+        <li>Postgres specifics: data types, <code>numeric</code> vs money-as-integer</li>
+        <li>Database <b>triggers</b> — how KDPS makes ledgers append-only in the DB itself</li>
+        <li>Append-only / immutable-record thinking (never <code>UPDATE</code> a posted entry)</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">core/ledger.py &amp; the migrations that install DB triggers · query the live Render Postgres read-only to see real rows.</p>
+      <div class="milestone"><b>Milestone:</b> you can explain, in SQL terms, why a posted ledger line can never be silently edited — and what would break if it could.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p3">
+  <div class="phase">
+    <div class="head"><span class="pn">P3</span><span class="pt">Django &amp; the ORM <span class="depth read">READ</span><span class="depth write">WRITE</span></span><span class="pw">The framework that turns P1 (Python) + P2 (SQL) into an application. Where the ORM ends and raw SQL begins is a judgement you now build.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Project vs app; <code>settings.py</code>; the app registry</li>
+        <li>Models = Python classes that become tables (the P2 link)</li>
+        <li>Fields, relationships, <code>Meta</code>, custom methods &amp; managers</li>
+        <li>Migrations: how schema changes are versioned &amp; applied</li>
+        <li>The ORM &amp; QuerySets: filtering, <code>select_related</code>, laziness, N+1</li>
+        <li>The request → URL → view → response cycle</li>
+        <li><code>transaction.atomic()</code> — the all-or-nothing wrapper</li>
+        <li>The Django admin (free back-office)</li>
+        <li>Signals, and why KDPS mostly avoids them (explicit &gt; magic)</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">core/documents.py (the docstatus FSM + gap-free numbering) · masters/models.py · any app's models.py + migrations/.</p>
+      <div class="milestone"><b>Milestone:</b> you can add a field to a model, write &amp; read the migration it generates, and predict the exact SQL the ORM will run for a given query.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p4">
+  <div class="phase">
+    <div class="head"><span class="pn">P4</span><span class="pt">DRF — the API layer <span class="depth read">READ</span><span class="depth write">WRITE</span></span><span class="pw">A thin, well-shaped skin over Django that turns models into JSON and enforces who-can-do-what. Small surface, high leverage.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Serializers: model ⇄ JSON, validation, computed fields</li>
+        <li>Views / ViewSets / routers — request handling patterns</li>
+        <li>Authentication with JWT (SimpleJWT): login, tokens, refresh</li>
+        <li>Permissions &amp; scoping (who sees which store's data)</li>
+        <li>Status codes, error shapes, pagination</li>
+        <li>drf-spectacular: the auto-generated OpenAPI schema</li>
+        <li>Where validation belongs: serializer vs model vs DB constraint</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">outbound/{serializers,views,permissions}.py · masters/scoping.py · finledger/health.py (the trial-balance endpoint).</p>
+      <div class="milestone"><b>Milestone:</b> you can follow a login → token → authorised API call end-to-end, and spot a permission that fails open instead of closed.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p5">
+  <div class="phase">
+    <div class="head"><span class="pn">P5</span><span class="pt">TypeScript &amp; React <span class="depth read">READ</span><span class="depth write">WRITE</span></span><span class="pw">You've built UIs before, so this is levelling-up, not starting over — but TypeScript's type system and React's data-flow model are the parts worth real depth.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Modern JavaScript essentials (modules, promises, <code>async/await</code>)</li>
+        <li>TypeScript: types, interfaces, unions, generics, <code>strict</code> mode</li>
+        <li>React components, props, and one-way data flow</li>
+        <li>State &amp; the core hooks: <code>useState</code>, <code>useEffect</code>, <code>useContext</code></li>
+        <li>Lists, keys, conditional rendering, forms</li>
+        <li>react-router 7: routes, params, navigation, guards</li>
+        <li>Data fetching with axios; loading/error states</li>
+        <li>Component structure: pages vs components vs shared lib</li>
+        <li>What Vite does (dev server, bundling, env)</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">app/frontend/src/{pages,components,auth,lib}/ · the theme/ folder (the light/dark work you already know).</p>
+      <div class="milestone"><b>Milestone:</b> you can add a screen that fetches from the API, renders a list, handles the loading &amp; error paths, and passes <code>tsc</code> with no <code>any</code>.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p6">
+  <div class="phase">
+    <div class="head"><span class="pn">P6</span><span class="pt">How it all connects <span class="depth read">READ</span></span><span class="pw">The seams between back and front — where most real bugs actually live, and where AI most often gets it subtly wrong.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>HTTP &amp; REST for real: methods, headers, status, idempotency</li>
+        <li>The full round-trip: React → axios → DRF → ORM → Postgres → back</li>
+        <li>CORS: why the browser blocks calls and how KDPS configures it</li>
+        <li>Auth end-to-end: token stored, sent, verified, expired, refreshed</li>
+        <li>The typed contract: OpenAPI schema → <code>openapi-typescript</code> → front-end types</li>
+        <li>Environments &amp; config (dev vs the Render alpha)</li>
+        <li>PWA basics: installable, offline-ish, service worker at a high level</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">config/settings.py (CORS/JWT) · the generated API-types file the front-end imports · DEPLOY.md for the two environments.</p>
+      <div class="milestone"><b>Milestone:</b> given a failing screen, you can tell in one pass whether the bug is in React, the network, the API, or the database.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p7">
+  <div class="phase">
+    <div class="head"><span class="pn">P7</span><span class="pt">The craft — tests, types, lint, CI, git <span class="depth write">WRITE</span></span><span class="pw">What separates code that <em>runs</em> from code you can <em>trust</em> and change without fear. This is the daily discipline of a senior engineer.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Why we test; unit vs integration vs "golden file" tests</li>
+        <li>pytest &amp; pytest-django: reading and writing real tests</li>
+        <li>Test-driven development (red → green → refactor)</li>
+        <li>vitest on the front-end</li>
+        <li>mypy strict: what type-safety buys and what it costs</li>
+        <li>ruff: linting &amp; formatting as non-negotiable hygiene</li>
+        <li>import-linter: enforcing architecture boundaries in code</li>
+        <li>CI/CD: what <code>npm run ci</code> and GitHub Actions actually gate</li>
+        <li>Git workflow: branches, commits that tell a story, PRs, review</li>
+        <li>Reading coverage: what a test <em>doesn't</em> prove</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">app/backend/tests/ (40+ real tests) · core/tests/ (the kernel anti-cheat tests) · pyproject.toml (ruff/mypy config) · .github/workflows/ci.yml.</p>
+      <div class="milestone"><b>Milestone:</b> for any change, you can write the test that would catch it breaking — and you instinctively distrust "it works" without one.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p8">
+  <div class="phase">
+    <div class="head"><span class="pn">P8</span><span class="pt">Architecture &amp; system design <span class="depth deep">DEEP</span></span><span class="pw">The summit you asked for. Now that you can read every layer, you learn to judge the <em>whole</em>: is this the right shape, and why?</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Layered architecture — KDPS's five layers (masters → documents → ledgers → controls → intelligence)</li>
+        <li>Domain modelling: getting the nouns &amp; rules right first (SKU = Style×Size×Color, SOR vs Outright)</li>
+        <li>The kernel pattern: a small, hard core everything else obeys</li>
+        <li>Append-only ledgers &amp; "documents write ledgers" (event-sourcing-lite)</li>
+        <li>State machines / FSMs (docstatus) &amp; idempotency</li>
+        <li>Coupling &amp; cohesion; separation of concerns; dependency direction</li>
+        <li>Enforcing boundaries in code (import-linter) — architecture that can't rot silently</li>
+        <li>Data integrity as design, not hope (constraints &gt; app checks &gt; comments)</li>
+        <li>Trade-offs: consistency vs availability, simplicity vs flexibility, when to add a table vs a flag ("variation is data, not code")</li>
+        <li>Reading &amp; writing ADRs — recording <em>why</em>, not just what</li>
+        <li>Designing for change: what KDPS deferred on purpose and why</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">CONTEXT.md + docs/my-understanding/system-design/00-system-architecture.html (the 12 rules) · the adr/ chain · core/ as the worked example of a kernel.</p>
+      <div class="milestone"><b>Milestone:</b> you can take a proposed feature and say where it belongs in the five layers, which rule it must obey, and what its ledger/document consequences are — before any code is written.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p9">
+  <div class="phase">
+    <div class="head"><span class="pn">P9</span><span class="pt">Deploy &amp; operate <span class="depth read">READ</span></span><span class="pw">Code that isn't running for real teaches you only half the lesson. This is the world the code lives in.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>How the Render alpha is wired (Postgres + web service + static site)</li>
+        <li>Blueprint-as-code: <code>render.yaml</code>; auto-deploy from <code>main</code></li>
+        <li>Environments, secrets, environment variables</li>
+        <li>Running migrations against a live database safely</li>
+        <li>gunicorn/uvicorn &amp; WhiteNoise — serving in production</li>
+        <li>Logs, metrics, and reading them when something breaks</li>
+        <li>Security baseline: JWT storage, CORS, secrets, data residency</li>
+        <li>Backups &amp; the "book of record" (Tally) relationship</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">render.yaml · DEPLOY.md · the live Render service logs &amp; metrics · config/{wsgi,asgi}.py.</p>
+      <div class="milestone"><b>Milestone:</b> you can explain what happens between a merge to <code>main</code> and a working change on the alpha — and where it could fail.</div>
+    </div>
+  </div>
+</section>
+
+<section id="p10">
+  <div class="phase">
+    <div class="head"><span class="pn">P10</span><span class="pt">Reviewing &amp; guiding AI — the capstone <span class="depth deep">DEEP</span></span><span class="pw">Everything above exists to make this possible: reading AI output with a senior engineer's suspicion, and steering it with a designer's clarity.</span></div>
+    <div class="body">
+      <h4>What this phase covers</h4>
+      <ul class="cov">
+        <li>Reading an AI diff critically: what it changed, and what it <em>quietly</em> changed</li>
+        <li>The spec → build → verify loop; never trust "done" without proof</li>
+        <li>Conformance-to-design as the primary review axis (does it obey the 12 rules / CONTEXT.md?)</li>
+        <li>Where AI habitually cuts corners: money paths, permissions failing open, missing the SOR/GST edge, single-entry where double-entry is required — the exact defects KDPS's own reviews caught</li>
+        <li>Writing a spec an AI can't misread; using CONTEXT.md/ADRs as the yardstick</li>
+        <li>Adversarial verification: "what input makes this wrong?"</li>
+        <li>Knowing when to accept, when to send back, when to write it yourself</li>
+        <li>Directing multi-step AI work and keeping yourself in the loop</li>
+      </ul>
+      <h4>Anchored in KDPS</h4>
+      <p class="anchor">The real review records: memory/implementation-review-2026-06-30 &amp; 07-06 (the P0 money-path defects) · consolidation/ review docs · the /review &amp; /code-review skills.</p>
+      <div class="milestone"><b>Milestone:</b> you can be handed an AI-built money slice and independently find the defect its author missed — the thing you set out to be able to do.</div>
+    </div>
+  </div>
+</section>
+
+<section id="after">
+  <h2><span class="num">04</span>What happens after you approve this order</h2>
+  <p class="lede">This document is only the sequence. Once you're happy with it, we turn each phase into the real thing — on your say-so, one phase at a time.</p>
+  <div class="box keep">
+    <div class="t">The teaching model (for when you give the go)</div>
+    <ul>
+      <li><b>One phase at a time</b>, in this order — never all at once.</li>
+      <li>Each phase becomes: a short explainer in plain language → a guided read of the real KDPS files listed above → small hands-on exercises against the actual repo → the milestone as the exit test.</li>
+      <li><b>You drive the depth.</b> Where you already know something (front-end concepts, some Python), we move fast; on money/data/architecture we go slow and deep.</li>
+      <li>We keep a running "you can now…" checklist so progress is visible.</li>
+    </ul>
+  </div>
+  <div class="box warn">
+    <div class="t">Open questions for you (before we start Phase 0)</div>
+    <ul>
+      <li>Order check — anything you want moved earlier or later? (Common wish: pull some architecture up front. My advice is to resist it; it lands better after P3.)</li>
+      <li>Do you want the front-end phases (P5/P6) <em>before</em> the API depth (P4), since you're strongest there — or keep the bottom-up order?</li>
+      <li>Should the very first deliverable be Phase 0 as a hands-on "trace one KDPS request" walkthrough, or a written explainer first?</li>
+    </ul>
+  </div>
+  <p class="small muted">File: <code>docs/learning/stack-learning-roadmap.html</code> · plan only, no lessons yet · sibling to your <code>ai-sdlc-playbook.html</code> research.</p>
+</section>
+
+<footer>
+  <div class="wrap">Prepared as a plan for review. Nothing here is taught yet — say which phase to open first, or which parts of the order to change.</div>
+</footer>
+
+</main>
+</div>
+</div>
+</body>
+</html>

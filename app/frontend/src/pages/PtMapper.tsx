@@ -26,10 +26,12 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { Combobox } from "../components/Combobox";
 import { InboundQueueCard, useInboundQueue } from "../components/InboundQueueCard";
+import { ListSearchBar } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 const KDPS_COLUMNS = [
   "SEASON", "BRAND", "COLOR", "GENDER", "SUB CATEGORY", "TYPE", "ITEM", "FIT",
@@ -129,9 +131,13 @@ interface GrnPickT {
   pt_files: { stage: string }[];
 }
 
-function PtFileTable({ files, empty }: { files: PtFileT[]; empty: string }) {
+function PtFileTable({ files, empty, searchTerm }: { files: PtFileT[]; empty: string; searchTerm?: string }) {
   if (files.length === 0) {
-    return <div className="card section-card" data-testid="pt-files-empty">{empty}</div>;
+    return (
+      <div className="card section-card" data-testid="pt-files-empty">
+        {searchTerm ? `No PT file matches “${searchTerm}”.` : empty}
+      </div>
+    );
   }
   return (
     <div className="table-wrap">
@@ -166,7 +172,7 @@ function PtFileTable({ files, empty }: { files: PtFileT[]; empty: string }) {
               <td><span className={`chip chip-${FILE_TONE[f.status] ?? "grey"}`}>{f.status_label}</span></td>
               <td><span className={`chip chip-${STAGE_TONE[f.stage] ?? "grey"}`} data-testid={`pt-file-stage-${f.id}`}>{f.stage_label}</span></td>
               <td>
-                <Link className="btn btn-sm" to={`/documents/pt-mapper/${f.id}`} data-testid={`pt-file-view-${f.id}`}>Open</Link>
+                <Link className="btn btn-sm" to={`/receive/pt/${f.id}`} data-testid={`pt-file-view-${f.id}`}>Open</Link>
               </td>
             </tr>
           ))}
@@ -182,7 +188,7 @@ function fmtDate(iso: string): string {
 
 /** PT File Mapper — branded brand-PT → KDPS. Invoice-first entry (D3): pick the
  *  received invoice, then upload the brand PT so it is linked to that GRN. */
-function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) {
+function MapperTab({ files, reload, searchTerm }: { files: PtFileT[]; reload: () => void; searchTerm?: string }) {
   const navigate = useNavigate();
   const { data: grns } = useList<GrnPickT>("/inbound/grns?kind=branded");
   const vocab = useVocab();
@@ -223,12 +229,12 @@ function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) 
     try {
       const { data } = await api.post("/ptmapper/files", form);
       reload();
-      navigate(`/documents/pt-mapper/${data.id}`);
+      navigate(`/receive/pt/${data.id}`);
     } catch (e: any) {
       // The GRN already carries a live PT — jump straight to it rather than error.
       const existing = e?.response?.data?.pt_file_id;
       if (existing) {
-        navigate(`/documents/pt-mapper/${existing}`);
+        navigate(`/receive/pt/${existing}`);
         return;
       }
       setError(apiErrorMessage(e));
@@ -344,25 +350,26 @@ function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) 
         </div>
       )}
 
-      <PtFileTable files={files} empty="No brand PT files mapped yet." />
+      <PtFileTable files={files} empty="No brand PT files mapped yet." searchTerm={searchTerm} />
     </>
   );
 }
 
 /** PT File Making — non-branded invoice → PT authoring. Hosts the "arrivals
  *  awaiting PT" work queue + the "Make PT file" button (moved off Stock Receive). */
-function MakingTab({ files }: { files: PtFileT[] }) {
+function MakingTab({ files, searchTerm }: { files: PtFileT[]; searchTerm?: string }) {
   const { queue } = useInboundQueue();
   return (
     <>
       {queue && <InboundQueueCard queue={queue} />}
-      <PtFileTable files={files} empty="No PT files made from arrivals yet." />
+      <PtFileTable files={files} empty="No PT files made from arrivals yet." searchTerm={searchTerm} />
     </>
   );
 }
 
 export function PtMapperPage() {
-  const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files");
+  const [q, setQ] = useState("");
+  const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files", { q });
   const { data: reviews } = useList<any>("/ptmapper/review?status=open");
   const { data: proposals } = useList<any>("/ptmapper/proposals?status=proposed");
   const [params, setParams] = useSearchParams();
@@ -380,25 +387,23 @@ export function PtMapperPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Documents · Warehouse (Ranchi) → Patna HO</p>
-          <h1 className="h1 h2-rust">PT File Operation</h1>
-        </div>
-        <div className="spacer" />
-        {tab === "mapper" && (
-          <>
-            <Link className="btn" to="/documents/pt-mapper/proposals" data-testid="proposals-link">
-              <Sparkles size={16} /> Learning proposals
-              {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
-            </Link>
-            <Link className="btn" to="/documents/pt-mapper/review" data-testid="review-queue-link">
-              <ListChecks size={16} /> Unmapped queue
-              {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
-            </Link>
-          </>
-        )}
-      </div>
+      <PageHeader
+        lead="Warehouse (Ranchi) → Patna HO. Goods are sellable only after their PT posts."
+        actions={
+          tab === "mapper" && (
+            <>
+              <Link className="btn" to="/receive/pt/proposals" data-testid="proposals-link">
+                <Sparkles size={16} /> Learning proposals
+                {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
+              </Link>
+              <Link className="btn" to="/receive/pt/review" data-testid="review-queue-link">
+                <ListChecks size={16} /> Unmapped queue
+                {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
+              </Link>
+            </>
+          )
+        }
+      />
 
       <div className="mode-toggle" data-testid="pt-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
         <button
@@ -419,12 +424,23 @@ export function PtMapperPage() {
         </button>
       </div>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search PT files — file name, brand, status"
+        label="Search PT files"
+        testId="pt-files-search"
+        noun="file"
+        count={tab === "mapper" ? brandFiles.length : makingFiles.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : tab === "mapper" ? (
-        <MapperTab files={brandFiles} reload={reload} />
+        <MapperTab files={brandFiles} reload={reload} searchTerm={q} />
       ) : (
-        <MakingTab files={makingFiles} />
+        <MakingTab files={makingFiles} searchTerm={q} />
       )}
     </div>
   );
@@ -439,6 +455,12 @@ interface PtRowT {
   // {controlled column → raw source value the engine read}. Shown as a tooltip /
   // hint so a steward can see what the file actually said behind a mapped cell.
   raw: Record<string, any>;
+}
+// What `POST /ptmapper/files/{id}/post` reports about the inward it just wrote.
+interface PostResultT {
+  doc_number: string;
+  entries: number;
+  skipped_rows: number;
 }
 interface PtFileDetailT extends PtFileT {
   meta: {
@@ -630,9 +652,13 @@ export function PtFileDetailPage() {
   const [ctxBrand, setCtxBrand] = useState("");
   const [ctxDate, setCtxDate] = useState("");
   const [showRerun, setShowRerun] = useState(false);
+  // What the last "Push into system" actually wrote - kept so the rows the post
+  // skipped for having no quantity are stated on screen, not left invisible.
+  const [postResult, setPostResult] = useState<PostResultT | null>(null);
 
   function load() {
     setLoading(true);
+    setPostResult(null); // the page is reused across files - never carry one file's count onto another
     api.get(`/ptmapper/files/${id}`).then((r) => {
       setFile(r.data);
       setCtxBrand(r.data?.meta?.context?.brand ?? "");
@@ -722,6 +748,7 @@ export function PtFileDetailPage() {
     try {
       const { data } = await api.post(`/ptmapper/files/${id}/${path}`, body ?? {});
       setFile(data);
+      setPostResult(data.post_result ?? null);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -905,7 +932,7 @@ export function PtFileDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/pt-mapper" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
+      <Link to="/receive/pt" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
       <div className="toolbar">
         <div>
           <p className="eyebrow">{file.profile_name}{file.meta?.sheet ? ` · sheet ${file.meta.sheet}` : ""}</p>
@@ -921,7 +948,7 @@ export function PtFileDetailPage() {
           <span className="chip chip-purple" data-testid="ptfile-source-badge">Authored · non-brand</span>
         )}
         {file.grn && (
-          <Link to={`/inbound/${file.grn}`} className="chip chip-navy" data-testid="ptfile-grn-chip">
+          <Link to={`/receive/${file.grn}`} className="chip chip-navy" data-testid="ptfile-grn-chip">
             GRN {file.grn_number || file.meta?.grn_number || `#${file.grn}`}
           </Link>
         )}
@@ -1011,6 +1038,11 @@ export function PtFileDetailPage() {
 
       {error && <div className="warn-note" data-testid="ptfile-action-error">{error}</div>}
       {priceNote && <div className="ok-note" data-testid="ptfile-price-note"><CheckCircle2 size={14} /> {priceNote}</div>}
+      {postResult && postResult.skipped_rows > 0 && (
+        <div className="warn-note" data-testid="ptfile-skipped-rows-note">
+          <AlertTriangle size={14} /> {postResult.entries} row(s) posted into stock · {postResult.skipped_rows} row(s) carried no quantity and were not stocked. Check they really were filler or summary lines.
+        </div>
+      )}
 
       {file.source === "invoice" && file.stage !== "posted" && file.stage !== "reversed" && (
         <AuthoringPanel
@@ -1029,14 +1061,14 @@ export function PtFileDetailPage() {
           {file.inward_doc_number ? <> as voucher <b className="mono">{file.inward_doc_number}</b></> : null}
           {file.booking_number ? <> · reconciled to booking <b>{file.booking_number}</b></> : null}
           {file.posted_at ? ` on ${new Date(file.posted_at).toLocaleString()}` : ""}. This record is locked.{" "}
-          <Link to={`/ledgers/stock?file=${file.id}`} style={{ color: "inherit", textDecoration: "underline" }} data-testid="ptfile-ledger-link">View in Stock Ledger</Link>
+          <Link to={`/stock/history?file=${file.id}`} style={{ color: "inherit", textDecoration: "underline" }} data-testid="ptfile-ledger-link">View in Stock Ledger</Link>
         </div>
       ) : file.stage === "sent" ? (
         <div className="ai-note" data-testid="ptfile-sent-banner"><Send size={14} /> Sent to Patna HO for review &amp; posting. Patna can download the Excel and push it into the system.</div>
       ) : file.unresolved_count > 0 ? (
         <div className="ai-note" data-testid="ptfile-unresolved-banner">
           <AlertTriangle size={14} /> {file.unresolved_count} value(s) couldn't be mapped automatically.{" "}
-          <Link to="/documents/pt-mapper/review" style={{ color: "inherit", textDecoration: "underline" }}>Resolve them in the unmapped queue</Link>, then re-run — or fill them in by hand with Edit.
+          <Link to="/receive/pt/review" style={{ color: "inherit", textDecoration: "underline" }}>Resolve them in the unmapped queue</Link>, then re-run — or fill them in by hand with Edit.
         </div>
       ) : (
         <div className="ok-note" data-testid="ptfile-ready-banner"><CheckCircle2 size={14} /> Every derived field mapped to a KDPS value. Ready to send to Patna.</div>
@@ -1221,7 +1253,8 @@ interface ReviewT {
 }
 
 export function ReviewQueuePage() {
-  const { data: items, loading, reload } = useList<ReviewT>("/ptmapper/review?status=open");
+  const [q, setQ] = useState("");
+  const { data: items, loading, reload } = useList<ReviewT>("/ptmapper/review", { status: "open", q });
   const [vocab, setVocab] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
@@ -1233,16 +1266,30 @@ export function ReviewQueuePage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/pt-mapper" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
+      <Link to="/receive/pt" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>Unmapped queue</h1>
       <p className="lead" style={{ marginBottom: 18, fontSize: 13.5 }}>
         Each entry is a raw brand value the tables don't know yet. Map it once — the engine remembers it for every future file.
       </p>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search the queue — raw value, dimension, status"
+        label="Search the unmapped queue"
+        testId="review-search"
+        noun="item"
+        count={items.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : items.length === 0 ? (
-        <div className="ok-note" data-testid="review-empty"><CheckCircle2 size={14} /> Queue is empty — every value maps to a KDPS value.</div>
+        <div className="ok-note" data-testid="review-empty">
+          <CheckCircle2 size={14} />{" "}
+          {q ? `No queue item matches “${q}”.` : "Queue is empty — every value maps to a KDPS value."}
+        </div>
       ) : (
         <div className="review-list" data-testid="review-list">
           {items.map((it) => (

@@ -149,8 +149,7 @@
     <tr><th>To</th><th>Questions</th></tr>
     <tr><td><strong>Client</strong></td><td>Registration reality (Q3) — <em>answered 26 Jun 2026: one PAN, two GSTINs (Bihar &amp; Jharkhand), one Tally company; cross-state moves happen, paperwork produced manually.</em> Open: store→state map · B2B invoices. Plus Q10: is 25-18-10 a distinct deal or BNS-with-allowance; any brand running two models in one season.</td></tr>
     <tr><td><strong>CA</strong></td><td>Q4 SOR/Consignment recognition (agent vs sale-or-return, per brand) · F9 one-convention · 6-month deemed-supply interpretation · Q3 slab basis + Jharkhand e-way carve-out · Q5 cost sign-off (Ind AS 2) · Q9 unknown-brand default posting · Q16 GST 2.0 slab · entity/GSTIN count + one-vs-two Tally companies + e-invoicing applicability.</td></tr>
-    <tr><td><strong>Ten Software (spike)</strong></td><td>Q6: can the sale event carry more than the raw barcode (season/MRP); does it prompt on a multi-variant barcode. Q8: documented API for sales/SOH/returns/collections pull + master/allocation/offers push; join key; auth; rate limits; timeline.</td></tr>
-  </table>
+      </table>
 </section>
 
 <section>
@@ -159,7 +158,7 @@
     <li><span class="step">1</span><strong>Non-destructive first.</strong> Create the 4 new artifacts (glossary, ERD, posting catalog, lifecycles) + the ADR chain + integration contracts; commit the consolidated design. Nothing deleted yet.</li>
     <li><span class="step">2</span><strong>Edit the canonical docs</strong> per §2 (architecture, design-of-record, D-docs, ground-truth fix, roadmap/study reconciliation, CLAUDE.md/PROJECT-MAP).</li>
     <li><span class="step">3</span><strong>Salvage, then delete</strong> the distrust set — only after the new artifacts hold the salvaged content, and only after the repo remote is confirmed. <em>(Gated on your explicit go.)</em></li>
-    <li><span class="step">4</span><strong>Issue the three question sheets</strong> to client / CA / Ten Software.</li>
+    <li><span class="step">4</span><strong>Issue the two question sheets</strong> to client / CA. (The POS sheet is void — KDPS builds its own counter, decided 26 Jul 2026.)</li>
     <li><span class="step">5</span><strong>Foundation build (slice 0)</strong> begins on the now-trustworthy set.</li>
   </ol>
   <div class="callout co-note"><strong>How it runs:</strong> a workflow of focused sub-agents, each reading the durable artifacts (decision log + review + this plan) and editing its assigned files, with a verification pass that every locked decision is reflected and no doc still contradicts another. Destructive steps (3) wait for your explicit confirmation.</div>

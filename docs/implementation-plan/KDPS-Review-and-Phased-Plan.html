@@ -99,7 +99,7 @@
   <tr><td><strong>Payments</strong></td><td><span class="pill p-no">Not built</span></td><td>Maker-checker + tiered approval, safety gate, multi-bill settlement, 3-rail bank reconciliation (cash/card/UPI), debit/credit notes. The finledger primitives exist; the workflow does not.</td></tr>
   <tr><td><strong>Analytics &amp; AI</strong></td><td><span class="pill p-no">Not built</span></td><td>Clean-data mapping, 9 PM WhatsApp brief, role alerts, brand report-maker, brand/store margin, dead-stock, forecasting. (Only Gemini doc-extraction exists at the edge.)</td></tr>
   <tr><td><strong>Tally sync</strong></td><td><span class="pill p-no">Not built</span></td><td>One-way voucher export + daily reconcile. Designed, not built.</td></tr>
-  <tr><td><strong>POS integration</strong> (Ten Software)</td><td><span class="pill p-no">Not built</span></td><td>Two-way adapter (push master/allocation/offers, read sales/SOH/collection). Blocked on the external API — has lead time.</td></tr>
+  <tr><td><strong>POS</strong> (KDPS-built, from 26 Jul 2026)</td><td><span class="pill p-no">Not built</span></td><td>Our own counter (push master/allocation/offers, read sales/SOH/collection). No longer blocked on an external API — has lead time.</td></tr>
   <tr><td><strong>Controls layer</strong></td><td><span class="pill p-no">Not built</span></td><td>Exception inbox, reconciliations, approvals surface, audit trail. Nav stubs exist; no backend. Tied to F3.</td></tr>
 </table>
 
@@ -199,7 +199,7 @@
   <ul>
     <li>PostgreSQL 15 installed + <strong>supervisor-managed</strong> (survives restarts); role/db <code>kdps</code>/<code>kdps_dev</code> created; Django + deps installed into the served venv; migrations + <code>seed_foundation</code> + <code>seed_ptmapper</code> applied.</li>
     <li>Verified end-to-end: login 200, authenticated API returns seeded masters, frontend renders, CORS clean, no console errors. Re-provision in one command: <code>scripts/dev-bootstrap.sh</code>.</li>
-    <li><strong>App:</strong> <code>https://kdps-delivery-check.preview.emergentagent.com</code> · demo logins in <code>memory/test_credentials.md</code>.</li>
+    <li><strong>App:</strong> <code>https://retail-erp-system-4.preview.emergentagent.com</code> · demo logins in <code>memory/test_credentials.md</code>.</li>
   </ul>
 </div>
 
@@ -236,7 +236,7 @@
   <ul>
     <li>The source-agnostic <strong>Sale</strong> document (posting logic on the Sale, not the adapter); stock-out posting to the ledger; SOR/consignment liability recognised <em>on the sale</em>.</li>
     <li>Counter sale, customer exchange (against original bill), store-to-store transfer (hold + receive-scan), defective return, SOR season-end return, the V-flip, EOSS, stock count.</li>
-    <li>Depends on the <strong>Ten Software POS API</strong> — start that external conversation now (lead time); build reader-first behind a swappable adapter with offline-capable fallback.</li>
+    <li><strong>No longer depends on an outside POS API</strong> (26 Jul 2026) — KDPS builds its own counter, offline-first, proven at one store before any second store follows.</li>
   </ul>
 </div>
 
@@ -274,7 +274,7 @@
   <tr><td><strong>GRN quantity rule (F2)</strong> — is PT the single point of truth, or do we need received-not-inwarded on-hand?</td><td>Affects POS reconciliation and the "sellable before inward" window. Anand + ops.</td></tr>
   <tr><td><strong>Audit scope (F3)</strong> — which actions require a reason code (booking edits, close/cancel, approvals, reversals)?</td><td>Defines the audit-log hook. Anand.</td></tr>
   <tr><td><strong>GST at inbound (F5)</strong> + the 5 CA-gated money items.</td><td>Money-critical. CA ruling; mechanisms are already built to hold the answer as data.</td></tr>
-  <tr><td><strong>Ten Software POS API</strong> — availability, auth, whether it can accept pending-inward and export line-item sales.</td><td>External dependency with lead time; gates Phase 3. Client to request from Ten Software.</td></tr>
+  <tr><td><strong>POS — resolved 26 Jul 2026.</strong> Was: an outside POS API whose availability, auth and export shape were unknown.</td><td>No longer an external dependency and no longer gates Phase 3 — KDPS builds its own counter.</td></tr>
   <tr><td><strong>Master lists for go-live</strong> — final stores, brands, GST registrations; per-brand deal type / margin / return window.</td><td>Needed to seed a real (not demo) environment. Client.</td></tr>
 </table>
 

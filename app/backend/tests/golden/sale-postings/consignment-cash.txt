@@ -1,0 +1,12 @@
+26-27/SEL-DEO/SAL/1
+  event A · money
+    dr CASH                      149900
+    cr SALES_REVENUE             142762  MUFTI · FW25
+    cr OUTPUT_GST                  7138  MUFTI · FW25
+    Σ 0
+  event B · cost
+    dr COGS                       70000  MUFTI · FW25
+    cr VENDOR_PAYABLE             70000  MUFTI · FW25 [vendor:ARVIND]
+    dr SOR_CONTRA                 70000  MUFTI · FW25
+    cr SOR_STOCK                  70000  MUFTI · FW25
+    Σ 0

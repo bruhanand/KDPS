@@ -1,0 +1,91 @@
+{
+  "name": "add-ons-do-not-stack-by-default",
+  "note": "An add-on that nobody flagged combinable does nothing. This is what every new offer does until head office says otherwise.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 50,
+      "name": "Mufti flat 50",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "50.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 60,
+      "name": "Storewide extra 10",
+      "layer": "storewide",
+      "brand": "",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "10.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 70,
+      "name": "HDFC extra 5",
+      "layer": "bank",
+      "brand": "",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "5.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 199900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 99950,
+        "offer_id": 50,
+        "evidence": {
+          "offer_id": 50,
+          "offer_name": "Mufti flat 50",
+          "layer": "brand",
+          "saved_paise": 99950,
+          "beat": [],
+          "stack": []
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 99950
+  }
+}

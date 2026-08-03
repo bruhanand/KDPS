@@ -61,7 +61,13 @@ def world(db):
 
 def _user() -> User:
     role, _ = Role.objects.get_or_create(code="accounts", defaults={"name": "accounts"})
-    user, _ = User.objects.get_or_create(username="patna-acct", defaults={"role": role})
+    user, _ = User.objects.get_or_create(
+        username="patna-acct",
+        defaults={"role": role, "scope_type": "all", "full_name": "Patna Accounts"},
+    )
+    if user.scope_type != "all":
+        user.scope_type = "all"
+        user.save(update_fields=["scope_type"])
     return user
 
 

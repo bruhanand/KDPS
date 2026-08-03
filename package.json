@@ -4,15 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sandcastle": "tsx .sandcastle/main.mts",
+    "sandcastle": "tsx .sandcastle/main.ts",
     "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile",
+    "dev": "./scripts/dev.sh",
+    "dev:setup": "./scripts/dev.sh --setup-only",
+    "dev:reset": "./scripts/dev.sh --reset --setup-only",
+    "dev:down": "./scripts/dev.sh --down",
+    "dev:stop": "./scripts/stop-stack.sh",
+    "dev:where": "./scripts/dev.sh --where",
     "setup": "cd app/backend && uv sync && cd ../.. && npm --prefix app/frontend install",
     "ci": "npm run ci:backend && npm run ci:frontend",
-    "ci:backend": "cd app/backend && uv run ruff format --check . && uv run ruff check . && uv run mypy core config && uv run python manage.py makemigrations --check --dry-run && uv run lint-imports && uv run pytest",
-    "ci:frontend": "npm --prefix app/frontend run ci"
+    "ci:backend": "cd app/backend && uv run ruff format --check . && uv run ruff check . && uv run mypy core config && uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check_db_drift && uv run lint-imports && uv run pytest",
+    "ci:frontend": "npm --prefix app/frontend run ci",
+    "ci:fast": "npm run ci:backend:fast && npm run ci:frontend",
+    "ci:backend:fast": "cd app/backend && uv run mypy core config && uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check_db_drift && uv run lint-imports && uv run pytest"
   },
   "devDependencies": {
-    "@ai-hero/sandcastle": "^0.5.10",
+    "@ai-hero/sandcastle": "^0.5.12",
+    "@types/node": "^22.20.1",
     "tsx": "^4.19.2"
   }
 }

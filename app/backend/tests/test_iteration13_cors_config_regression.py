@@ -14,6 +14,7 @@ import os
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -49,7 +50,7 @@ def _login(session: requests.Session, username: str, password: str) -> requests.
 @pytest.mark.parametrize(
     "username,password",
     [
-        ("owner", "Owner@123"),
+        ("owner", SEED_OWNER_PASSWORD),
         ("deo.cashier", "Store@123"),
         ("wh.patna", "Wh@123"),
     ],
@@ -71,7 +72,7 @@ def test_seeded_users_login_returns_access_and_refresh(username, password):
 
 @pytest.fixture
 def owner_auth_headers(session: requests.Session) -> dict:
-    r = _login(session, "owner", "Owner@123")
+    r = _login(session, "owner", SEED_OWNER_PASSWORD)
     assert r.status_code == 200, r.text[:300]
     return {"Authorization": f"Bearer {r.json()['access']}"}
 
@@ -133,7 +134,7 @@ def test_cors_actual_post_includes_allow_origin_header():
     at the Django layer."""
     r = requests.post(
         f"{API}/auth/login",
-        json={"username": "owner", "password": "Owner@123"},
+        json={"username": "owner", "password": SEED_OWNER_PASSWORD},
         headers={"Origin": CORS_TEST_ORIGIN, "Content-Type": "application/json"},
         timeout=30,
     )

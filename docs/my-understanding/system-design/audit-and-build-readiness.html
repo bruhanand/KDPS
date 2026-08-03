@@ -247,7 +247,7 @@
   <div class="card"><ul style="margin:0">
     <li><b>The buildable artifacts don't exist yet</b> — unified data model, double-entry posting catalog ("the heart of correctness", per your own docs), state machines, golden files, feature inventory. This is the #1 gap across everything.</li>
     <li><b>D9 migration &amp; rollout</b> — entirely undesigned; migration + training are the top-2 ERP failure causes (38% / 42%).</li>
-    <li><b>POS fallback architecture</b> — if Ten Software has no usable API, the "build our own minimal POS" fork is a huge latent scope jump treated casually in the meeting. Make it a conscious go/no-go with an August deadline.</li>
+    <li><b>POS fallback architecture</b> — <b>closed 26 Jul 2026.</b> The "build our own POS" fork was flagged here as a latent scope jump needing a conscious go/no-go. It was taken deliberately: KDPS builds its own counter, and the third-party route is dropped.</li>
     <li><b>GST mechanics under-specified</b> — discount-split-back-to-lines across mixed HSN slabs, GST on exchanges and the V-flip, SOR tax-invoice timing. Needs a dedicated CA-assisted pass.</li>
     <li><b>E-invoicing (IRN) + e-way bills</b> — statutory (you're &gt; ₹5cr PAN-wise) but deferred to "later" and owned by no module. IRN must be independent of the Tally path.</li>
     <li><b>Reversal/void into Tally</b> — exactly-once is designed only for the happy path; a corrected bill after the daily voucher pushed has no defined reversal.</li>
@@ -264,7 +264,7 @@
   <h3>D · Client must-haves not yet covered</h3>
   <div class="card"><ul style="margin:0">
     <li><b>Attendance &amp; Payroll (WAPCS)</b> — a named PRD must-have with no design folder and a hardware contradiction (a store device + face vs browser + GPS). Decide in/out explicitly; if in, it needs its own discussion.</li>
-    <li><b>POS / billing / loyalty</b> — the PRD assumed you'd build it; your later docs correctly rule it out of scope (Ten Software owns it). That's the right call — but flag the reversal to the client, don't drop it silently.</li>
+    <li><b>POS / billing / loyalty</b> — the PRD assumed you'd build it; the mid-2026 docs ruled it out of scope in favour of the incumbent counter software. <b>Reversed again on 26 Jul 2026: KDPS builds its own POS after all</b>, which lands back where the PRD started. Loyalty stays out. Flag both turns to the client rather than letting the record show only the latest.</li>
     <li><b>The CA-led facts</b> (e-invoicing applicability, SOR invoice vs challan, ledger structure) gate D6 vouchers, D4 P&amp;L and SOR booking at once — one conversation unblocks several modules. <em>(Entity count settled 26 Jun 2026: one PAN, two GSTINs, one Tally company.)</em></li>
   </ul></div>
 </section>
@@ -303,7 +303,7 @@
 
   <h3>The gate — finish these before slice&nbsp;#1</h3>
   <div class="card"><ol style="margin:0">
-    <li><b>Spike #1 — Ten Software POS API</b> (highest priority). Get docs + a sandbox. Two make-or-break answers: can it accept pending-inward qty per store, and export line-item sales? Pre-decide the "no" fallback + the build-own-POS go/no-go with an August deadline.</li>
+    <li><b>Spike #1 — dropped (26 Jul 2026).</b> This was the third-party POS API spike, and its whole purpose was to decide whether to fall back to building our own counter. That decision is made, so the spike is void. What replaces it is the selling slice itself. <span class="muted">Original text: get docs + a sandbox; can it accept pending-inward qty per store, and export line-item sales; pre-decide the "no" fallback + the build-own-POS go/no-go with an August deadline.</span></li>
     <li><b>Spike #2 — Tally via TaxOne.</b> Actually post a sales + a transfer voucher to their TallyPrime; confirm deterministic import (no AI re-interpretation) and idempotency. Generate one IRN + one e-way bill in sandbox.</li>
     <li><b>Spike #3 — Barcode tool.</b> Sample sticker + Code 128 generation + HID-mode scanning (not keyboard-wedge).</li>
     <li><b>The CA sitting</b> — e-invoicing applicability, SOR invoice vs challan, ledger structure <em>(entity count settled: one PAN / two GSTINs / one Tally company)</em>.</li>
@@ -319,7 +319,7 @@
     <div class="slice"><div class="snum">2</div><div><h4>Booking + order-vs-received tracking</h4><div class="d">Build first per the 21-Jun meeting (August = peak booking). Branded capture → AI draft → human confirm; status derived from GRNs. <b>Resolve the booking-price conflict in the spec first.</b></div></div></div>
     <div class="slice"><div class="snum">3</div><div><h4>Non-branded inbound — the AI PT maker</h4><div class="d">~99% of warehouse volume and the harder, AI-on-the-critical-path half. Invoice read → chat fill → editable PT → stock-in via the non-branded margin formula. Needs the per-category margin list.</div></div></div>
     <div class="slice"><div class="snum">4</div><div><h4>Payments spine</h4><div class="d">Payable accrual → eligibility gate → maker≠checker≠payer → manual pay (UTR) → bank-statement auto-close. <b>Vendor GSTIN/bank cleanup must precede this.</b></div></div></div>
-    <div class="slice gated"><div class="snum">5</div><div><h4>Outbound + the POS edge <span class="chip c-med">gated on Spike #1</span></h4><div class="d">"One machine, eight settings" behind a swappable POS adapter. <b>Fix the cross-state IGST bug here.</b> If no API → this triggers the build-own-POS fork.</div></div></div>
+    <div class="slice gated"><div class="snum">5</div><div><h4>Outbound + the POS edge <span class="chip c-med">no longer gated</span></h4><div class="d">"One machine, eight settings" behind the POS boundary. <b>Fix the cross-state IGST bug here.</b> The counter is KDPS-built (26 Jul 2026), so nothing here waits on an outside API.</div></div></div>
     <div class="slice"><div class="snum">6</div><div><h4>Offers engine</h4><div class="d">Rulebook (paste circular → AI draft → confirm), item-level stacking, bill-discount split back to lines (keeps cost/profit/GST correct), applied-vs-rulebook reconcile. Lock "which offer wins" first.</div></div></div>
     <div class="slice gated"><div class="snum">7</div><div><h4>Tally sync <span class="chip c-med">gated on Spike #2 + CA</span></h4><div class="d">Deterministic export → TaxOne, daily B2C voucher per store per rate, idempotent KDPS voucher numbers, daily tie-out queue.</div></div></div>
     <div class="slice"><div class="snum">8</div><div><h4>Analytics foundation + WhatsApp digest</h4><div class="d">The metrics layer (load-bearing for everything) → the 9pm exception digest → discount-leakage watchdog (zero ML, highest ROI). Defer forecasting until clean seasons exist. <b>Challenge the hold-back before building it.</b></div></div></div>

@@ -93,11 +93,11 @@
 <div class="tabpanel show" id="tab-design">
 
 <div class="callout co-dep" style="margin-top:4px">
-  <strong>D8 is designed — all 11 questions locked (21 Jun 2026).</strong> The master inventory (§2), the real-file grounding (§2b), the governance model (§3), the full edit-rights grid (§4), every per-master design (§5) and the common five-rule standard (§6) are complete. In short: <strong>hybrid stewardship</strong> (one HO data owner, delegated editing, a second eye on the dangerous four) · brand terms <strong>captured fresh per brand</strong> (model/margin/return-window, named steward, brand stays <em>draft</em> until validated), stored as a <strong>two-axis registry</strong> (ownership × return-terms + rolling-top-up) with the friendly label derived · season a <strong>governed house calendar</strong> (Open → EOSS → Closed) · identity = the <strong>SKU cohort</strong> (barcode is a non-unique scan-alias into it) · product attributes come from the <strong>PT Master Sheet</strong> (KDPS's existing product master, promoted into governed tables) · store master = <strong>firm geography + flexible store-groups</strong> · vendor = HO-edited with bank+GSTIN second-eye · taxonomy promoted + <strong>GST as date-effective HSN+price-band data</strong> · offers placed (best-for-customer precedence) · users = <strong>configurable RBAC, shape only</strong>. What remains is purely <strong>client facts (§7, CD1–CD9)</strong> — collected after the design is shown, never guessed. the masters are built <strong>POS-agnostic</strong> — both Ten Software and the KDPS-built POS sit behind one adapter (Q8), and no till quirk is baked into a master (scope note below).
+  <strong>D8 is designed — all 11 questions locked (21 Jun 2026).</strong> The master inventory (§2), the real-file grounding (§2b), the governance model (§3), the full edit-rights grid (§4), every per-master design (§5) and the common five-rule standard (§6) are complete. In short: <strong>hybrid stewardship</strong> (one HO data owner, delegated editing, a second eye on the dangerous four) · brand terms <strong>captured fresh per brand</strong> (model/margin/return-window, named steward, brand stays <em>draft</em> until validated), stored as a <strong>two-axis registry</strong> (ownership × return-terms + rolling-top-up) with the friendly label derived · season a <strong>governed house calendar</strong> (Open → EOSS → Closed) · identity = the <strong>SKU cohort</strong> (barcode is a non-unique scan-alias into it) · product attributes come from the <strong>PT Master Sheet</strong> (KDPS's existing product master, promoted into governed tables) · store master = <strong>firm geography + flexible store-groups</strong> · vendor = HO-edited with bank+GSTIN second-eye · taxonomy promoted + <strong>GST as date-effective HSN+price-band data</strong> · offers placed (best-for-customer precedence) · users = <strong>configurable RBAC, shape only</strong>. What remains is purely <strong>client facts (§7, CD1–CD9)</strong> — collected after the design is shown, never guessed. the masters are built <strong>POS-agnostic</strong> — the KDPS-built POS sits behind one boundary (Q8), and no till quirk is baked into a master (scope note below).
 </div>
 
 <div class="callout co-note">
-  <strong>Scope note — POS.</strong> D8 designs the <strong>pure, POS-agnostic system</strong>: KDPS owns the truth and is built so a better in-house, season-aware POS can take over later. <strong>The POS edge — both Ten Software and the KDPS-built POS, behind one swappable adapter (Q8) — is designed in D3/Outbound and the integration contracts, not in the masters</strong> — it's ~2 months away and unlikely (≈80%) to expose a usable API. So every master must stand on its own; any quirk of the current till is parked to the integration/rollout work, never designed into the masters. The POS requirements we sent the vendor confirm the direction: barcode is the shared key and KDPS may send its <em>own</em> barcodes, and the item master carries season.
+  <strong>Scope note — POS.</strong> D8 designs the <strong>pure, POS-agnostic system</strong>: KDPS owns the truth and is built so a better in-house, season-aware POS can take over later. <strong>The POS edge — the KDPS-built counter behind one boundary (Q8); the third-party route was dropped 26 Jul 2026 — is designed in D3/Outbound and the integration contracts, not in the masters</strong> — it's ~2 months away and unlikely (≈80%) to expose a usable API. So every master must stand on its own; any quirk of the current till is parked to the integration/rollout work, never designed into the masters. The POS requirements we sent the vendor confirm the direction: barcode is the shared key and KDPS may send its <em>own</em> barcodes, and the item master carries season.
 </div>
 
 <section id="idea">
@@ -120,7 +120,7 @@
 
 <section id="inventory">
   <h2 class="sec">2 · What D8 consolidates — the master inventory</h2>
-  <p class="lead">Every reference list born across the seven locked designs. "Interim owner" = who touches it today, before D8 makes it official. The last column is the D8 agenda.</p>
+  <p class="lead">Every reference list born across the locked designs, including the Customer master later born in D10. "Interim owner" = who touches it today, before D8 makes it official. The last column is the D8 agenda.</p>
   <table>
     <thead><tr><th>Master</th><th>What it holds</th><th>Born in</th><th>Interim owner today</th><th>What D8 must settle</th></tr></thead>
     <tbody>
@@ -144,6 +144,13 @@
         <td>D2 (consumed everywhere, never actually defined)</td>
         <td>Nobody owns the master</td>
         <td><strong>Define the master fields</strong>; store → GSTIN (D6 needs it for voucher routing); store-groups (D5 offers need them); who maintains it.</td>
+      </tr>
+      <tr>
+        <td><strong>Customer</strong></td>
+        <td>One all-KDPS row per normalised, digits-only mobile key: a 12-digit value beginning <code>91</code> loses that prefix; an 11-digit value beginning <code>0</code> loses that prefix; any other digits-only value up to 15 characters is retained rather than guessed at. The row carries the latest non-blank name and optional GSTIN. The counter reads it for its mobile/name typeahead and refreshes it after an accepted bill; bills keep name/mobile snapshots rather than a foreign key. There is <strong>no deletion channel</strong>.</td>
+        <td>D10 / billing-screen revamp (#242)</td>
+        <td>Built from accepted bills; no store-owned list</td>
+        <td>System-fed, all-KDPS lookup; corrections arrive through later accepted bills; retain every row and every bill snapshot.</td>
       </tr>
       <tr>
         <td><strong>SKU registry</strong></td>
@@ -248,6 +255,7 @@
       <tr><td><strong>Vendor &amp; agent</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO/buyer; not store-editable</span></td><td><span class="chip in">bank + GSTIN = 2nd-eye (D4/Q7)</span></td><td><span class="chip in">every edit: who+why (D1)</span></td><td><span class="chip in">yes — statutory+bank onto each doc (D1)</span></td></tr>
       <tr><td><strong>Brand &amp; terms</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">buyer; one card per brand per season</span></td><td><span class="chip in">yes — 2nd-eye approves each season's terms</span></td><td><span class="chip in">every edit: who+why (D1)</span></td><td><span class="chip in">yes — terms onto each booking (D1)</span></td></tr>
       <tr><td><strong>Store &amp; warehouse</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO; not store-editable</span></td><td><span class="chip in">no — state/GSTIN change handled carefully</span></td><td><span class="chip in">all edits logged</span></td><td><span class="chip in">yes — store + its GSTIN onto each doc</span></td></tr>
+      <tr><td><strong>Customer</strong></td><td><span class="chip in">system-fed, all KDPS</span></td><td><span class="chip in">accepted bills refresh name/GSTIN by mobile</span></td><td><span class="chip in">no — the bill must never wait</span></td><td><span class="chip in">accepted bill is the source; no deletion channel</span></td><td><span class="chip in">yes — name/mobile remain text on every bill</span></td></tr>
       <tr><td><strong>SKU registry</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">WH at PT (dropdowns); auto-dedup (D2)</span></td><td><span class="chip in">merge/correct = HO stewardship</span></td><td><span class="chip in">create/dedup at PT; merge/correct logged</span></td><td><span class="chip in">frozen at PT stock-in (D2)</span></td></tr>
       <tr><td><strong>Barcode registry</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">vendor / POS-generated (D2)</span></td><td><span class="chip in">n/a — frozen at stock-in</span></td><td><span class="chip in">creation logged; reuse → oldest cohort first (Q4)</span></td><td><span class="chip in">frozen at stock-in; key=barcode+season (D2)</span></td></tr>
       <tr><td><strong>Season</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">WH picks Open seasons; HO opens/closes</span></td><td><span class="chip in">no — single HO act, logged + impact summary</span></td><td><span class="chip in">open/close/correct all logged</span></td><td><span class="chip in">season stamped on PT + identity (D2)</span></td></tr>
@@ -268,6 +276,11 @@
     <p><strong>How it changes:</strong> opening a season for a brand copies last season's card forward as the starting point. The <strong>buyer</strong> adjusts it; a <strong>second person approves</strong> before it goes live (high-risk, Q1); within the season it's fixed. The commercial model rides forward unchanged unless deliberately changed.</p>
     <p><strong>Why it's safe &amp; scalable:</strong> every booking snapshots the live season card at creation (Rule 3), so past deals never move. The season <em>is</em> the version — margin-by-season reporting is natural and history is automatic. Finer per-date control could be layered on later without changing the model.</p>
     <p class="why">Owner = HO data owner · editor = buyer · approver = second person · every edit logged (who + why). Plugs into the season master (Q3): a season's terms card is created when that season is opened for the brand.</p>
+  </div>
+  <div class="card"><h4>Customer master <span class="badge b-locked">placed by D10 · 2 Aug 2026</span></h4>
+    <p><strong>Shape:</strong> one row per normalised, digits-only mobile key, carrying the latest non-blank name and an optional GSTIN. Normalisation strips a leading <code>91</code> only from a 12-digit value and a leading <code>0</code> only from an 11-digit value; other digit-only values up to 15 characters survive unchanged. Mobile is the key; the row is shared across all KDPS stores. Bills never point to it — they snapshot the customer's name and mobile as text, so a later correction cannot rewrite an old bill (Rule 3).</p>
+    <p><strong>How it lives:</strong> every till receives the names and numbers in its synced reference dataset for an instant, offline typeahead. After Save &amp; Print has committed a bill, the accept path creates or refreshes the row; that refresh is best-effort and can never refuse the bill. There is no hard-delete or customer deletion channel.</p>
+    <p class="why">Born in billing-screen revamp #242; read and fed by D10. Return mode searches the same master by mobile or name, then uses the store-scoped bill search to show that customer's past bills.</p>
   </div>
   <div class="card"><h4>Season master &amp; the open/close ritual <span class="badge b-locked">Q3 locked</span></h4>
     <p><strong>Shape:</strong> one KDPS <strong>house season calendar</strong>. Each season is a record in a fixed format (FAMILY + Mon-YY, system-derived, never free text) with a lifecycle state: <strong>Open → EOSS / markdown → Closed</strong>. A brand-season <strong>mapping table</strong> translates each brand's incoming label ("SS26", "Spring Summer 2020", a date, or blank) into the house season.</p>
@@ -548,7 +561,7 @@
   <div class="gq" id="q11">
     <div class="qh">Q11 · The common standard across all masters <span class="pill-status b-locked">LOCKED 21 Jun — five-rule standard adopted · D8 complete</span></div>
     <p>The synthesis of everything above into one set of rules every master obeys, so it doesn't get re-argued per master. Proposed standard (full text in §6):</p>
-    <div class="opt rec"><b>Adopt the five-rule standard.</b> (1) Audit who+why+when on every change, never hard-delete; (2) a second eye on the dangerous four (brand terms · GST · vendor bank+GSTIN · user roles); (3) documents snapshot the master at creation; (4) version only at the grain that matters (terms by season, GST by date, current-value+log elsewhere); (5) controlled vocabularies + one HO owner + stewardship merges with survivorship. <span class="why">It's the consistent skin over the nine masters — each per-master decision is just this applied. Lightweight where it can be, strict where money/tax/identity demand it.</span></div>
+    <div class="opt rec"><b>Adopt the five-rule standard.</b> (1) Audit who+why+when on every change, never hard-delete; (2) a second eye on the dangerous four (brand terms · GST · vendor bank+GSTIN · user roles); (3) documents snapshot the master at creation; (4) version only at the grain that matters (terms by season, GST by date, current-value+log elsewhere); (5) controlled vocabularies + one HO owner + stewardship merges with survivorship. <span class="why">It's the consistent skin over the ten masters — each per-master decision is just this applied. Lightweight where it can be, strict where money/tax/identity demand it.</span></div>
   </div>
 
 </section>
@@ -557,7 +570,7 @@
 
 <footer>
   KDPS · D8 Master Data &amp; Users · living design doc · started 21 Jun 2026.<br>
-  Consolidates registries born in D1 (vendor/brand), D2 (store/SKU/barcode/season/taxonomy), D4 (users/roles), D5 (offers), D6 (GST slab/voucher series) and D7 (supplier/brand crosswalk). Decisions here govern <em>ownership, edit rights, audit and snapshot</em> only — upstream module logic stays locked.
+  Consolidates registries born in D1 (vendor/brand), D2 (store/SKU/barcode/season/taxonomy), D4 (users/roles), D5 (offers), D6 (GST slab/voucher series), D7 (supplier/brand crosswalk), and D10 (Customer). Decisions here govern <em>ownership, edit rights, audit and snapshot</em> only — upstream module logic stays locked.
 </footer>
 
 <script>

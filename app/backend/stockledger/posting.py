@@ -8,6 +8,9 @@ uploads keep RAN-WH) and:
   * **values stock at P RATE** — the locked unit cost frozen at the PT, never the
     ex-GST BASIC — and refuses any row where P RATE > MRP or the cost is unreadable
     (strict money: a bad cell blocks the post, it never silently values at ₹0),
+  * applies the same strictness to **quantity**: an unreadable NAG/QTY blocks the
+    post rather than becoming a silent 0 that drops the line from stock; a genuinely
+    blank quantity is skipped, and the post reports how many rows that was,
   * posts a **balanced** value voucher via `core.post_entries`, branching by the
     booking's commercial model (Rule 3 snapshot):
         - Outright / Correction (KDPS-owned) → Dr INVENTORY / Cr VENDOR_PAYABLE,
@@ -38,13 +41,19 @@ from stockledger.models import StockLedgerEntry, StockOnHand
 WAREHOUSE_CODE = "RAN-WH"
 DOC_TYPE = "PT"
 OWNED = Brand.Ownership.OWNED
+# What `StockLedgerEntry.qty` (a Postgres integer column) can actually hold. A bigger
+# number is a bad cell, not a quantity, and must be refused before a voucher is minted
+# rather than blowing up as a database error afterwards.
+MAX_LEDGER_QTY = 2_147_483_647
 
 
 class PtPostingError(Exception):
-    """A PT file cannot be posted as-is (unreadable/missing cost, or P RATE > MRP).
+    """A PT file cannot be posted as-is (unreadable/missing cost, P RATE > MRP, or an
+    unreadable quantity).
 
     Surfaced to the API as a 422 listing the offending rows — the warehouse fixes
-    the data and re-sends, rather than the engine silently valuing stock at zero.
+    the data and re-sends, rather than the engine silently valuing stock at zero or
+    silently dropping the line for a quantity it could not read.
     """
 
 
@@ -55,10 +64,17 @@ def financial_year(d: date) -> str:
 
 
 def _decimal(value) -> Decimal | None:
-    """Strict rupee cell → Decimal (None if blank). Raises on garbage — no silent 0."""
+    """Strict rupee cell → Decimal (None if blank). Raises on garbage — no silent 0.
+
+    `inf`/`nan` parse cleanly into a Decimal but poison every comparison and gross-up
+    downstream (`cost > inf` is False, so an infinite MRP would pass the P RATE ≤ MRP
+    gate and then blow up converting to paise), so they count as garbage too."""
     if value in (None, ""):
         return None
-    return Decimal(str(value).replace(",", "").strip())
+    amount = Decimal(str(value).replace(",", "").strip())
+    if not amount.is_finite():
+        raise InvalidOperation(f"non-finite amount: {value!r}")
+    return amount
 
 
 def _rupees_to_paise(amount: Decimal) -> int:
@@ -84,15 +100,42 @@ def _unit_cost_paise(data: dict, line_no: int) -> int:
     return _rupees_to_paise(cost)
 
 
-def _row_qty(data: dict) -> int:
+def _row_qty(data: dict, line_no: int) -> int:
+    """Quantity from NAG, falling back to QTY. A blank cell means "no quantity here"
+    and yields 0 - the caller skips such a row and counts it.
+
+    A cell that *has* a value the ledger cannot take raises: strict money on the
+    quantity axis, the same rule the cost side already follows. It must never become
+    a silent 0 that drops the line from the stock ledger. Unreadable means garbage
+    text, but also a negative (a PT brings goods in), a fraction (stock moves in whole
+    pieces) and anything too large for the ledger's own quantity column - each of
+    those otherwise ends as a dropped or truncated line nobody is told about."""
+    unreadable: list[str] = []
     for key in ("NAG", "QTY"):
-        v = data.get(key)
-        if v in (None, ""):
+        raw = data.get(key)
+        text = str(raw if raw is not None else "").replace(",", "").strip()
+        if not text:  # blank / whitespace-only cell - genuinely no quantity
             continue
         try:
-            return int(Decimal(str(v)))
-        except (InvalidOperation, ValueError):
+            qty = Decimal(text)
+        except (ArithmeticError, ValueError):
+            unreadable.append(f"{key} = {raw!r}")
             continue
+        # `inf` is integral by `to_integral_value`, so it needs its own guard.
+        if not qty.is_finite() or qty != qty.to_integral_value():
+            unreadable.append(f"{key} = {raw!r}")
+            continue
+        if qty < 0 or qty > MAX_LEDGER_QTY:
+            unreadable.append(f"{key} = {raw!r} (out of range)")
+            continue
+        if qty > 0:
+            return int(qty)  # a real quantity - it settles the row
+        if not unreadable:
+            return 0  # a clean explicit zero and nothing dubious seen: a filler row
+        # An explicit zero cannot vouch for a cell we already failed to read, so keep
+        # looking for a real quantity and fall through to the raise if there is none.
+    if unreadable:
+        raise PtPostingError(f"row {line_no}: unreadable quantity cell ({', '.join(unreadable)})")
     return 0
 
 
@@ -135,24 +178,39 @@ def _stock_entry_from_pt_row(
 
 def _build_inward_entries(
     pt, store: Store, number: str, user, booking=None
-) -> list[StockLedgerEntry]:
+) -> tuple[list[StockLedgerEntry], int]:
     """Value every positive-qty row at P RATE; raise (blocking the whole post) if any
-    row has an unreadable/missing cost or P RATE > MRP."""
+    row has an unreadable quantity, an unreadable/missing cost, or P RATE > MRP - every
+    bad row listed at once, so the warehouse fixes the file in one pass.
+
+    Returns the entries plus the number of rows skipped for having no quantity at all
+    (blank/zero filler and summary rows). That count is reported by the post so the
+    drop is visible, never silent."""
     entries: list[StockLedgerEntry] = []
     issues: list[str] = []
+    skipped = 0
     for row in pt.rows.all():
-        qty = _row_qty(row.data)
-        if qty <= 0:
+        qty: int | None = None
+        try:
+            qty = _row_qty(row.data, row.line_no)
+        except PtPostingError as exc:
+            issues.append(str(exc))
+        if qty == 0:  # filler / summary line - no quantity to stock
+            skipped += 1
             continue
+        # Price the row even when its quantity was unreadable, so one 422 carries
+        # every defect in the file instead of one defect per re-send.
         try:
             unit_paise = _unit_cost_paise(row.data, row.line_no)
         except PtPostingError as exc:
             issues.append(str(exc))
             continue
+        if qty is None:  # quantity defect already recorded - nothing postable here
+            continue
         entries.append(_stock_entry_from_pt_row(row, store, number, unit_paise, qty, user, booking))
     if issues:
         raise PtPostingError("Cannot post — fix these rows first:\n" + "\n".join(issues))
-    return entries
+    return entries, skipped
 
 
 def _model_label(booking) -> str:
@@ -193,14 +251,18 @@ def _post_value_gl(pt, store: Store, number: str, booking, total_value_paise: in
     return True
 
 
-def _reconcile(booking, pt, sign: int) -> int:
-    """Bump (+1) or un-bump (−1) booking line `inwarded_qty` by matched PT qty."""
+def _reconcile(booking, entries: list[StockLedgerEntry], sign: int) -> int:
+    """Bump (+1) or un-bump (−1) booking line `inwarded_qty` by matched PT qty.
+
+    Driven by the stock rows themselves, never by re-reading the PT file: what the
+    booking got credited with is what the ledger actually took in, so a reversal
+    un-bumps exactly that - and a correction never depends on the source file still
+    parsing the way it did on the day it posted."""
     agg: dict[tuple[str, str], int] = defaultdict(int)
-    for row in pt.rows.all():
-        qty = _row_qty(row.data)
-        if qty <= 0:
+    for entry in entries:
+        if entry.qty <= 0:
             continue
-        agg[(_norm(row.data.get("DESIGN")), _norm(row.data.get("SIZE")))] += qty
+        agg[(_norm(entry.design), _norm(entry.size))] += entry.qty
     touched = 0
     for line in booking.lines.all():
         matched = agg.get((_norm(line.style_code), _norm(line.size)), 0)
@@ -254,21 +316,19 @@ def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
 def _register_identity(pt, number: str) -> None:
     """Upsert the SKU master + the (barcode, season) cohort for every valued row,
     persisting the locked per-unit cost (the queryable identity spine, ADR Phase F).
-    Costs are already P RATE-validated by `_build_inward_entries`; the cohort's DB
-    CHECK (`unit_cost ≤ mrp`) is defence-in-depth."""
+    Quantities and costs were already validated by `_build_inward_entries`, so every
+    row here re-parses cleanly - anything that didn't blocked the post long before
+    this point. The cohort's DB CHECK (`unit_cost ≤ mrp`) is defence-in-depth."""
     for row in pt.rows.all():
         data = row.data
-        qty = _row_qty(data)
+        qty = _row_qty(data, row.line_no)
         if qty <= 0:
             continue
         barcode = str(data.get("BARCODE") or "")[:64]
         if not barcode:
             continue
-        try:
-            unit_paise = _unit_cost_paise(data, row.line_no)
-            mrp = _decimal(data.get("MRP"))
-        except (PtPostingError, InvalidOperation, ValueError, ArithmeticError):
-            continue
+        unit_paise = _unit_cost_paise(data, row.line_no)
+        mrp = _decimal(data.get("MRP"))
         mrp_paise = _rupees_to_paise(mrp) if (mrp is not None and mrp > 0) else None
         sku, _ = Sku.objects.update_or_create(
             barcode=barcode,
@@ -304,7 +364,7 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     the stock-ledger + value-GL entries and lock the file (SUBMITTED).
 
     Raises `PtPostingError` (rolling back everything, incl. the minted number) if any
-    row cannot be valued.
+    row cannot be valued or its quantity cannot be read.
     """
     from django.utils import timezone
 
@@ -325,10 +385,10 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     pt.post()
     number = pt.doc_number
 
-    entries = _build_inward_entries(pt, store, number, user, booking)
+    entries, skipped_rows = _build_inward_entries(pt, store, number, user, booking)
     StockLedgerEntry.objects.bulk_create(entries)
     _apply_on_hand(entries)
-    reconciled = _reconcile(booking, pt, sign=1) if booking is not None else 0
+    reconciled = _reconcile(booking, entries, sign=1) if booking is not None else 0
     total_value = sum(e.amount for e in entries)
     _post_value_gl(pt, store, number, booking, total_value, user)
     vendor_bill = post_pt_vendor_bill(pt, booking, total_value, user)
@@ -336,6 +396,10 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     return {
         "doc_number": number,
         "entries": len(entries),
+        # Rows carrying no quantity at all (blank/zero filler and summary lines). They
+        # are legitimately not stock, but the number is reported so nobody has to
+        # discover the drop from a physical count months later.
+        "skipped_rows": skipped_rows,
         "reconciled_lines": reconciled,
         "commercial_model": _model_label(booking),
         "stock_value_paise": total_value,
@@ -422,7 +486,7 @@ def reverse_pt_inward(pt, user) -> dict:
     _apply_on_hand(reversals)
     _reverse_value_gl(pt.doc_number, number, store, user)
     if pt.booking_id:
-        _reconcile(pt.booking, pt, sign=-1)
+        _reconcile(pt.booking, originals, sign=-1)
     vendor_reversed = reverse_pt_vendor_bills(pt, user)
     pt.cancel()  # SUBMITTED → CANCELLED; the file is frozen forever
     return {"doc_number": number, "entries": len(reversals), "vendor_reversed": vendor_reversed}

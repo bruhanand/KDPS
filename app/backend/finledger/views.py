@@ -9,12 +9,15 @@ from django.db.models import Count, Sum
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section, user_can
+from accounts.sections import CAP_MANAGE
 from core.money import paise_to_rupees_str
+from core.textsearch import search_term, text_filter
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from finledger.posting import (
     AlreadyReversedError,
@@ -28,20 +31,21 @@ from finledger.posting import (
 from finledger.serializers import CashLedgerEntrySerializer, VendorLedgerEntrySerializer
 from vendors.models import Vendor
 
-FINANCE_ROLES = {"accounts", "owner", "it_admin"}
+# Vendor/cash payables, balances and ageing are the books (ADR-0003) — gated by
+# the SIDEBAR RBAC contract, not by a hand-kept role list. `money: manage` is the
+# rung only Owner and Accounts hold: a store person or warehouse operator holds
+# `money: operate` ("Expenses only"), which creates an expense but never opens
+# the books, and Admin holds `none` (Sheet-1 note 2 — deliberately no Money).
+#
+# It was a role list until #87 browser-testing found `it_admin` sitting in it, so
+# the sidebar hid Money from Admin while this API still served vendor payables.
+# Reading the same `Role.section_access` the sidebar reads is what keeps the two
+# from drifting again — and retuning it stays data, never a release (Rule 12).
+IsBooksKeeper = require_section("money", CAP_MANAGE)
 
 
-def _is_finance(user: Any) -> bool:
-    return getattr(getattr(user, "role", None), "code", "") in FINANCE_ROLES
-
-
-class IsFinance(BasePermission):
-    """Vendor/cash payables, balances and ageing are finance-only data (ADR-0003)."""
-
-    message = "Finance role required."
-
-    def has_permission(self, request: Request, view: Any) -> bool:
-        return bool(request.user and request.user.is_authenticated and _is_finance(request.user))
+def _keeps_books(user: Any) -> bool:
+    return user_can(user, "money", CAP_MANAGE)
 
 
 class LedgerPagination(PageNumberPagination):
@@ -53,8 +57,12 @@ class LedgerPagination(PageNumberPagination):
 # --- Vendor ledger ---------------------------------------------------------
 
 
+#: Vendor Ledger (#106) — the document number and the party (the vendor).
+VENDOR_ENTRY_SEARCH_FIELDS = ("doc_number", "vendor__name", "vendor__code")
+
+
 class VendorEntriesView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = VendorLedgerEntrySerializer
     pagination_class = LedgerPagination
 
@@ -63,11 +71,12 @@ class VendorEntriesView(generics.ListAPIView):
         vendor = self.request.query_params.get("vendor")
         if vendor:
             qs = qs.filter(vendor_id=vendor)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), VENDOR_ENTRY_SEARCH_FIELDS)
 
 
 class VendorBalancesView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def get(self, request: Request) -> Response:
         rows = (
@@ -135,7 +144,7 @@ def _open_vendor_lots(entries: list[VendorLedgerEntry]) -> list[dict[str, Any]]:
 
 
 class VendorAgeingView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def get(self, request: Request) -> Response:
         grouped: dict[int, list[VendorLedgerEntry]] = defaultdict(list)
@@ -198,10 +207,10 @@ class VendorAgeingView(APIView):
 
 
 class VendorBillView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def post(self, request: Request) -> Response:
-        if not _is_finance(request.user):
+        if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
         vendor = Vendor.objects.filter(pk=request.data.get("vendor_id")).first()
         if not vendor:
@@ -220,10 +229,10 @@ class VendorBillView(APIView):
 
 
 class VendorPaymentView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def post(self, request: Request) -> Response:
-        if not _is_finance(request.user):
+        if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
         vendor = Vendor.objects.filter(pk=request.data.get("vendor_id")).first()
         if not vendor:
@@ -244,10 +253,10 @@ class VendorPaymentView(APIView):
 
 
 class VendorReverseView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def post(self, request: Request, pk: int) -> Response:
-        if not _is_finance(request.user):
+        if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
         entry = VendorLedgerEntry.objects.filter(pk=pk).first()
         if not entry:
@@ -262,8 +271,13 @@ class VendorReverseView(APIView):
 # --- Cash ledger -----------------------------------------------------------
 
 
+#: Cash Ledger (#106) — the document number and the party (a cash-out that pays
+#: a vendor carries one; a plain expense doesn't, and the description covers it).
+CASH_ENTRY_SEARCH_FIELDS = ("doc_number", "description", "vendor__name")
+
+
 class CashEntriesView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = CashLedgerEntrySerializer
     pagination_class = LedgerPagination
 
@@ -272,11 +286,12 @@ class CashEntriesView(generics.ListAPIView):
         account = self.request.query_params.get("account")
         if account:
             qs = qs.filter(account=account)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), CASH_ENTRY_SEARCH_FIELDS)
 
 
 class CashSummaryView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def get(self, request: Request) -> Response:
         rows = (
@@ -307,10 +322,10 @@ class CashSummaryView(APIView):
 
 
 class CashMovementView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def post(self, request: Request) -> Response:
-        if not _is_finance(request.user):
+        if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
         direction = request.data.get("direction")
         if direction not in ("in", "out"):
@@ -330,10 +345,10 @@ class CashMovementView(APIView):
 
 
 class CashReverseView(APIView):
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def post(self, request: Request, pk: int) -> Response:
-        if not _is_finance(request.user):
+        if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
         entry = CashLedgerEntry.objects.filter(pk=pk).first()
         if not entry:

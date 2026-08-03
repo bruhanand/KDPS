@@ -56,3 +56,22 @@ __pycache__/
 # --- Local Postgres data dir (never commit) ---
 .pgdata/
 .gstack/
+invoice/
+
+# design-sync (Claude Design import)
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+
+# TypeScript incremental build cache (tsc -b).
+*.tsbuildinfo
+
+# graphify's code graph — rebuilt from the AST in ~10s (sandbox-setup.sh does it
+# per sandbox), so it is derived data, never source. Matches both app/graphify-out
+# and the root symlink the sandbox creates so `graphify`'s default path resolves.
+graphify-out
+
+
+sandcastle-demo/

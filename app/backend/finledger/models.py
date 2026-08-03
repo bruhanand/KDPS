@@ -66,7 +66,22 @@ class CashLedgerEntry(LedgerEntry):
         PAYMENT = "payment", "Payment (cash out)"
         REVERSAL = "reversal", "Reversal"
 
-    account = models.CharField(max_length=24, default="CASH")  # CASH / BANK / UPI …
+    class Account(models.TextChoices):
+        """Where the money physically is - which is not the same as whether we hold it.
+
+        Card and UPI are the counter's two "paid but not settled" buckets: the
+        customer has handed the money over and the bank has not passed it on, so
+        they roll up into their own value-GL clearing accounts rather than into
+        CASH. `finledger.posting.CASH_CONTROL_ACCOUNTS` is that mapping, and the
+        books-health tie is checked against it per account.
+        """
+
+        CASH = "CASH", "Cash drawer"
+        BANK = "BANK", "Bank"
+        CARD = "CARD", "Card, awaiting settlement"
+        UPI = "UPI", "UPI, awaiting settlement"
+
+    account = models.CharField(max_length=24, choices=Account.choices, default=Account.CASH)
     kind = models.CharField(max_length=12, choices=Kind.choices)
     doc_number = models.CharField(max_length=128, db_index=True)
     description = models.CharField(max_length=240, blank=True, default="")

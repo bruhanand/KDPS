@@ -1,0 +1,366 @@
+// Finding the bill a piece was bought on (#184, D10 step 5).
+//
+// **Local first, server when online**, and the order is not an optimisation.
+// A bill the counter rang up ten minutes ago may still be in the queue - the line
+// went down, or it simply has not drained yet - and the server cannot answer
+// about it at all. That is the commonest exchange there is: the customer walks
+// back in with the wrong size. So the counter's own queue is asked first, and
+// only then head office.
+//
+// The two answers differ in where they came from, but both can back the same new
+// Sale: the accept pipeline resolves an unsynced original once the queue drains
+// in order, while a synced bill can be checked immediately.
+//
+// Everything a returned line is worth is read off the bill rather than off the
+// price list: what comes back is what was paid (D2), which is a fact about that
+// bill and about no other.
+
+import type { ApiSchemas } from "../lib/api";
+import type { TillDb } from "./db";
+import type { Exchange, ExchangeOriginal, OriginalLine } from "./exchange";
+import { searchCustomers } from "./lookup";
+import type { QueuedBill, TillItem, TillKnownCustomer } from "./types";
+
+/** A bill found, and where it was found. */
+export interface FoundBill {
+  original: ExchangeOriginal;
+  lines: OriginalLine[];
+  billed_at: string;
+  customer_name: string;
+  customer_mobile: string;
+  /** The Sale's own authoritative net, including any exchange it originally
+   * carried. Never reconstructed from the filtered returnable lines. */
+  net_paise: number;
+  /** True when this bill is still in the counter's own queue. */
+  local: boolean;
+}
+
+/** How a bill is asked for: the sequence number off the printed slip. */
+export function billSeqFrom(typed: string): number | null {
+  const trimmed = typed.trim();
+  if (!trimmed) return null;
+  // A person reads "74" off the slip as often as the whole key, and the whole key
+  // ends in the same number - so the last run of digits is what they mean either
+  // way. `26-27/DEO/SAL/74` and `74` are the same question.
+  const digits = trimmed.match(/(\d+)\s*$/);
+  const seq = digits ? Number(digits[1]) : NaN;
+  return Number.isInteger(seq) && seq > 0 ? seq : null;
+}
+
+/**
+ * The bill this counter numbered `seq` and has not yet sent, or null.
+ *
+ * Read out of the queue, which is the only copy of it that exists anywhere.
+ * `returned_qty` is worked out from the other bills in the same queue: an
+ * exchange against this one, rung up while both were still local, is a piece
+ * already given back and the counter must not offer it twice.
+ */
+export async function findQueuedBill(
+  db: TillDb,
+  fy: string,
+  seq: number,
+): Promise<FoundBill | null> {
+  const queue = await db.queue.orderBy("id").toArray();
+  const bill = queue.find((row) => row.fy === fy && row.till_seq === seq);
+  if (!bill) return null;
+  const given = alreadyGivenBack(queue, fy, seq);
+  const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** A queued bill by the exact document number encoded in its receipt barcode.
+ * Kept separate from the sequence lookup because configured voucher-series
+ * suffixes need not end in digits. */
+export async function findQueuedBillByDoc(
+  db: TillDb,
+  docNumber: string,
+): Promise<FoundBill | null> {
+  const wanted = docNumber.trim().toLocaleLowerCase();
+  if (!wanted) return null;
+  const queue = await db.queue.orderBy("id").toArray();
+  const bill = queue.find((row) => row.doc_number.toLocaleLowerCase() === wanted);
+  if (!bill) return null;
+  const given = alreadyGivenBack(queue, bill.fy, bill.till_seq);
+  const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** Unsynced bills whose snapshotted customer matches the third find-bill door.
+ * This is deliberately local even while online: the bill rung up five minutes
+ * ago may not exist at head office yet. */
+export async function searchQueuedBillsByCustomer(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+): Promise<FoundBill[]> {
+  const query = key === "mobile" ? digitsOf(term) : term.trim().toLocaleLowerCase();
+  if (!query) return [];
+  const queue = await db.queue.orderBy("id").reverse().toArray();
+  const items = await db.items.toArray();
+  return queue
+    .filter((bill) => {
+      const value =
+        key === "mobile"
+          ? digitsOf(bill.customer?.mobile ?? "")
+          : (bill.customer?.name ?? "").toLocaleLowerCase();
+      return value.includes(query);
+    })
+    .map((bill) => fromQueued(bill, alreadyGivenBack(queue, bill.fy, bill.till_seq), items));
+}
+
+/** Matching people from the all-KDPS customer master. Mobile uses its index;
+ * name is the rarer deliberate scan, capped before it can become a result dump. */
+export async function searchKnownCustomers(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+  limit = 8,
+): Promise<TillKnownCustomer[]> {
+  if (key === "mobile") return searchCustomers(db, term, limit);
+  const wanted = term.trim().toLocaleLowerCase();
+  if (wanted.length < 2) return [];
+  try {
+    return await db.customers
+      .filter((row) => row.name.toLocaleLowerCase().includes(wanted))
+      .limit(limit)
+      .toArray();
+  } catch {
+    return [];
+  }
+}
+
+/** A picked master row identifies a person by mobile. Names are deliberately
+ * not reused for the history request: two customers can share one, and the
+ * server's bounded fuzzy-name search cannot promise which one's bills fit. */
+export function billSearchForCustomer(customer: TillKnownCustomer): {
+  key: "mobile";
+  term: string;
+} {
+  return { key: "mobile", term: customer.mobile };
+}
+
+function digitsOf(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function fromQueued(
+  bill: QueuedBill,
+  given: Map<number, { qty: number; paise: number }>,
+  items: TillItem[],
+): FoundBill {
+  return {
+    original: { fy: bill.fy, till_seq: bill.till_seq, doc_number: bill.doc_number },
+    billed_at: bill.billed_at,
+    customer_name: bill.customer?.name ?? "",
+    customer_mobile: bill.customer?.mobile ?? "",
+    net_paise: bill.totals.net_paise,
+    local: true,
+    lines: bill.lines
+      .filter((line) => line.direction !== "return")
+      .map((line) => {
+        const back = given.get(line.line_no) ?? { qty: 0, paise: 0 };
+        const piece = items.find(
+          (row) => row.barcode === line.barcode && row.season === (line.season ?? ""),
+        );
+        return {
+          line_no: line.line_no,
+          barcode: line.barcode,
+          season: line.season ?? "",
+          ...describedBy(piece),
+          qty: line.qty,
+          net_paise: line.net_paise,
+          gst_rate: line.gst_rate,
+          gst_paise: line.gst_paise,
+          manual_desc: line.manual_desc ?? "",
+          direction: "sale",
+          returned_qty: back.qty,
+          returned_paise: back.paise,
+        };
+      }),
+  };
+}
+
+/** What every other bill still in this queue has already given back off `seq`. */
+function alreadyGivenBack(
+  queue: QueuedBill[],
+  fy: string,
+  seq: number,
+): Map<number, { qty: number; paise: number }> {
+  const given = new Map<number, { qty: number; paise: number }>();
+  for (const bill of queue) {
+    const exchange = bill.exchange;
+    if (exchange?.original.fy !== fy || exchange.original.till_seq !== seq) continue;
+    for (const leg of exchange.lines) {
+      const seen = given.get(leg.original_line) ?? { qty: 0, paise: 0 };
+      given.set(leg.original_line, {
+        qty: seen.qty + leg.qty,
+        paise: seen.paise + leg.refund_paise,
+      });
+    }
+  }
+  return given;
+}
+
+/** The seven merchandising words for a piece the counter still stocks - or
+ *  blanks, which `describeOriginal` falls back through to the typed description
+ *  and then to the barcode. */
+function describedBy(piece: TillItem | undefined) {
+  return {
+    design: piece?.design ?? "",
+    color: piece?.color ?? "",
+    size: piece?.size ?? "",
+    brand: piece?.brand ?? "",
+    item: piece?.item ?? "",
+    hsn: piece?.hsn ?? "",
+  };
+}
+
+/** The read shape of `GET /api/sell/sales/{doc_number}`, generated from the
+ * server serializer through the OpenAPI seam (ADR-0001). */
+export type SaleDetail = ApiSchemas["SaleRead"];
+
+function requiredPaise(value: number | undefined, field: string): number {
+  if (value === undefined) throw new Error(`Head office omitted ${field} from the bill.`);
+  return value;
+}
+
+/** A bill head office holds, in the same shape as a queued one. */
+export function fromServer(detail: SaleDetail): FoundBill {
+  return {
+    original: {
+      fy: detail.fy,
+      till_seq: detail.till_seq,
+      doc_number: detail.doc_number ?? "",
+    },
+    billed_at: detail.billed_at,
+    customer_name: detail.customer_name ?? "",
+    customer_mobile: detail.customer_mobile ?? "",
+    net_paise: requiredPaise(detail.net_paise, "net_paise"),
+    local: false,
+    // A bill's own exchange legs are lines too, and they are not returnable -
+    // they are pieces that already came back.
+    lines: detail.lines
+      .filter((line) => line.direction !== "return")
+      .map((line) => ({
+        line_no: line.line_no,
+        barcode: line.barcode,
+        season: line.season ?? "",
+        design: line.design ?? "",
+        color: line.color ?? "",
+        size: line.size ?? "",
+        brand: line.brand ?? "",
+        item: line.item ?? "",
+        hsn: line.hsn ?? "",
+        qty: line.qty,
+        net_paise: requiredPaise(line.net_paise, `line ${line.line_no} net_paise`),
+        gst_rate: line.gst_rate ?? "0.00",
+        gst_paise: requiredPaise(line.gst_paise, `line ${line.line_no} gst_paise`),
+        manual_desc: line.manual_desc ?? "",
+        direction: line.direction ?? "sale",
+        returned_qty: line.returned_qty,
+        returned_paise: line.returned_paise,
+      })),
+  };
+}
+
+/** Include return legs that this till has committed but head office has not yet
+ * accepted. Without them a server bill can offer the same piece twice. */
+export async function withQueuedReturns(db: TillDb, found: FoundBill): Promise<FoundBill> {
+  const queue = await db.queue.orderBy("id").toArray();
+  const pending = alreadyGivenBack(queue, found.original.fy, found.original.till_seq);
+  if (!pending.size) return found;
+  return {
+    ...found,
+    lines: found.lines.map((line) => {
+      const back = pending.get(line.line_no);
+      return back
+        ? {
+            ...line,
+            returned_qty: Math.min(line.qty, line.returned_qty + back.qty),
+            returned_paise: Math.min(line.net_paise, line.returned_paise + back.paise),
+          }
+        : line;
+    }),
+  };
+}
+
+/** The against-bill card persisted inside a direct-cart exchange, if this draft
+ * was written by a build new enough to carry it. */
+export function foundFromExchange(exchange: Exchange | null): FoundBill | null {
+  const bill = exchange?.original_bill;
+  if (!exchange || !bill) return null;
+  return { original: exchange.original, ...bill };
+}
+
+// ── Recent-bills helpers (for the three return-start doors) ──────────────────
+//
+// These are pure convenience over the existing queue and search paths - no new
+// contract, no new server endpoint required for local bills. The server `?recent=N`
+// query is fetched by the caller (Billing.tsx) and passed in as `server` rows.
+
+/** A thin summary of a bill: enough for the recent-bills pick list without
+ *  fetching or loading any line detail. */
+export interface RecentBillSummary {
+  doc_number: string;
+  billed_at: string;
+  customer_name: string;
+  customer_mobile: string;
+  net_paise: number;
+  local: FoundBill | null;
+}
+
+/** Up to `limit` (default 3) most-recent bills from this counter's own queue,
+ *  newest-first, as pick-list summaries.
+ *
+ *  Local first and always: a bill the counter rang up ten minutes ago may still
+ *  be in the queue, and the server cannot answer about it at all. This is the
+ *  same local-first principle that governs `findQueuedBill`. */
+export async function recentQueuedBills(db: TillDb, limit = 3): Promise<RecentBillSummary[]> {
+  const queue = await db.queue.orderBy("id").reverse().toArray();
+  const items = await db.items.toArray();
+  return queue.slice(0, limit).map((bill) => {
+    const given = alreadyGivenBack(queue, bill.fy, bill.till_seq);
+    const full = fromQueued(bill, given, items);
+    return {
+      doc_number: bill.doc_number,
+      billed_at: bill.billed_at,
+      customer_name: bill.customer?.name ?? "",
+      customer_mobile: bill.customer?.mobile ?? "",
+      net_paise: bill.totals.net_paise,
+      local: full,
+    };
+  });
+}
+
+/** Merge a local-queue list and a server list of recent-bill summaries.
+ *  Deduplicates by `doc_number` (local wins), sorts newest-first, returns at
+ *  most `limit` rows.
+ *
+ *  A bill the counter has not yet synced appears on both sides: the queue copy
+ *  wins so the caller never has to wait for an extra server round-trip. */
+export function mergeRecentBills(
+  local: RecentBillSummary[],
+  server: RecentBillSummary[],
+  limit = 3,
+): RecentBillSummary[] {
+  const seen = new Set(local.map((b) => b.doc_number));
+  const merged = [
+    ...local,
+    ...server.filter((b) => !seen.has(b.doc_number)),
+  ];
+  merged.sort((a, b) => b.billed_at.localeCompare(a.billed_at));
+  return merged.slice(0, limit);
+}
+
+/** Resolve a recent-bill summary to a full `FoundBill`.
+ *
+ *  If the summary carries a `local` copy (queue bill), it is returned directly.
+ *  Otherwise, `GET /api/sell/sales/{doc_number}` is fetched and converted by
+ *  `fromServer` — identical path to the existing bill-search flow. */
+export async function resolveRecentMatch(summary: RecentBillSummary): Promise<FoundBill> {
+  if (summary.local) return summary.local;
+  const res = await fetch(`/api/sell/sales/${encodeURIComponent(summary.doc_number)}`);
+  if (!res.ok) throw new Error(`Head office returned ${res.status} for ${summary.doc_number}`);
+  const detail: SaleDetail = await res.json();
+  return fromServer(detail);
+}

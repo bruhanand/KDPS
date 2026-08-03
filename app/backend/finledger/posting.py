@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from django.db import transaction
 
@@ -30,6 +31,32 @@ from masters.models import Brand
 HO_CODE = "HO"
 VENDOR_DOC = "VEND"
 CASH_DOC = "CASH"
+
+#: Which value-GL control account each cash-ledger account rolls up into.
+#:
+#: Cash and bank share one control account because the GL does not split them yet;
+#: card and UPI have their own, because the customer has paid and the bank has not
+#: settled, and the gap between the two is what the daily settlement reconciliation
+#: is for. One map, used by everything that writes a cash row *and* by the
+#: books-health tie - so the F1 reconciliation can be checked account by account
+#: instead of as one lump total that a mis-file inside the family would hide.
+CASH_CONTROL_ACCOUNTS: dict[str, str] = {
+    CashLedgerEntry.Account.CASH: GLAccount.CASH,
+    CashLedgerEntry.Account.BANK: GLAccount.CASH,
+    CashLedgerEntry.Account.CARD: GLAccount.CARD_CLEARING,
+    CashLedgerEntry.Account.UPI: GLAccount.UPI_CLEARING,
+}
+
+
+def gl_control_for(account: str) -> str:
+    """The value account a cash-ledger account answers to.
+
+    An account nobody has mapped answers to CASH, which is where every cash row
+    went before this map existed - a row that fell through would otherwise have no
+    control account at all and would break the tie rather than merely be filed
+    coarsely.
+    """
+    return CASH_CONTROL_ACCOUNTS.get(account, GLAccount.CASH)
 
 
 class AlreadyReversedError(Exception):
@@ -59,7 +86,7 @@ def _allocate(doc_type: str) -> str:
     return number
 
 
-def _user(user):
+def _user(user: Any) -> Any:
     return user if getattr(user, "is_authenticated", False) else None
 
 
@@ -189,7 +216,9 @@ def post_vendor_payment(
             posted_by=_user(user),
         )
     if amount_paise:
-        credit_account = GLAccount.CASH if also_cash else GLAccount.SUSPENSE
+        # Paid out of whichever account the cash row named, so the payment relieves
+        # the same control account the subledger row does.
+        credit_account = gl_control_for(account) if also_cash else GLAccount.SUSPENSE
         _post_gl(
             VENDOR_DOC,
             entry.doc_number,
@@ -280,6 +309,69 @@ def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedg
     )
 
 
+def post_sale_sor_liability(
+    vendor: Any, amount_paise: int, description: str, user: Any, *, reference: str = ""
+) -> VendorLedgerEntry | None:
+    """The SOR/consignment liability a *bill* raises, as vendor-subledger detail.
+
+    Brand-owned stock raises nothing at the PT (`post_pt_vendor_bill` refuses it):
+    the goods were never ours, so what we owe the brand is not known until a piece
+    sells. It accrues here, at the settlement rate frozen on the piece - never at
+    the price the customer happened to pay for it.
+
+    Detail only, deliberately: the Sale's own cost event books the payable in the
+    value GL (Dr COGS / Cr VENDOR_PAYABLE), so this row must not book it a second
+    time. What it buys is that the vendor's account shows the accrual, and the
+    subledger sum still equals the GL payable control account (F1).
+
+    A negative amount is an exchange handing a brand-owned piece back inside the
+    bill: what we owe falls, so the row is a reversal of accrual, not a bill.
+    """
+    if vendor is None or not amount_paise:
+        return None
+    return VendorLedgerEntry.objects.create(
+        vendor=vendor,
+        amount=amount_paise,
+        kind=(VendorLedgerEntry.Kind.BILL if amount_paise > 0 else VendorLedgerEntry.Kind.REVERSAL),
+        doc_number=_allocate(VENDOR_DOC),
+        description=description,
+        reference=reference,
+        posted_by=_user(user),
+    )
+
+
+def post_sale_collection(
+    *,
+    account: str,
+    amount_paise: int,
+    doc_number: str,
+    description: str,
+    mode: str,
+    user: Any,
+) -> CashLedgerEntry:
+    """One tender on a bill, as a cash-ledger receipt row.
+
+    Projection only, and that is the whole point of it not going through
+    `post_cash_movement`: the Sale's money event has already booked this tender in
+    the value GL (Dr CASH / CARD_CLEARING / UPI_CLEARING), and that helper would
+    book its own balanced voucher against SUSPENSE - the same rupees twice.
+
+    The row carries the *bill's* number rather than a CASH-series one, because it
+    is not an event of its own: it is what the bill collected, and the store's cash
+    summary and the D4 three-way audit both want to get from a collection back to
+    the bill that made it.
+    """
+    return CashLedgerEntry.objects.create(
+        account=account,
+        amount=abs(amount_paise),
+        kind=CashLedgerEntry.Kind.RECEIPT,
+        doc_number=doc_number,
+        description=description,
+        mode=mode,
+        posted_by=_user(user),
+    )
+
+
 @transaction.atomic
 def reverse_pt_vendor_bills(pt, user) -> int:
     """Reverse the live auto-bills raised for a PT file (called on PT reversal)."""
@@ -318,15 +410,16 @@ def post_cash_movement(
     if amount_paise:
         # Standalone cash movement books against SUSPENSE — a holding account until it
         # is classified (to store collection / expense) in a later slice; keeps Σ=0.
+        control = gl_control_for(entry.account)
         legs = (
             [
-                dr(GLAccount.CASH, abs(amount_paise), memo=description),
+                dr(control, abs(amount_paise), memo=description),
                 cr(GLAccount.SUSPENSE, abs(amount_paise), memo=description),
             ]
             if is_in
             else [
                 dr(GLAccount.SUSPENSE, abs(amount_paise), memo=description),
-                cr(GLAccount.CASH, abs(amount_paise), memo=description),
+                cr(control, abs(amount_paise), memo=description),
             ]
         )
         _post_gl(CASH_DOC, entry.doc_number, legs, user)

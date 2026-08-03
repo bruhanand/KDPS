@@ -20,10 +20,11 @@ from datetime import date
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from accounts.models import Role, User
+from accounts.models import User
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.models import Grn, GrnLine
@@ -72,8 +73,9 @@ def vocab(db):
 
 
 def _user(username: str, role_code: str) -> User:
-    role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": role_code})
-    user = User.objects.create_user(username=username, password=TEST_PASSWORD, role=role)
+    user = User.objects.create_user(
+        username=username, password=TEST_PASSWORD, role=make_role(role_code)
+    )
     user.scope_type = "all"
     user.save(update_fields=["scope_type"])
     return user
@@ -165,6 +167,34 @@ def test_brand_pt_upload_without_grn_still_works(world, vocab, warehouse_client)
 def test_brand_pt_link_to_missing_grn_is_404(world, vocab, warehouse_client):
     r = _upload_brand_pt(warehouse_client, 999_999)
     assert r.status_code == 404
+
+
+def test_store_cannot_make_a_pt_file_not_even_grn_less(world, vocab, store_client):
+    """PT making left the store's Receive Goods cell for the warehouse's (#119).
+    Refused at the API, whether or not the upload names a GRN — a store person
+    must not route around the gate by leaving the link off."""
+    grn = _grn(world, lines=LINES)
+    linked = _upload_brand_pt(store_client, grn.id)
+    assert linked.status_code == 403, linked.content
+    assert not PtFile.objects.filter(grn=grn).exists()
+
+    grnless = _upload_brand_pt(store_client)
+    assert grnless.status_code == 403, grnless.content
+    assert not PtFile.objects.exists()
+
+
+def test_store_can_still_read_a_pt_file_it_made_before_the_rung_moved(
+    world, vocab, warehouse_client, store_client
+):
+    """Reading a PT and making one are different rights (#119): only making
+    moved. A PT already sitting against the store's own arrival stays open to
+    read even though the store can no longer create a new one."""
+    grn = _grn(world, lines=LINES)
+    pt_id = _upload_brand_pt(warehouse_client, grn.id).json()["id"]
+
+    r = store_client.get(f"/api/ptmapper/files/{pt_id}")
+
+    assert r.status_code == 200, r.content
 
 
 # ---------------------------------------------------------------- from-grn seeding
@@ -351,9 +381,31 @@ def test_queue_lists_arrivals_and_clears_on_pt(world, vocab, warehouse_client):
     assert q["pt_in_progress"][0]["grn_number"] == grn.doc_number
 
 
-def test_queue_is_a_warehouse_ho_screen(world, vocab, store_client):
-    r = store_client.get("/api/inbound/queue")
-    assert r.status_code == 403
+def test_queue_opens_for_the_store_but_shows_only_its_own_arrivals(world, vocab, store_client):
+    """The queue is `receive_goods: view`, scoped to the caller's unit (#94).
+
+    It used to be a role list that refused every store outright. But a store
+    receives its own direct deliveries, so the sidebar already shows it Receive
+    Goods — refusing the API behind that link was the drift. What actually keeps
+    one store out of another's work is the scope, not the rung: this user is
+    entitled to a shop, and the arrival under test landed at the warehouse.
+    """
+    _grn(world, lines=LINES)
+
+    shop = Store.objects.create(
+        code="SHOP-1", name="Shop 1", store_type=Store.StoreType.STORE, gstin=world["wh"].gstin
+    )
+    scoped = _user("shop-scoped", "store_staff")
+    scoped.scope_type = "store"
+    scoped.save(update_fields=["scope_type"])
+    scoped.stores.add(shop)
+    scoped_client = APIClient()
+    scoped_client.force_authenticate(scoped)
+
+    assert store_client.get("/api/inbound/queue").status_code == 200
+
+    body = scoped_client.get("/api/inbound/queue").json()
+    assert body["counts"] == {"awaiting_pt": 0, "pt_in_progress": 0}
 
 
 # ------------------------------------------------- derived GRN lifecycle (full walk)

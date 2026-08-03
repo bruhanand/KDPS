@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D10 · The KDPS POS — store-login requirements</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --red:#a32a2a; --red-bg:#fde8e8;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:var(--maxw); margin:0 auto; padding:38px 34px 110px}
+  @media(max-width:700px){ main{padding:22px 16px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:22px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:28px; line-height:1.22; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:75ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:36px 0}
+  h2{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  p{margin:9px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 9px; border-radius:999px; vertical-align:middle; white-space:nowrap}
+  .b-lock{background:var(--green-bg); color:var(--green)}
+  .b-store{background:var(--blue-bg); color:var(--blue)}
+  .b-keep{background:var(--grey-bg); color:#444}
+  .b-new{background:var(--purple-bg); color:var(--purple)}
+  .b-drop{background:var(--red-bg); color:var(--red)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-rule{background:var(--green-bg); border-color:#bfe0cd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  .photos{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0}
+  @media(max-width:700px){ .photos{grid-template-columns:1fr} }
+  .photos figure{margin:0}
+  .photos img{width:100%; border:1px solid var(--line); border-radius:12px; display:block}
+  .photos figcaption{font-size:12.5px; color:var(--muted); margin-top:6px; text-align:center}
+  .note{color:var(--muted); font-style:italic}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  .legend{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">Design discussion D10 · Point of Sale · Requirements</div>
+  <h1>The KDPS POS — store-login requirements</h1>
+  <p class="sub">What the store-facing POS must do, gathered before any screen is designed. Sources: the two handwritten store notes (30 June and 25 July), the store-visit interviews of 26 May, four screenshots of the billing software the stores use today (RetailJI, taken at Singhmore Ranchi), and every decision the design corpus has already locked about selling. <b>Scope: the store login only.</b> Head-office screens, masters, Tally and analytics are out of this document.</p>
+  <div class="stamp">Prepared 29 July 2026 · Standing decision: KDPS builds its own POS (26 July 2026); the third-party route is dropped.</div>
+</header>
+
+<!-- ============================================================ -->
+<section>
+<h2>1 · The rule that shapes everything: keep the shape</h2>
+
+<div class="callout co-rule">
+  <p><strong>Client requirement (29 July 2026, and said before at the 26 May store visit):</strong> the new POS should look and drive like the one the staff already use, so the current users adapt with near-zero retraining. Same layout, same scan-first rhythm, same keyboard habits. We change the engine, not the face.</p>
+</div>
+
+<p>Concretely this means the new Sell screen keeps:</p>
+<ul>
+  <li>The <b>scan box top-right</b>, always focused; scan → line appears → cursor returns to the scan box.</li>
+  <li>The <b>line grid in the middle</b> with the same columns staff read today: item name, brand, barcode, design no., size, qty, rate, discount % and amount, GST, salesman, amount, net amount.</li>
+  <li>The <b>payment panel on the right</b>: bill amount at top, one row per payment mode, tendered cash and change at the bottom.</li>
+  <li>The <b>customer strip at the bottom</b>: member/mobile, name, address.</li>
+  <li>The <b>big action buttons</b> stay visible, with the current accelerators beside them: F2 Hold · F3 Look up / Find bill · F4 New bill · F9 Pay &amp; Print · Esc back to scan/dismiss error · Enter for the next bill on the finish overlay (POS counter redesign Q4). The former F5/F8/F9 mapping is superseded.</li>
+</ul>
+<p>Keeping the shape does <b>not</b> mean keeping the junk. Dead controls (the never-used Coupon tile, Sodexo, Backup buttons, the column-width fiddling toolbar) go, and the known bugs get fixed underneath (section 5). The stores should feel "same screen, but it never hangs", not "new software to learn".</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>2 · The current screen, read closely</h2>
+
+<div class="photos">
+  <figure>
+    <img src="current-pos/home.png" alt="RetailJI home screen">
+    <figcaption>Home — right rail is the store's daily menu: Invoice F8, Sales Return F9, Approval/Order F10, Sale Report, Item Search, Daily Cash Summary.</figcaption>
+  </figure>
+  <figure>
+    <img src="current-pos/billing-empty.png" alt="Billing screen, empty">
+    <figcaption>Billing, empty — scan box top-right, line grid centre, payment modes right, customer tabs below.</figcaption>
+  </figure>
+  <figure>
+    <img src="current-pos/billing-salesman-popup.png" alt="Salesman popup on scan">
+    <figcaption>On scan, a "Select Salesman" popup — the seller is recorded <b>per line</b>, and stock under the scanned barcode shows at once ("Total Stock: 1").</figcaption>
+  </figure>
+  <figure>
+    <img src="current-pos/billing-line-complete.png" alt="Completed line">
+    <figcaption>Line complete — salesman ALIE on the line, GST slab picked per line, bill amount ready for tender.</figcaption>
+  </figure>
+</div>
+
+<p>What the screenshots establish, region by region:</p>
+
+<table>
+  <tr><th style="width:26%">Region today</th><th>What it does</th><th style="width:18%">In the new POS</th></tr>
+  <tr>
+    <td><b>Header</b>: date, branch, invoice no. <span class="note">26-27/SGMR/1622</span>, approval box</td>
+    <td>Branch is fixed to the store. Invoice number is financial-year / store code / running serial.</td>
+    <td>Keep. Numbering already matches our rule: per-store, gap-free, never reused.</td>
+  </tr>
+  <tr>
+    <td><b>Scan box + Return tick</b></td>
+    <td>Scan-first entry; ticking "Return" makes the next scans return lines in the same bill.</td>
+    <td>Keep the gesture; returns become proper documents underneath (section 3D).</td>
+  </tr>
+  <tr>
+    <td><b>Line grid</b> incl. Agent column</td>
+    <td>Item resolves from the master on scan; a salesman is chosen per line via popup; GST slab sits per line; stock under the barcode shows immediately.</td>
+    <td>Keep. GST comes from our date-effective slab master; stock from the store's own cached data.</td>
+  </tr>
+  <tr>
+    <td><b>Payment panel</b>: Cash, Card (bank), UPI, Wallet, Credit Note, Coupon, Credit, Tender Cash</td>
+    <td>Amount boxes per mode — the current POS already does <b>split payment</b> across modes on one bill.</td>
+    <td>Keep Cash / Card / UPI. Credit Note, Coupon, Wallet and other legacy tender rows do not enter the new counter; POS counter redesign Q3/Q3b explicitly retires counter note issue and redemption.</td>
+  </tr>
+  <tr>
+    <td><b>Customer strip</b>: Member ID, mobile, name, address, GSTIN, member disc %, wallet balance, "is WhatsApp"</td>
+    <td>The bill can carry a customer; membership gives a discount % and a points wallet.</td>
+    <td>Keep name + mobile capture; membership/wallet is a decision (section 4).</td>
+  </tr>
+  <tr>
+    <td><b>Offer Detail + Apply Scheme / Re-set Scheme</b></td>
+    <td>Schemes are applied to the bill on demand and shown in a detail area.</td>
+    <td>Replaced by the offer engine: rules arrive from HO, apply themselves as items scan (section 3B).</td>
+  </tr>
+  <tr>
+    <td><b>Totals strip</b>: total qty, gross, net, return voucher no. + return amount</td>
+    <td>A return in the same bill nets off against the new items.</td>
+    <td>Keep — this is the exchange flow the design already locks.</td>
+  </tr>
+  <tr>
+    <td><b>Home rail</b>: Sale Report, Item Search, Daily Cash Summary</td>
+    <td>The store's own day: today's sales, item lookup, cash summary.</td>
+    <td>Keep all three; they map to screens the stores asked for by name.</td>
+  </tr>
+  <tr>
+    <td><b>"Back Calculation Active"</b></td>
+    <td>Price is MRP, inclusive of tax; base and GST are worked backwards from it.</td>
+    <td>Keep. MRP-inclusive is the law and already our locked pricing rule.</td>
+  </tr>
+  <tr>
+    <td><b>Backup / Cloud Backup / Update Now / Register</b></td>
+    <td>Desktop-app housekeeping.</td>
+    <td>Drop — the platform handles this; stores never see it.</td>
+  </tr>
+</table>
+
+<div class="callout co-key">
+  <p><strong>The happy surprise in these screenshots:</strong> the current POS already does three things our design wants — a salesman recorded on every sale, split payment across modes, and MRP-inclusive back-calculation. Keeping the shape and keeping the rules point the same way.</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>3 · The requirements</h2>
+
+<p class="sub">Each item is tagged:
+<span class="badge b-lock">Locked</span> the design corpus already decided it ·
+<span class="badge b-store">Stores asked</span> it comes from the store notes or interviews ·
+<span class="badge b-keep">Keep-shape</span> it exists in the current POS and stays because of the continuity rule ·
+<span class="badge b-new">Decision</span> genuinely open, listed again in section 4.</p>
+
+<h3>A · Billing — the Sell screen</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>A1</td><td><b>Scan-first billing.</b> Cursor lives in the scan box; scan resolves the item from the <b>store's own cached data — no internet round-trip per scan</b>. After qty + Enter the cursor returns to the scan box by itself.</td><td><span class="badge b-store">Stores asked</span> <span class="badge b-keep">Keep-shape</span></td></tr>
+  <tr><td>A2</td><td><b>Barcode is a scan-alias, not the identity.</b> One live batch under the barcode → straight through. Several → oldest season first. Genuinely ambiguous → one-tap "which season?" that never blocks the sale.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>A3</td><td><b>Stock under the barcode shows at scan time</b> (the current "Total Stock" readout), from local data.</td><td><span class="badge b-keep">Keep-shape</span></td></tr>
+  <tr><td>A4</td><td><b>Every line records who sold it.</b> The current per-line salesman popup stays. This field is the foundation for the member-wise reports and staff targets the stores asked for. (Per line vs per bill: see decision D-1.)</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>A5</td><td><b>Price is the printed MRP, inclusive of tax.</b> GST is worked backwards from it using the dated slab for that item's HSN and price band (data, not code). The bill carries the full GST breakup; nothing downstream recomputes it.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>A6</td><td><b>The bill snapshots everything at the moment of billing</b> — price, slab, offer. Editing a master later never changes an old bill.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>A7</td><td><b>No editing a saved bill, ever.</b> Reprint only; a mistake is corrected by a new reversing document that references the original. The stores wrote this rule themselves ("can re-print only").</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>A8</td><td><b>Bill numbers are per-store, gap-free, never reused — including offline.</b> One POS per store is a hard invariant, so store + bill number is always unique.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>A9</td><td><b>Selling an SOR/consignment piece posts the brand's money at the till.</b> Invisible to the cashier, but the sale is the document that writes the vendor liability — the POS must know each item's ownership.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>A10</td><td><b>Auto-inward on scan.</b> A piece that has arrived but is not yet formally inwarded can be inwarded and billed in one scan — the sale is never blocked and no negative-stock gap is left.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>B · Discounts and offers</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>B1</td><td><b>Offers apply themselves.</b> HO pushes the live rulebook to the till; as items scan, the right offer lands per item (best brand offer + stackable store-wide/bank add-ons). No cashier typing a % from memory. The owner's words: rule set by HO, counter staff just chooses.</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>B2</td><td><b>Manual discount has an absolute HO-configured cap</b> (10% default). The till cannot exceed it: no manager PIN and no override. A line already carrying an offer gets no extra manual discount unless HO configuration explicitly allows stacking (POS counter redesign Q5/Q5b).</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>B3</td><td><b>Every discounted line records the evidence</b>: MRP, discount, final price, which rule fired, who billed, who approved, who funds it. Feeds the daily applied-vs-rulebook check.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>B4</td><td><b>No-discount styles are skipped automatically.</b></td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>C · Payment</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>C1</td><td><b>Modes: Cash, Card, UPI</b> — the three real rails. Counter credit notes are retired by POS counter redesign grill Q3/Q3b; Coupon and Sodexo remain dropped as unused.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>C2</td><td><b>Split payment on one bill</b> — amounts across several modes, exactly as the current panel works. (The design corpus never confirmed this; the screenshots settle that stores have it today. See decision D-2 to ratify.)</td><td><span class="badge b-keep">Keep-shape</span> <span class="badge b-new">Decision</span></td></tr>
+  <tr><td>C3</td><td><b>Tendered-cash and change</b> at the bottom of the panel, as today.</td><td><span class="badge b-keep">Keep-shape</span></td></tr>
+  <tr><td>C4</td><td><b>Credit (udhaar) stays a tag, not a ledger</b> — the conscious omission stands until receivables are designed. The bill can record "on credit", nothing chases it yet.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>C5</td><td><b>Per-bill payment totals feed the daily 3-way collection audit</b> (POS ↔ settlement report ↔ bank) that D4 designed. The store confirms its own day; HO works the exceptions.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>D · Returns and exchange</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>D1</td><td><b>Exchange in one bill</b>: return legs + new items, linked to the original bill and reason-coded. Outgoing pieces must be worth at least the returned paid value; Save &amp; Print refuses anything short.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>D2</td><td><b>Returned value is what the customer actually paid</b> for the piece, never its MRP; the new piece charges at today's live price and offer.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>D3</td><td><b>A returned piece goes back to shelf if good, to quarantine if damaged</b>, feeding the defective flow.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>D4</td><td><b>No return without an equal-or-higher new purchase.</b> No cash/card/UPI refund and no credit note: money that entered KDPS never leaves. Superseded and closed by POS counter redesign grill Q3/Q3b (2 Aug 2026).</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>E · Reprint and customer search</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>E1</td><td><b>Find a past bill by name, phone number, or bill number</b>; it opens read-only in the sell screen.</td><td><span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>E2</td><td><b>Reprint only.</b> No edit path exists from a found bill.</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>E3</td><td><b>Capture customer name + mobile on the bill</b> (as today). Whether this grows into membership and a points wallet is decision D-3.</td><td><span class="badge b-keep">Keep-shape</span> <span class="badge b-new">Decision</span></td></tr>
+</table>
+
+<h3>F · Billing never stops (the offline rule)</h3>
+<div class="callout co-warn">
+  <p><strong>"Net chale ya na chale, billing nahi ruke."</strong> The single loudest store complaint: today's POS is fully cloud-dependent — no internet, no billing — and retries under a slow network have double-billed customers. This is the number-one engineering requirement of the whole slice.</p>
+</div>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>F1</td><td><b>The till bills entirely offline</b>: local item/price/offer/stock data, local bill numbering, a durable local queue that syncs when the connection returns.</td><td><span class="badge b-lock">Locked</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>F2</td><td><b>A retry can never double-bill.</b> Every sale carries a terminal-generated unique ID; the server accepts it once and returns the same bill on any repeat.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>F3</td><td><b>Paper fallback with a flag.</b> If the till itself is down, staff bill on paper and re-enter before end of day; the daily check flags a paper bill never re-entered, or entered twice.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>F4</td><td><b>The daily reconciliation is the gate.</b> A store's POS is "live" only while its end-of-day check (bills continuous, stock and money matching) runs green.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>G · Hardware and feel</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>G1</td><td><b>Wedge scanner, instant lines.</b> Rapid repeat scans must never crash or lag (today: multi-second waits and "unhandled exception" on fast rescans).</td><td><span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>G2</td><td><b>Printer check before print.</b> Warn if the printer is off before saving-and-printing; a one-tap Reprint button. (Today a morning with the printer off means a saved bill, nothing printed, and a painful recovery cycle.)</td><td><span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>G3</td><td><b>Every wait shows a spinner and the button locks</b> — staff double-clicking a silent "Bill" button is a real, observed cause of duplicates.</td><td><span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>G4</td><td><b>Counter bills are normal B2C GST invoices</b> — no e-invoice/IRN machinery at the till.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>H · Who can do what</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>H1</td><td><b>The till sees only its own store's data.</b> No whole-company master browsing from a counter.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>H2</td><td><b>The cashier never sees cost or margin</b>, and cannot lift the discount cap. The nine-role access matrix already on main governs this.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>H3</td><td><b>Manager override at the counter survives only for a late-exchange window.</b> Discounts have no override; HO moves the configured cap. A late exchange records who authorised it and when.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+
+<h3>I · The store's day around the bill</h3>
+<table>
+  <tr><th style="width:6%">#</th><th>Requirement</th><th style="width:14%">Tag</th></tr>
+  <tr><td>I1</td><td><b>Daily Cash Summary</b> stays a one-tap screen: today's collections by mode, ready for the deposit and the 3-way audit.</td><td><span class="badge b-keep">Keep-shape</span> <span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>I2</td><td><b>Sale Report and Item Search</b> stay on the store's home rail (today's sales; find an item by name, barcode, or brand with stock and price).</td><td><span class="badge b-store">Stores asked</span></td></tr>
+  <tr><td>I3</td><td><b>Store open / close</b> (opening float, end-of-day tally) is designed as its own small flow, sequenced with — not inside — the first POS slice.</td><td><span class="badge b-lock">Locked</span></td></tr>
+  <tr><td>I4</td><td><b>One store, one counter first.</b> The POS pilots at a single store and must reconcile clean daily before any second store follows.</td><td><span class="badge b-lock">Locked</span></td></tr>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>4 · Decisions to make before the screen is designed</h2>
+
+<div class="card">
+  <h3>D-1 · Salesman per line, or per bill?</h3>
+  <p>The locked decision says every sale records who sold it. The current POS goes further: a salesman per <b>line</b>, chosen in a popup at every scan. Recommendation: keep per line — it matches the shape staff know, and member-wise reporting gets finer data at zero extra cost. Also decide whether the popup fires every scan (today) or defaults to the last-picked salesman with a tap to change.</p>
+</div>
+
+<div class="card">
+  <h3>D-2 · Ratify split payment</h3>
+  <p>The design corpus left split-tender open; the current POS plainly has it and stores use it. Ratified shape: one bill, amounts across cash/card/UPI, which must sum to the bill amount. The former credit-note tender is superseded by POS counter redesign Q3/Q3b.</p>
+</div>
+
+<div class="card">
+  <h3>D-3 · Membership and the points wallet</h3>
+  <p>The old "the POS owns the customer" decision dissolved the day KDPS decided to build its own POS — KDPS now owns the customer by construction. The current screen has Member ID, member discount %, and a points wallet whose redemption is famously broken (the OTP that never arrives). Call to make: does v1 carry (a) just name + mobile on the bill, (b) a membership discount %, or (c) the full points wallet with a defined earn/redeem ratio? Recommendation: (a) in the first slice, with the customer record designed so (b) and (c) bolt on without rework.</p>
+</div>
+
+<div class="card">
+  <h3>D-4 · Return without an exchange — closed</h3>
+  <p><b>Superseded and ruled by POS counter redesign grill Q3/Q3b (2 Aug 2026):</b> there is no plain return, refund, or counter credit note. A return exists only inside an exchange against the original bill, and the customer takes pieces of equal or greater paid value. The return window remains data; a late exchange uses the recorded manager-override path.</p>
+</div>
+
+<div class="card">
+  <h3>D-5 · The B2B corner of the counter</h3>
+  <p>The current screen carries Party A/C, customer GSTIN, an IGST tick and a "Cess &amp; E-invoice" tab — a B2B billing path living inside the retail counter. Decide whether the store login needs it at all (a customer who wants a GST-credit invoice), or whether B2B invoicing belongs to HO. Recommendation: keep only a "customer GSTIN on the bill" field at the till; everything else moves to HO.</p>
+</div>
+
+<div class="card">
+  <h3>D-6 · What is "Approval / Order" (F10)?</h3>
+  <p>The home rail has an Approval/Order function and the billing header an Approval box. If this is goods-on-approval (items taken home to try) or advance orders, it is a real store workflow we have not captured anywhere. Ask the stores what they use it for before deciding in or out.</p>
+</div>
+
+<div class="card">
+  <h3>D-7 · Which offer wins (O3, still open from D5)</h3>
+  <p>When two offers could apply to the same item, the offers design recommends "best for the customer" but left it as the one open question. The till has to break the tie automatically, so this closes before the POS builds.</p>
+</div>
+
+<div class="callout co-key">
+  <p><strong>Also carried, not blocking the screen design:</strong> the five money-critical CA questions (SOR GST recognition among them) must be answered before the POS handles live money — but requirements and screen design can proceed.</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>5 · What we fix while keeping the face</h2>
+<p>The continuity rule is about layout and habit, not about preserving faults. These known failures of the current POS are explicitly in scope to kill:</p>
+<ul>
+  <li>No internet, no billing → offline-first till (F1).</li>
+  <li>Retry after a hang double-bills → idempotent sale ID (F2).</li>
+  <li>Every scan is a live database round-trip, seconds of lag, crashes on fast rescans → local lookup (A1, G1).</li>
+  <li>Printer off in the morning → bill saved, nothing printed, ugly recovery → pre-print check + Reprint (G2).</li>
+  <li>Silent buttons invite double-clicks → spinners + locked buttons (G3).</li>
+  <li>Cashier types the discount % from memory → the rulebook applies it (B1, B2).</li>
+  <li>Broken wallet redemption and dead Coupon/Sodexo controls → dropped or redesigned deliberately (C1, D-3).</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>6 · Out of scope for the store login</h2>
+<ul>
+  <li>Everything head-office: masters, offer authoring, vendor money, Tally, analytics.</li>
+  <li>Attendance and payroll — still deferred by decision; the stores' biometric ask remains an open call, separate from this slice.</li>
+  <li>Staff targets, achievement, growth and photos — parked by decision; requirement A4 (salesman on every line) is deliberately locked now so this can be built later without missing data.</li>
+  <li>Customer receivables (udhaar as a real ledger) — tag only for now (C4).</li>
+  <li>Loyalty earn/redeem mechanics — unless D-3 decides otherwise.</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>7 · One-line summary</h2>
+<p>The POS is the current RetailJI screen kept in shape and habit, rebuilt on the KDPS kernel underneath — scan-first, offline-first, append-only, rulebook-driven discounts, salesman on every line. The return question is closed: exchange only, equal-or-up, no refund or counter credit note (POS counter redesign Q3/Q3b).</p>
+</section>
+
+<footer>
+  D10 · POS requirements, store login only · prepared 29 July 2026.
+  Sources: store notes of 30 June and 25 July 2026 (this repo, store-requirements-users), store-visit interviews of 26 May 2026, four RetailJI screenshots (current-pos/ beside this file), and the locked decisions of D3 Outbound, D4 Payments, D5 Offers, the master architecture and the integration contracts.
+  Standing decision of record: KDPS builds its own POS (26 July 2026).
+</footer>
+
+</main>
+</body>
+</html>

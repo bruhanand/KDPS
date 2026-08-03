@@ -4,6 +4,7 @@ import os
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -54,7 +55,7 @@ def _login(s, username, password):
 
 
 def test_login_owner_returns_tokens_and_profile(s):
-    r = _login(s, "owner", "Owner@123")
+    r = _login(s, "owner", SEED_OWNER_PASSWORD)
     assert r.status_code == 200, r.text
     data = r.json()
     assert "access" in data and "refresh" in data
@@ -76,7 +77,7 @@ def test_login_invalid_credentials(s):
 
 # ---------- /me & refresh ----------
 def test_me_with_token(s):
-    r = _login(s, "owner", "Owner@123")
+    r = _login(s, "owner", SEED_OWNER_PASSWORD)
     access = r.json()["access"]
     me = s.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {access}"}, timeout=15)
     assert me.status_code == 200
@@ -95,7 +96,7 @@ def test_me_without_token_returns_401(s):
 
 
 def test_refresh_returns_new_access(s):
-    r = _login(s, "owner", "Owner@123")
+    r = _login(s, "owner", SEED_OWNER_PASSWORD)
     refresh = r.json()["refresh"]
     rr = s.post(f"{API}/auth/refresh", json={"refresh": refresh}, timeout=15)
     assert rr.status_code == 200
@@ -121,7 +122,7 @@ def test_brute_force_lockout_429():
 # ---------- Scope isolation ----------
 def test_scope_isolation_stores_and_summary(s):
     # owner sees all 6 stores
-    r = _login(s, "owner", "Owner@123")
+    r = _login(s, "owner", SEED_OWNER_PASSWORD)
     owner_token = r.json()["access"]
     o_stores = s.get(
         f"{API}/masters/stores", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15
@@ -167,7 +168,7 @@ def test_scope_isolation_stores_and_summary(s):
 
 # ---------- Master seeded data ----------
 def test_masters_seeded(s):
-    r = _login(s, "owner", "Owner@123")
+    r = _login(s, "owner", SEED_OWNER_PASSWORD)
     token = r.json()["access"]
     h = {"Authorization": f"Bearer {token}"}
 

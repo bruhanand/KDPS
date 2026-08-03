@@ -15,9 +15,30 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from core.identity import migration_identity
+
+# The migration *names* spell out every schema change ever made, so publish them
+# only where the reader is a developer or CI and the endpoint is not open to the
+# internet. The digest and count go out everywhere - they are enough to detect a
+# mismatch, which is all a caller needs (issue #93).
+_PUBLISH_MIGRATION_NAMES = settings.DEBUG or bool(os.environ.get("CI"))
+
 
 def health(_request: HttpRequest) -> JsonResponse:
-    return JsonResponse({"status": "ok", "service": "kdps-backend"})
+    """Liveness, plus *which code* is alive.
+
+    Unauthenticated and database-free by design: it must answer when Postgres is
+    down, and callers use it before they hold a token. `migrations` is the
+    server's identity - `app/backend/tests/conftest.py` compares it against the
+    working tree so a stale server can never masquerade as the one under test.
+    """
+    return JsonResponse(
+        {
+            "status": "ok",
+            "service": "kdps-backend",
+            "migrations": migration_identity(include_names=_PUBLISH_MIGRATION_NAMES),
+        }
+    )
 
 
 # Django admin ships with a seeded superuser; exposing /admin in production widens
@@ -34,7 +55,18 @@ urlpatterns = [
     path("api/inbound/", include("inbound.urls")),
     path("api/ptmapper/", include("ptmapper.urls")),
     path("api/stockledger/", include("stockledger.urls")),
+    # The counter's stock question, not the back office's ledger read — see
+    # `stockledger/urls_stock.py` for why the two are mounted apart (#175).
+    path("api/stock/", include("stockledger.urls_stock")),
     path("api/finledger/", include("finledger.urls")),
+    path("api/outbound/", include("outbound.urls")),
+    path("api/sell/", include("sell.urls")),
+    path("api/offers/", include("offers.urls")),
+    path("api/", include("approvals.urls")),
+    path("api/", include("alerts.urls")),
+    path("api/mail/", include("mail.urls")),
+    path("api/", include("search.urls")),
+    path("api/store/", include("storefront.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
 ]

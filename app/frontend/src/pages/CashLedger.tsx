@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { FINANCE_ROLES } from "../auth/routeAccess";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface AccountT {
   account: string;
@@ -27,7 +29,9 @@ interface EntryT {
 
 export default function CashLedger() {
   const { user } = useAuth();
-  const isFinance = FINANCE_ROLES.includes(user?.role?.code ?? "");
+  // Mirrors the server gate exactly (`finledger.IsBooksKeeper` = money:manage),
+  // read from the same section payload rather than a role list of our own.
+  const isFinance = userCan(user, "money", "manage");
 
   const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);
@@ -36,6 +40,8 @@ export default function CashLedger() {
   const [hasNext, setHasNext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [q, setQ] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ direction: "in", amount: "", account: "CASH", description: "" });
@@ -43,14 +49,17 @@ export default function CashLedger() {
 
   function loadAll() {
     api.get("/finledger/cash/summary").then((r) => setSummary(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/cash/entries?${q}`).then((r) => {
+    setEntriesLoading(true);
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (q.trim()) params.set("q", q.trim());
+    api.get(`/finledger/cash/entries?${params}`).then((r) => {
       setEntries(r.data.results);
       setCount(r.data.count);
       setHasNext(Boolean(r.data.next));
-    });
+    }).finally(() => setEntriesLoading(false));
   }
-  useEffect(loadAll, [page]);
+  useEffect(loadAll, [page, q]);
+  useEffect(() => setPage(1), [q]);
 
   async function submit() {
     setBusy(true);
@@ -87,16 +96,14 @@ export default function CashLedger() {
 
   return (
     <div className="page-pad" data-testid="cash-ledger-page">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · cash & bank · append-only</p>
-          <h1 className="h1 h2-rust">Cash Ledger</h1>
-        </div>
-        <div className="spacer" />
-        {isFinance && (
-          <button className="btn btn-cta" onClick={() => { setOpen(true); setError(""); }} data-testid="cl-record-btn"><Plus size={15} /> Record Movement</button>
-        )}
-      </div>
+      <PageHeader
+        lead="Cash and bank movements. Append-only: a correction is a reversing entry."
+        actions={
+          isFinance && (
+            <button className="btn btn-cta" onClick={() => { setOpen(true); setError(""); }} data-testid="cl-record-btn"><Plus size={15} /> Record Movement</button>
+          )
+        }
+      />
 
       <div className="stat-grid" data-testid="cl-summary">
         <div className="card stat-card"><Wallet size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="cl-total">{summary?.total_rupees ?? "0.00"}</div><div className="stat-label">Total cash on hand (₹)</div></div>
@@ -135,8 +142,20 @@ export default function CashLedger() {
       )}
 
       <h3 className="h3" style={{ margin: "22px 0 8px" }}>All movements</h3>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search movements — doc number, party"
+        label="Search cash ledger entries"
+        testId="cl-entries-search"
+        noun="movement"
+        count={count}
+        loading={entriesLoading}
+      />
       {entries.length === 0 ? (
-        <div className="card section-card" data-testid="cl-entries-empty">No cash movements yet.</div>
+        <div className="card section-card" data-testid="cl-entries-empty">
+          {q ? `No movement matches “${q}”.` : "No cash movements yet."}
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="data" data-testid="cl-entries-table">
@@ -169,7 +188,7 @@ export default function CashLedger() {
           </div>
         </div>
       )}
-      <Link to="/ledgers/vendor" className="btn" style={{ marginTop: 18 }}>← Vendor Ledger</Link>
+      <Link to="/money/vendor" className="btn" style={{ marginTop: 18 }}>← Vendor Ledger</Link>
     </div>
   );
 }

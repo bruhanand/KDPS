@@ -4,6 +4,13 @@ Booking capture is a two-step, human-in-the-loop flow:
   POST /api/bookings/draft   → Gemini reads the uploaded receiving doc, returns a
                                DRAFT (nothing saved). The handler edits it.
   POST /api/bookings/        → saves the confirmed booking + lines (status Booked).
+
+Every Booking endpoint answers on the ``booking`` section of the ratified access
+table (#130): reading a booking needs ``view``, placing one needs ``operate``.
+Until then these endpoints were open to any authenticated user, so the table's
+Booking column decided nothing - which is why a store person's ratified
+``view`` cell had to arrive with a gate behind it. *Which* bookings a caller
+sees is the separate record-scope axis, and #101's work.
 """
 
 from __future__ import annotations
@@ -18,9 +25,13 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_APPROVE, CAP_OPERATE, CAP_VIEW
 from core.documents import VoucherSeries
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile
 from masters.models import Brand, Season, Store
+from masters.permissions import IsMasterSteward
 from vendors.agents import read_booking_receipt
 from vendors.models import Booking, BookingLine, Vendor
 from vendors.serializers import (
@@ -28,6 +39,21 @@ from vendors.serializers import (
     BookingSerializer,
     VendorSerializer,
 )
+
+# The Booking column of the access table, as three DRF permissions. `view` is the
+# screen and the list - the rung the store person now holds; `operate` is placing
+# one, which stays HO's, the warehouse's and the brand manager's.
+CanReadBooking = require_section("booking", CAP_VIEW)
+CanPlaceBooking = require_section("booking", CAP_OPERATE)
+CanReadOrPlaceBooking = require_section("booking", CAP_VIEW, write_minimum=CAP_OPERATE)
+# Ending a commitment early is the table's Booking *Approve* cell — the rung the
+# matrix has always granted (owner, HO ops) and no endpoint read until now. The
+# brand manager who drafts an order does not get to write off its balance.
+CanCloseBooking = require_section("booking", CAP_APPROVE)
+
+#: What a typed term looks through on the vendor master — who they are, where
+#: they are, and the number the accountant quotes.
+VENDOR_SEARCH_FIELDS = ("code", "name", "city", "gstin")
 
 
 def _rupees_to_paise(value: Any) -> int | None:
@@ -62,15 +88,46 @@ def _allocate_booking_number(season: Season) -> str:
 
 
 class VendorListCreateView(generics.ListCreateAPIView):
+    """The vendor master. Reads stay open (every booking form needs the list);
+    writes are the master-data steward's, the same gate stores, brands, seasons
+    and GSTINs have carried since D8.
+
+    Until this review the whole endpoint sat on a bare ``IsAuthenticated``: a
+    store cashier could mint the supplier that every future booking, GRN and
+    payable then hangs off, and nothing could correct one afterwards because
+    there was no detail route at all.
+    """
+
     serializer_class = VendorSerializer
-    permission_classes = [IsAuthenticated]
-    queryset = Vendor.objects.prefetch_related("brands").filter(is_active=True)
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+
+    def get_queryset(self) -> Any:
+        qs = Vendor.objects.prefetch_related("brands")
+        # Inactive vendors stay out of the pickers, and stay visible to the
+        # steward who has to look after them (`?include_inactive=1`).
+        if self.request.query_params.get("include_inactive") not in ("1", "true"):
+            qs = qs.filter(is_active=True)
+        return text_filter(qs, search_term(self.request), VENDOR_SEARCH_FIELDS)
+
+
+class VendorDetailView(generics.RetrieveUpdateAPIView):
+    """Correct a vendor, or retire one. Never deleted — bookings and payables
+    point at it (masters are referenced by append-only rows)."""
+
+    serializer_class = VendorSerializer
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+    queryset = Vendor.objects.prefetch_related("brands")
 
 
 class BookingDraftView(APIView):
-    """Read an uploaded receiving doc into a draft booking (not saved)."""
+    """Read an uploaded receiving doc into a draft booking (not saved).
 
-    permission_classes = [IsAuthenticated]
+    Nothing is saved, but the draft is the first half of placing a booking and it
+    burns an AI read on an upload - so it sits at the same rung as the create,
+    not at ``view``.
+    """
+
+    permission_classes = [IsAuthenticated, CanPlaceBooking]
 
     def post(self, request: Request) -> Response:
         upload = request.FILES.get("file")
@@ -95,8 +152,20 @@ class BookingDraftView(APIView):
         return Response(result)
 
 
+#: What a typed term looks through on the Bookings screen — the four things a
+#: person half-remembers about an order: its number, who it was placed with,
+#: whose goods they are, and which season it belongs to.
+BOOKING_SEARCH_FIELDS = (
+    "number",
+    "vendor__name",
+    "brand__name",
+    "season__code",
+    "season__name",
+)
+
+
 class BookingListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadOrPlaceBooking]
     serializer_class = BookingSerializer
 
     def get_queryset(self) -> Any:
@@ -110,7 +179,9 @@ class BookingListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(brand_id=params["brand"])
         if params.get("season"):
             qs = qs.filter(season_id=params["season"])
-        return qs
+        # The screen's own search box (#102), applied last so it can only narrow
+        # what the filters above already allow.
+        return text_filter(qs, search_term(self.request), BOOKING_SEARCH_FIELDS)
 
     @transaction.atomic
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -172,8 +243,41 @@ class BookingListCreateView(generics.ListCreateAPIView):
 
 
 class BookingDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadBooking]
     serializer_class = BookingSerializer
     queryset = Booking.objects.select_related(
         "vendor", "brand", "season", "destination_store"
     ).prefetch_related("lines", "lines__store")
+
+
+class BookingCloseView(APIView):
+    """End a booking: short-close what will not arrive, or cancel one nothing came against.
+
+    The reason is mandatory. An open order report is only worth reading if every
+    row on it is expected — and "why did the other 60 pieces never come?" is a
+    question the vendor conversation needs answered six months later.
+    """
+
+    permission_classes = [IsAuthenticated, CanCloseBooking]
+
+    def post(self, request: Request, pk: int) -> Response:
+        booking = (
+            Booking.objects.select_related("vendor", "brand", "season", "destination_store")
+            .prefetch_related("lines", "lines__store")
+            .filter(pk=pk)
+            .first()
+        )
+        if booking is None:
+            return Response({"detail": "Booking not found."}, status=404)
+        reason = str(request.data.get("reason") or "").strip()
+        if len(reason) < 3:
+            return Response(
+                {"detail": "Say why this booking is ending — the reason is part of the record."},
+                status=400,
+            )
+        cancel = str(request.data.get("action") or "close").lower() == "cancel"
+        try:
+            booking.end(user=request.user, reason=reason, cancel=cancel)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        return Response(BookingSerializer(booking).data)

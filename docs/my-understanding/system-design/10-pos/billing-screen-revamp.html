@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D10 · Billing screen revamp — exploration &amp; proposal</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --red:#b3261e; --red-bg:#fdecea;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:var(--maxw); margin:0 auto; padding:38px 34px 110px}
+  @media(max-width:700px){ main{padding:22px 16px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:22px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:28px; line-height:1.22; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:75ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:36px 0}
+  h2{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  p{margin:9px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 9px; border-radius:999px; vertical-align:middle; white-space:nowrap}
+  .b-prop{background:var(--amber-bg); color:var(--amber)}
+  .b-open{background:var(--blue-bg); color:var(--blue)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-rule{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a0}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  .note{color:var(--muted); font-style:italic}
+
+  /* ---- screen mock ---- */
+  .mock{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin:16px 0}
+  .mock-cap{font-size:12.5px; color:var(--muted); margin:0 0 10px}
+  .screen{border:2px solid var(--navy); border-radius:10px; overflow:hidden;
+    display:grid; grid-template-rows:auto 1fr auto; min-height:430px; font-size:11.5px; line-height:1.4}
+  .m-top{display:flex; gap:8px; align-items:center; padding:8px 10px; background:var(--grey-bg); border-bottom:1px solid var(--line); flex-wrap:wrap}
+  .m-chip{background:#fff; border:1px solid var(--line); border-radius:6px; padding:3px 8px; white-space:nowrap}
+  .m-scan{flex:1; min-width:150px; background:#fff; border:2px solid var(--navy); border-radius:6px; padding:5px 9px; color:var(--muted)}
+  .m-btn{background:#fff; border:1px solid #b9c2d4; border-radius:6px; padding:3px 9px; color:var(--navy); white-space:nowrap}
+  .m-btn.pri{background:var(--navy); color:#fff; border-color:var(--navy); font-weight:700; padding:6px 14px}
+  .m-mid{display:grid; grid-template-columns:1fr 250px; min-height:0}
+  .m-grid{border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+  .m-gh{display:grid; grid-template-columns:2.2fr .8fr .6fr 1fr 1fr 1.2fr 1fr; gap:4px; padding:5px 8px; background:var(--navy); color:#fff; font-size:10px}
+  .m-gr{display:grid; grid-template-columns:2.2fr .8fr .6fr 1fr 1fr 1.2fr 1fr; gap:4px; padding:5px 8px; border-bottom:1px solid var(--line)}
+  .m-gr .chip{grid-column:1/-1; font-size:10px; color:var(--green)}
+  .m-scroll-note{margin:auto; text-align:center; color:var(--muted); padding:12px; font-style:italic}
+  .m-rail{display:flex; flex-direction:column; gap:8px; padding:8px; background:#fafbfc}
+  .m-card{background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px}
+  .m-card .cap{font-size:9.5px; font-weight:700; letter-spacing:.08em; color:var(--rust); text-transform:uppercase}
+  .m-due{font-size:24px; font-weight:800; color:var(--navy); margin:2px 0 6px}
+  .m-tr{display:flex; justify-content:space-between; gap:6px; padding:3px 0; border-top:1px dashed var(--line)}
+  .m-tr .amt{border:1px solid var(--line); border-radius:4px; padding:1px 6px; min-width:52px; text-align:right; color:var(--muted)}
+  .m-chips{display:flex; gap:4px; flex-wrap:wrap; margin:4px 0}
+  .m-chips span{border:1px solid #b9c2d4; border-radius:999px; padding:1px 7px; font-size:10px; color:var(--navy)}
+  .m-bal{margin-top:5px; padding-top:5px; border-top:1px solid var(--line); display:flex; justify-content:space-between; font-weight:700}
+  .m-bal.red{color:var(--red)} .m-bal.green{color:var(--green)}
+  .m-field{border:1px solid var(--line); border-radius:4px; padding:3px 7px; color:var(--muted); margin:3px 0}
+  .m-hits{border:1px solid #bcd6f3; background:var(--blue-bg); border-radius:4px; padding:3px 7px; font-size:10px; margin:2px 0}
+  .m-foot{display:flex; gap:10px; align-items:center; padding:8px 10px; background:var(--grey-bg); border-top:1px solid var(--line); flex-wrap:wrap}
+  .m-fig{display:flex; flex-direction:column; line-height:1.15}
+  .m-fig .k{font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+  .m-fig .v{font-weight:700; color:var(--navy)}
+  .m-fig.big .v{font-size:19px}
+  .m-spacer{flex:1}
+  @media(max-width:700px){ .m-mid{grid-template-columns:1fr} .m-rail{border-top:1px solid var(--line)} }
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">Design discussion D10 · Sell / Billing · Exploration</div>
+  <h1>The billing screen, rebuilt to fit one screen <span class="badge b-lock" style="background:var(--green-bg); color:var(--green)">Agreed — grilled 1-2 Aug 2026</span></h1>
+  <p class="sub">The Billing tab works, but it reads like a form that grew: the page scrolls, the money card is a stack of boxes, and the two things a cashier needs every minute — the amount due and Save &amp; Print — are the first to slide off the bottom. This document is the research and the proposed new structure. Functionality does not change; the frame it sits in does. When agreed, it supersedes the <b>region placement</b> in store-front-design.html §4 and enters the normal dev process.</p>
+  <div class="stamp">1 August 2026 · research: 10+ commercial systems (Oracle Xstore, Dynamics 365, Shopify, Square, Lightspeed, Toast) + Indian POS (Ginesys, GoFrugal, Marg, Zoho) + open-source (Odoo, ERPNext) · full source notes in the change log entry</div>
+</header>
+
+<!-- ============================================================ -->
+<section>
+<h2>1 · What is wrong today</h2>
+<ul>
+  <li><b>The page scrolls.</b> The scan box and bill area sit at the top; the payment card, customer card, totals and every action button live below the fold. On a normal laptop the cashier bills on one half of the screen and pays on the other, with a scroll in between.</li>
+  <li><b>The money section is a form, not a till.</b> Four equal input rows, a small "Still to pay", a separate "Cash received" and "Change" — nothing is visually the amount due, nothing helps the cashier avoid arithmetic.</li>
+  <li><b>Seven buttons of equal weight sit in one bottom row</b> — the button that closes money (Save &amp; Print) looks like the button that clears the screen (New bill).</li>
+  <li><b>Banners stack.</b> Each alert pushes the bill further down.</li>
+  <li><b>The customer card can't help.</b> Mobile is a free-text box; the system never says "this is Sunita, she was here in June."</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>2 · What the research says</h2>
+<p>Every serious POS, Western or Indian, commercial or open-source, converges on the same few rules. These are the ones that decide our structure:</p>
+<table>
+  <tr><th style="width:34%">Rule (who does it)</th><th>What it means for us</th></tr>
+  <tr><td><b>The screen fills the viewport exactly once; only the item list scrolls.</b> Odoo pins the shell to the viewport height; ERPNext caps every section at screen height and confines scrolling to the cart list; Oracle Xstore names exactly one scrolling region; Shopify's redesign goal was literally "eliminating unnecessary scrolling."</td><td>The billing page becomes a fixed frame: top strip, work area, bottom bar. Only the bill's line list scrolls, under a sticky column header.</td></tr>
+  <tr><td><b>Totals and the closing action live in a footer that never moves.</b> Toast puts Hold/Print/Pay at the foot of the check; SAP Fiori's footer rule: "always visible and will not scroll away."</td><td>Net amount + Save &amp; Print + Reprint are pinned at the bottom, visible from the first scan to the last.</td></tr>
+  <tr><td><b>The amount due is the biggest number on the screen.</b> Odoo renders the total two type-scales above everything else; a counter screen is read from ~80&nbsp;cm, not 40.</td><td>"To pay ₹X" becomes the hero of the payment panel — large, top, always current.</td></tr>
+  <tr><td><b>Tapping a tender fills it with the remaining balance.</b> Oracle Xstore pre-fills the tender amount; Dynamics ships a one-touch "Pay cash quick" (exact amount); every system keeps the remaining balance on screen until it hits zero.</td><td>Tap Card with ₹2,540 left and the box says 2,540. Split payment stops being mental subtraction.</td></tr>
+  <tr><td><b>Change is computed, never mentally calculated.</b> Cashier-training literature is blunt: the till must take "cash handed over" and answer with the change.</td><td>Cash received + change stay, but inside the cash row, colour-coded: red "still to pay", green "change to give".</td></tr>
+  <tr><td><b>Lifecycle actions split: a few permanent buttons, the rest demoted.</b> Xstore has a bounded button strip with a "More…"; Shopify pruned its More-actions menu to whole-bill actions only; Lightspeed puts Park sale on screen and Discard in overflow.</td><td>Find / New / Hold / Held(n) go to the top strip near the scan box; Save &amp; Print and Reprint keep the footer. Nothing else competes.</td></tr>
+  <tr><td><b>Customer attach is a typeahead on the critical path, never a modal.</b> ERPNext searches by name/phone in the cart header; Ginesys tags a searched customer; GoFrugal turns the matched customer's history into one-tap re-orders.</td><td>Typing a mobile number lists matching customers right under the field; Enter attaches. Unknown number → "new customer", name only.</td></tr>
+  <tr><td><b>UPI on charge = a QR with a tiny state machine.</b> GoFrugal's Paytm tender shows a QR modal with exactly two controls, Cancel and Check status; Paytm's spec: poll ~8×/minute, offer manual check-status after 1 minute, QR at least 1.5" on white. The acquirer owns the timeout — the till never assumes failure on its own clock.</td><td>We design the full charge flow now (Generating → Awaiting → Success / Failed / Unknown) behind an adapter with a mock, so plugging real hardware later changes no screen.</td></tr>
+  <tr><td><b>Do not copy the product grid.</b> Odoo/ERPNext give ~60% of the screen to a product picker because cafés pick from menus. An apparel till scans.</td><td>The width goes to the bill grid. The existing type-to-search "did you mean" list stays as the failed-scan fallback.</td></tr>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>3 · The proposed structure — one fixed frame, three bands</h2>
+
+<div class="mock">
+  <p class="mock-cap">The whole tab, mid-bill. The outer frame never moves; only the line list (centre-left) scrolls. Proportions: bill grid ≈ 2/3, right rail ≈ 340px, footer ≈ 56px.</p>
+  <div class="screen">
+    <div class="m-top">
+      <span class="m-chip">Bill 26-27/DEO/SAL/2 · <span style="color:var(--green)">●</span> synced</span>
+      <span class="m-scan">Scan a tag, or type a design number…</span>
+      <span class="m-btn">Find a bill</span>
+      <span class="m-btn">Held bills (2)</span>
+      <span class="m-btn">Hold bill</span>
+      <span class="m-btn">New bill</span>
+    </div>
+    <div class="m-mid">
+      <div class="m-grid">
+        <div class="m-gh"><span>Item</span><span>Size</span><span>Qty</span><span>MRP</span><span>Disc ₹</span><span>Salesman</span><span>Net</span></div>
+        <div class="m-gr"><span>MUFTI Slim Shirt · MFS-2231</span><span>40</span><span>1</span><span>2,499</span><span>—</span><span>Ravi</span><span>2,499</span><span class="chip">✓ EOSS 30% — you saved ₹750</span></div>
+        <div class="m-gr"><span>Killer Jeans · KJD-118</span><span>32</span><span>1</span><span>3,299</span><span>200</span><span>Ravi</span><span>3,099</span></div>
+        <div class="m-scroll-note">… the one and only scrolling region — sticky header above, more lines below …</div>
+      </div>
+      <div class="m-rail">
+        <div class="m-card">
+          <div class="cap">To pay</div>
+          <div class="m-due">₹4,848</div>
+          <div class="m-tr"><span>Cash</span><span class="amt">2,848</span></div>
+          <div class="m-chips"><span>Exact</span><span>₹2,900</span><span>₹3,000</span></div>
+          <div class="m-tr"><span>Card</span><span class="amt">2,000</span></div>
+          <div class="m-tr"><span>UPI · <u>show QR</u></span><span class="amt">0</span></div>
+          <div class="m-bal green"><span>Change to give</span><span>₹152</span></div>
+        </div>
+        <div class="m-card">
+          <div class="cap">Customer</div>
+          <div class="m-field">98352…</div>
+          <div class="m-hits">Sunita Devi · 9835211442</div>
+          <div class="m-hits">Sunil Kumar · 9835299801</div>
+          <div class="m-field" style="color:#c9ced8">Name</div>
+          <div style="font-size:10px; color:var(--blue)">Business bill? add GSTIN ▸</div>
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <span class="m-fig"><span class="k">Pieces</span><span class="v">2</span></span>
+      <span class="m-fig"><span class="k">Gross</span><span class="v">₹5,798</span></span>
+      <span class="m-fig"><span class="k">You saved</span><span class="v">₹950</span></span>
+      <span class="m-fig"><span class="k">Tax incl.</span><span class="v">₹519</span></span>
+      <span class="m-fig big"><span class="k">Net</span><span class="v">₹4,848</span></span>
+      <span class="m-spacer"></span>
+      <span class="m-btn">Reprint</span>
+      <span class="m-btn pri">Save &amp; Print</span>
+    </div>
+  </div>
+</div>
+
+<h3>Band by band</h3>
+<table>
+  <tr><th style="width:22%">Band</th><th>What lives there, and why</th></tr>
+  <tr><td><b>Top strip</b> (fixed)</td><td>Bill number + sync light folded into one chip · the <b>scan box</b>, still the biggest input on the screen, still always focused · then the bill's lifecycle: <b>Find a bill · Held bills (n) · Hold bill · New bill</b>. These are "which bill am I on" actions, so they sit with the bill's identity, not with the money. Alerts (printer off, offers stale, second-window block) collapse into <b>one</b> line under this strip instead of stacking.</td></tr>
+  <tr><td><b>Work area</b> (only the line list scrolls)</td><td><b>Left ≈ 2/3: the bill grid.</b> Sticky column header; the line list is the single scrolling region of the whole tab. Offer chips stay on the line. The "did you mean" suggestions and the not-in-system prompt render at the top of this area, never pushing the rail. <b>Right ≈ 340px: the rail</b>, fixed — payment card above, customer card below, both always visible (today's 264px rail is too narrow for tender rows plus chips; ~340px is the floor).</td></tr>
+  <tr><td><b>Bottom bar</b> (fixed)</td><td>The totals read left to right — Pieces · Gross · <b>You saved</b> · Tax included · <b>Net</b> (largest figure) — then <b>Reprint</b> and <b>Save &amp; Print</b> (the one visually primary button on the whole screen) pinned at the right. Visible from the first scan to the last, exactly as asked.</td></tr>
+</table>
+
+<h3>The payment card, rebuilt</h3>
+<ol>
+  <li><b>"To pay ₹X"</b> — the hero number, updating live as lines enter.</li>
+  <li><b>Tender rows: Cash · Card · UPI — and these rows <i>are</i> split payment.</b> Any combination, no separate "split" button or mode: put an amount on one row, the balance line shows what's left, put the rest on another. Tapping into an empty amount box <b>pre-fills the remaining balance</b>; typing over it splits further. Example: ₹4,848 bill → 2,000 on Card → tap UPI, it offers 2,848, overtype 2,000 → tap Cash, it offers 848 → customer hands ₹1,000 → green "Change to give ₹152". This is the Oracle/Zoho/ERPNext pattern; the research found the explicit "Split payment" button (Shopify, Square) is the weaker one — an extra step on every mixed payment, and Square's version voids all legs if the split takes over five minutes. <b>Counter credit notes are retired</b> by POS counter redesign grill Q3/Q3b.</li>
+  <li><b>Quick chips under Cash</b>: Exact, and two round-ups (next ₹100 / ₹500) — one tap records what the customer handed over. <span class="badge b-open">Ruled yes — §4 D-2</span></li>
+  <li><b>One balance line, colour-coded</b>: red <b>"Still to pay ₹X"</b> until covered, flipping to green <b>"Change to give ₹X"</b> the moment cash exceeds the bill. "Cash received" folds into the cash row rather than being a separate block.</li>
+  <li><b>UPI row carries "show QR."</b> Entering an amount and tapping it opens the charge card: the amount huge, a QR panel (mock today, hardware later), and the states <i>Generating → Awaiting (Cancel · Check status) → Success (ref captured, bill proceeds) / Failed (retry or another tender) / Unknown ("can't reach the bank — check again")</i>. Built behind a payment adapter with a mock, the same shape as the print adapter, so the hardware slice later touches no screen.</li>
+  <li><b>Manager authorisation</b> no longer covers discounts or credit notes. Its surviving counter role is the late-exchange window override, recorded on the bill.</li>
+  <li>An exchange may never net in the customer's favour: the outgoing pieces must be equal-or-up, and Save &amp; Print refuses a short exchange with a plain explanation (POS counter redesign grill Q3/Q3b).</li>
+</ol>
+
+<h3>The customer card, rebuilt</h3>
+<ul>
+  <li><b>Mobile first.</b> From the third digit, matching customers list <b>directly under the field</b> — name and mobile only. Enter (or tap) attaches. No visit count, last-visit date, spend, or other purchase history is shipped to the till.</li>
+  <li><b>Unknown number → "bill to a new customer"</b> inline: name, nothing else. The bill still works with no customer at all.</li>
+  <li><b>GSTIN moves behind a "Business bill?" disclosure.</b> It matters on a minority of bills; when opened it behaves exactly as today (state-code check, tax-kind banner).</li>
+  <li>The <b>Customer master is now built</b>: every till syncs all-KDPS mobile/name/GSTIN rows for offline lookup, while bills keep their text snapshots. Past bills are fetched only through the online, store-scoped bill search in counter return mode. <span class="badge b-open">Ruled: customer master, all-KDPS, synced — §4 D-3</span></li>
+</ul>
+
+<h3>What explicitly does not change</h3>
+<p class="note">Everything under the skin: scan-first entry with local lookup, offers applying themselves, per-line salesman with last-picked default, the ambiguous-barcode season question, not-in-system manual lines, hold semantics, commit-then-print, offline queue and sync light, the second-window guard, the late-exchange-window manager PIN gate, paper re-entry mode, exchange legs riding the bill. This is a re-framing, not a re-build of behaviour.</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>4 · Decisions — ruled in the Phase 1 grill (1-2 Aug 2026)</h2>
+<p>The full record with Anand's reasoning: <code>docs/features/billing-screen-revamp/grill-decisions.md</code>. The substance:</p>
+<table>
+  <tr><th style="width:8%">#</th><th style="width:28%">Question</th><th>Ruling</th></tr>
+  <tr><td><b>D-1</b></td><td>Keyboard behaviours?</td><td><b>Superseded 2 Aug 2026 by the POS counter redesign grill Q4:</b> F2 Hold · F3 Look up / Find bill · F4 New bill · F9 Pay &amp; Print · Esc back to scan/dismiss error · Enter for the next bill on the finish overlay. Every action remains a visible button and handlers claim the keys with <code>preventDefault</code>. The scan box keeps its auto-focus, and scanning the same barcode again still increments the existing line.</td></tr>
+  <tr><td><b>D-2</b></td><td>Quick-cash chips?</td><td><b>Yes</b> — Exact + the next two round figures, computed from what's still to pay. Refine denominations later if counters ask.</td></tr>
+  <tr><td><b>D-3</b></td><td>Customer lookup — how far?</td><td><b>A real customer master, all-KDPS, synced to every till</b> (shape c). One row per mobile; auto-created/refreshed at Save &amp; Print; tills hold mobile, name and optional GSTIN but no purchase history; bills snapshot per Rule 3. KDPS's first customer master.</td></tr>
+  <tr><td><b>D-4</b></td><td>GST columns on the grid?</td><td><b>Collapse to a per-line rate badge</b> ("5%"/"18%"); the full breakup opens from the tax figure in the bottom bar. Print and calculation unchanged.</td></tr>
+  <tr><td><b>D-5</b></td><td>Manual "UPI received" fallback?</td><td><b>Manual stays allowed forever</b> (billing never stops); every UPI tender stamped <b>confirmed</b> or <b>manual</b>; no manager PIN — control is the day close showing the confirmed/manual split per till. Charge card ships now on a mock adapter with the five states; the acquirer owns the timeout. Stays a non-money slice.</td></tr>
+  <tr><td><b>D-6</b></td><td>Sound on scan?</td><td><b>Yes, both tones</b> (landed tick + distinct failure buzz), mute toggle in Till &amp; Sync.</td></tr>
+  <tr><td><b>G-1</b></td><td>Draft / never losing the bill</td><td><b>Continuous autosave, no button</b> — every cart action persists instantly; "Draft · saved" in the top strip; crash/close restores mid-scan. Hold bill unchanged. Plus a <b>per-action Undo button</b> on the bill.</td></tr>
+  <tr><td><b>G-2</b></td><td>Screen floor</td><td><b>The fixed frame holds at ≥1280px width</b> (covers 1366×768 laptops); narrower degrades honestly — bands stack, page scrolls. A till is a laptop in landscape.</td></tr>
+  <tr><td><b>G-3</b></td><td>Find a bill</td><td><b>Superseded by POS counter redesign Q2:</b> the Customers tab retires. Counter return mode finds the original bill by receipt barcode, typed bill number, or Customer-master mobile/name search; the customer door uses the online store-scoped bill search and degrades honestly offline.</td></tr>
+  <tr><td><b>G-4</b></td><td>Prompt placement</td><td><b>Nothing pushes the layout</b>: "did you mean" + not-in-system float from the scan box over the grid; the customer typeahead floats under the mobile field; the season question stays inline on the line.</td></tr>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>5 · How this lands</h2>
+<ul>
+  <li>This chat is exploration only. Once the decisions above are made and the structure is agreed, the revamp enters the normal dev process (feature-analyst onward) as a UI slice; the payment-card behaviours (pre-fill, chips, UPI states) and the customer lookup are its only functional additions.</li>
+  <li>On agreement, <b>store-front-design.html §4's region table is updated</b> to this frame (the change log there records the supersession) — the behaviour rules in §4 stand untouched.</li>
+  <li>The build has a house pattern to stand on: the app shell already pins the viewport, and the scan screens (GRN, Stock Count) already do fixed-header / scrolling-middle / fixed-footer. The billing frame is the same idea applied to a route.</li>
+</ul>
+</section>
+
+<footer>
+  D10 · billing screen revamp exploration · lives beside store-front-design.html (whose §4 it will supersede in part) and pos-store-requirements.html.<br>
+  Research base: Oracle Xstore &amp; Dynamics 365 published screen taxonomies · Shopify POS v11 changelog &amp; design posts · Square, Lightspeed R/X, Toast help docs · Ginesys, GoFrugal, Marg, Zoho knowledge bases · Odoo &amp; ERPNext source · Paytm/Pine Labs UPI integration specs · NN/g, WCAG, Material sizing references.
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,11 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, FileUp, Plus, Sparkles, Trash2, XCircle } from "lucide-react";
 
+import { useAuth } from "../auth/AuthContext";
+import { ListSearchBar } from "../components/SearchBox";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 const STATUS_TONE: Record<string, string> = {
   draft: "grey",
@@ -32,6 +36,10 @@ interface BookingT {
   destination_store_name: string | null;
   booked_total: number;
   received_total: number;
+  open_qty: number;
+  close_reason: string;
+  closed_at: string | null;
+  closed_by_name: string | null;
   ownership: string;
   return_terms: string;
   estimated_value_paise: number | null;
@@ -52,29 +60,50 @@ interface BookingLineT {
 }
 
 export function BookingsPage() {
-  const { data, loading } = useList<BookingT>("/bookings");
+  const { user } = useAuth();
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<BookingT>("/bookings", { q });
+  // Mirrors the server gate exactly (`vendors.CanPlaceBooking` = booking:operate),
+  // read from the same section payload rather than a role list of our own. A
+  // store holds `booking: view` (#130) - the list, never the create.
+  const canPlace = userCan(user, "booking", "operate");
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Vendors · Procurement</p>
-          <h1 className="h1 h2-rust">Bookings</h1>
-        </div>
-        <div className="spacer" />
-        <Link className="btn btn-cta" to="/documents/bookings/new" data-testid="new-booking-btn">
-          <Plus size={16} /> New booking
-        </Link>
-      </div>
+      <PageHeader
+        actions={
+          canPlace && (
+            <Link className="btn btn-cta" to="/booking/new" data-testid="new-booking-btn">
+              <Plus size={16} /> New booking
+            </Link>
+          )
+        }
+      />
+
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search bookings — number, vendor, brand, season"
+        label="Search bookings"
+        testId="bookings-search"
+        noun="booking"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
-        <div className="card section-card">No bookings yet. Create one from a vendor's receiving document.</div>
+        <div className="card section-card" data-testid="bookings-empty">
+          {q
+            ? `No booking matches “${q}”. Try the booking number, the vendor, the brand or the season.`
+            : "No bookings yet. Create one from a vendor's receiving document."}
+        </div>
       ) : (
         <div className="card-grid" data-testid="bookings-grid">
           {data.map((b) => {
             const pct = b.booked_total ? Math.round((b.received_total / b.booked_total) * 100) : 0;
             return (
-              <Link key={b.id} to={`/documents/bookings/${b.id}`} className="card bk-card" data-testid={`booking-card-${b.number}`}>
+              <Link key={b.id} to={`/booking/${b.id}`} className="card bk-card" data-testid={`booking-card-${b.number}`}>
                 <div className="bk-card-top">
                   <span className="bk-num">{b.number}</span>
                   <StatusPill status={b.status} label={b.status_label} />
@@ -198,7 +227,7 @@ export function BookingNewPage() {
         source_file_id: sourceFileId,
         lines: payloadLines,
       });
-      navigate(`/documents/bookings/${data.id}`);
+      navigate(`/booking/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -208,7 +237,7 @@ export function BookingNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/bookings" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
+      <Link to="/booking" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New booking</h1>
 
       <div className="card section-card">
@@ -296,23 +325,132 @@ export function BookingNewPage() {
   );
 }
 
-export function BookingDetailPage() {
-  const { id } = useParams();
-  const { data: b, loading } = useDoc<BookingT>(`/bookings/${id}`);
-  if (loading || !b) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+/** Short-close or cancel, for whoever holds the Booking *Approve* cell.
+ *
+ *  `Status.CLOSED` and `Status.CANCELLED` existed on the model from the first
+ *  migration and nothing could ever reach them, so a season that delivered 40 of
+ *  100 pieces stayed "Partially received" for ever and the open-order figure
+ *  counted 60 pieces nobody was waiting for. The reason is mandatory: it is the
+ *  answer to "why did the rest never come?" six months later. */
+function EndBooking({ booking, onDone }: { booking: BookingT; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [action, setAction] = useState<"close" | "cancel">("close");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const nothingReceived = booking.received_total === 0;
+
+  async function submit() {
+    setSaving(true);
+    setError("");
+    try {
+      await api.post(`/bookings/${booking.id}/close`, { action, reason });
+      setOpen(false);
+      setReason("");
+      onDone();
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn" onClick={() => setOpen(true)} data-testid="end-booking-btn">
+        <XCircle size={15} /> Close booking
+      </button>
+    );
+  }
+
   return (
-    <div className="page-pad">
-      <Link to="/documents/bookings" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
-      <div className="toolbar">
+    <div className="card section-card" style={{ marginBottom: 18 }} data-testid="end-booking-panel">
+      <div className="toolbar" style={{ marginBottom: 10 }}>
         <div>
-          <p className="eyebrow">{b.number}</p>
-          <h1 className="h1">{b.brand_name}</h1>
-          <p className="lead">{b.vendor_name} · {b.season_name}{b.destination_store_name ? ` · → ${b.destination_store_name}` : ""}</p>
+          <p className="eyebrow">Ending this booking</p>
+          <h3 className="h3">
+            {action === "cancel"
+              ? "Cancel — nothing was received"
+              : `Short-close — write off ${booking.open_qty} undelivered piece(s)`}
+          </h3>
         </div>
         <div className="spacer" />
-        <StatusPill status={b.status} label={b.status_label} />
-        <Link className="btn btn-cta" to={`/documents/inbound/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
+        <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="end-booking-cancel">Keep it open</button>
       </div>
+      <div className="seg" style={{ marginBottom: 10 }}>
+        <button
+          className={`seg-btn ${action === "close" ? "active" : ""}`}
+          onClick={() => setAction("close")}
+          data-testid="end-action-close"
+        >
+          Short-close
+        </button>
+        <button
+          className={`seg-btn ${action === "cancel" ? "active" : ""}`}
+          onClick={() => setAction("cancel")}
+          disabled={!nothingReceived}
+          title={nothingReceived ? undefined : "Goods have already arrived — short-close it instead"}
+          data-testid="end-action-cancel"
+        >
+          Cancel
+        </button>
+      </div>
+      <input
+        className="input"
+        placeholder="Why is this booking ending? (e.g. season over, vendor short-shipped 60 pcs)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        data-testid="end-booking-reason"
+      />
+      {error && <div className="warn-note" style={{ marginTop: 10 }} data-testid="end-booking-error">{error}</div>}
+      <button
+        className="btn btn-cta"
+        style={{ marginTop: 12 }}
+        disabled={reason.trim().length < 3 || saving}
+        onClick={submit}
+        data-testid="end-booking-confirm"
+      >
+        {saving ? "Recording…" : action === "cancel" ? "Cancel this booking" : "Short-close this booking"}
+      </button>
+    </div>
+  );
+}
+
+export function BookingDetailPage() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const { data: b, loading, reload } = useDoc<BookingT>(`/bookings/${id}`);
+  // Same rung the server checks (`vendors.CanCloseBooking` = booking:approve).
+  const canEnd = userCan(user, "booking", "approve");
+  if (loading || !b) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+  const ended = b.status === "closed" || b.status === "cancelled";
+  return (
+    <div className="page-pad">
+      <PageHeader
+        title={b.brand_name}
+        lead={`${b.number} · ${b.vendor_name} · ${b.season_name}${b.destination_store_name ? ` · → ${b.destination_store_name}` : ""}`}
+        actions={
+          <>
+            <StatusPill status={b.status} label={b.status_label} />
+            {!ended && (
+              <Link className="btn btn-cta" to={`/receive/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
+            )}
+            {!ended && canEnd && <EndBooking booking={b} onDone={reload} />}
+          </>
+        }
+      />
+
+      {ended && (
+        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="booking-ended-note">
+          <p className="eyebrow">{b.status === "cancelled" ? "Cancelled" : "Short-closed"}</p>
+          <h3 className="h3">{b.close_reason || "No reason recorded"}</h3>
+          <p className="lead">
+            {b.closed_by_name ? `${b.closed_by_name} · ` : ""}
+            {b.closed_at ? new Date(b.closed_at).toLocaleString("en-IN") : ""}
+            {b.open_qty > 0 && b.status === "closed" ? ` · ${b.open_qty} piece(s) written off` : ""}
+          </p>
+        </div>
+      )}
 
       <div className="form-row" style={{ marginBottom: 18 }}>
         <div className="card section-card"><p className="eyebrow">Commercial model</p><h3 className="h3" style={{ textTransform: "capitalize" }}>{b.ownership.replace("_", " ")} · {b.return_terms}</h3></div>

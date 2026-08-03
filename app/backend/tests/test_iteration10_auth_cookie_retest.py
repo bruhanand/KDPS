@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -44,7 +45,7 @@ def session() -> requests.Session:
 
 
 def test_login_returns_json_tokens_and_sets_http_only_cookies(session: requests.Session):
-    r = _json_login(session, "owner", "Owner@123")
+    r = _json_login(session, "owner", SEED_OWNER_PASSWORD)
     assert r.status_code == 200, r.text[:300]
 
     body = r.json()
@@ -59,7 +60,7 @@ def test_login_returns_json_tokens_and_sets_http_only_cookies(session: requests.
 
 
 def test_auth_me_works_with_cookie_only_without_authorization_header(session: requests.Session):
-    login = _json_login(session, "owner", "Owner@123")
+    login = _json_login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200
 
     # no Authorization header set; relies on cookie-based auth path
@@ -73,7 +74,7 @@ def test_auth_me_works_with_cookie_only_without_authorization_header(session: re
 def test_refresh_from_cookie_sets_access_cookie_and_keeps_json_compatibility(
     session: requests.Session,
 ):
-    login = _json_login(session, "owner", "Owner@123")
+    login = _json_login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200
 
     # Cookie-only refresh (no request body token)
@@ -88,7 +89,7 @@ def test_refresh_from_cookie_sets_access_cookie_and_keeps_json_compatibility(
 
 
 def test_logout_clears_auth_cookies(session: requests.Session):
-    login = _json_login(session, "owner", "Owner@123")
+    login = _json_login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200
 
     r = session.post(f"{API}/auth/logout", json={}, timeout=30)
@@ -207,7 +208,7 @@ def test_seed_admin_is_idempotent_and_does_not_overwrite_password():
 
 
 def test_regression_vendor_users_inbound_routes_still_load_via_api(session: requests.Session):
-    login = _json_login(session, "owner", "Owner@123")
+    login = _json_login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200
     access = login.json()["access"]
     headers = _bearer_headers(access)

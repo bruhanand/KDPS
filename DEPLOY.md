@@ -80,6 +80,64 @@ a live `Lookup`. Both commands are idempotent and read-mostly, safe to re-run.
 > tab (or locally against the same `DATABASE_URL`) whenever you want to fold the
 > week's corrections back in. Nothing else depends on the cron.
 
+## Alerts (in-transit aging + return-window 30/15/7)
+
+The `render.yaml` includes a **`kdps-alerts-check` cron** that runs once a day:
+
+```
+python manage.py check_alerts   # in-transit aging + return-window checks → alerts table
+```
+
+Both thresholds (aging days; the 30/15/7 return-window days) are `AlertPolicy`
+rows, retunable in the admin without a release (Rule 12). The command is
+idempotent — safe to re-run the same day, or catch up after a missed one — so
+on the **free tier**, run it by hand from the API service **Shell** tab (or
+locally against the same `DATABASE_URL`) whenever you want alerts current.
+
+## Mail (each person's Google Workspace inbox, in the top bar)
+
+Mail stays **switched off** until these four variables exist.
+The Mail button does not appear in the top bar at all without them, so a half-configured server shows nothing rather than a button that fails.
+
+| Variable | What it is |
+|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` | From the Google Cloud console, below. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Same place. |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `https://<api-host>/api/mail/callback` - must match the console **exactly**, including the scheme and any trailing path. |
+| `KDPS_MAIL_TOKEN_KEY` | Encrypts stored Google refresh tokens. Generate with `openssl rand -base64 32`. |
+
+Two optional ones.
+`MAIL_FRONTEND_URL` is where the browser is sent back after consent (defaults to `/`).
+
+`GOOGLE_WORKSPACE_DOMAIN` (e.g. `kdps.in`) is optional but **should be set on any real deployment**.
+Setting it does two things: it narrows Google's account picker to the KDPS domain, and - the part that matters - it makes the server *refuse* any mailbox outside that domain when the consent comes back.
+Leave it unset and a personal Gmail can be attached, which is a private inbox sitting in the company's database.
+
+
+
+### Registering the OAuth client - the one setting that costs money if you get it wrong
+
+In the Google Cloud console, create an OAuth client for the KDPS Workspace project and set **User type = Internal**.
+
+This is not a preference.
+Reading mail needs a *restricted* scope, and a **public** app asking for one must pass a Google-approved CASA Tier 2 security audit, repeated **every twelve months** at a quoted $500 to $75,000 a year.
+Google exempts **internal** apps - those usable only by people in your own Workspace organisation - from that assessment entirely.
+
+An External registration behaves identically all the way through testing and then hits that wall at go-live.
+If somebody ever sees a Google "unverified app" warning, the client was registered wrong.
+
+Scope requested: `gmail.modify` (read, plus mark-as-read and send).
+Deliberately **not** `mail.google.com`, which would also permit deleting a mailbox.
+
+### What this does and does not do
+
+Mail is a **cache, not a book of record**. It writes no ledger and no document; the mailbox lives at Google and these tables can be dropped and refilled at any time.
+Each person connects their own account and sees only their own inbox - the only KDPS read that scopes by *person* rather than by store.
+
+Sync runs **when somebody opens the app**, not on a timer (there is no worker or Redis here yet).
+The practical consequence: the unread badge is as fresh as the last time that person had KDPS open, so a mail arriving overnight is counted in the morning rather than at 3am.
+When a scheduler exists, `python manage.py sync_mail` is already the whole job and can go on a cron beside `check_alerts`.
+
 ## Not done yet (before real use)
 
 - Cloud CI (`.github/workflows/ci.yml`) gates only **pytest + the frontend build**; `ruff` / `mypy` strict / `import-linter` run only in pre-commit + local `npm run ci` (not in the cloud), so this alpha carries ~54 `ruff` findings + un-run `mypy` strict. Green cloud CI ≠ green `npm run ci`.

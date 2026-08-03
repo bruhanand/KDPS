@@ -17,6 +17,7 @@ from django.db import IntegrityError, transaction
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
+from accounts.rbac_matrix import section_access_for
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Season, Sku, Store
 from ptmapper import engine
 from ptmapper.models import PtFile, PtRow
@@ -42,6 +43,13 @@ def world(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
     vendor = Vendor.objects.create(code="v1", name="V1")
+    accounts_role = Role.objects.create(code="accounts", name="Accounts")
+    actor = User.objects.create(
+        username="phase-f-head-office",
+        full_name="Phase F Head Office",
+        scope_type="all",
+        role=accounts_role,
+    )
     return {
         "entity": entity,
         "gstin": gstin,
@@ -49,6 +57,7 @@ def world(db):
         "season": season,
         "owned": owned,
         "vendor": vendor,
+        "actor": actor,
     }
 
 
@@ -91,7 +100,16 @@ def _pt(*, qty="3", prate="100", mrp="200", barcode="B1", season="SS26"):
 
 
 def _user(role_code: str, scope: str = "all") -> User:
-    role = Role.objects.create(code=role_code, name=role_code.title())
+    # Seed the role's section access from the RBAC matrix exactly as
+    # `seed_foundation` does — the API gates on `Role.section_access`, so a role
+    # built without it would be denied everything and prove nothing.
+    role, _ = Role.objects.update_or_create(
+        code=role_code,
+        defaults={
+            "name": role_code.title(),
+            "section_access": section_access_for(role_code),
+        },
+    )
     return User.objects.create(username=f"u_{role_code}", role=role, scope_type=scope)
 
 
@@ -108,7 +126,11 @@ def test_moneyfield_rejects_float_on_paise_column(world):
 
 
 def test_post_registers_sku_and_cohort_with_locked_cost(world):
-    post_pt_inward(_pt(qty="3", prate="100", mrp="200"), None, booking=_booking(world))
+    post_pt_inward(
+        _pt(qty="3", prate="100", mrp="200"),
+        world["actor"],
+        booking=_booking(world),
+    )
 
     sku = Sku.objects.get(barcode="B1")
     assert sku.brand == "Mufti" and sku.mrp_paise == 20000 and sku.first_doc_number
@@ -136,12 +158,12 @@ def test_cohort_db_check_blocks_cost_over_mrp(world):
 
 def test_stock_on_hand_materialises_and_zeroes_on_reversal(world):
     pt = _pt(qty="3", prate="100", mrp="200")
-    post_pt_inward(pt, None, booking=_booking(world))
+    post_pt_inward(pt, world["actor"], booking=_booking(world))
 
     oh = StockOnHand.objects.get(store=world["wh"], sku_code="B1")
     assert oh.net_qty == 3 and oh.net_value_paise == 30000
 
-    reverse_pt_inward(pt, None)
+    reverse_pt_inward(pt, world["actor"])
     oh.refresh_from_db()
     assert oh.net_qty == 0 and oh.net_value_paise == 0
 
@@ -168,7 +190,7 @@ def test_pt_reader_not_truncated_for_small_file(db, monkeypatch):
 
 
 def test_books_health_reports_balanced_books_after_post(world):
-    post_pt_inward(_pt(), None, booking=_booking(world))
+    post_pt_inward(_pt(), world["actor"], booking=_booking(world))
     client = APIClient()
     client.force_authenticate(_user("owner"))
     r = client.get("/api/finledger/health")
@@ -176,6 +198,65 @@ def test_books_health_reports_balanced_books_after_post(world):
     assert r.data["balanced"] is True
     assert r.data["trial_balance_paise"] == 0
     assert r.data["assets_paise"] == 30000  # Dr INVENTORY 300.00
+
+
+def test_books_health_covers_every_gl_account():
+    """No account may exist in the chart without a side on the equation of state.
+
+    `trial_balance()` is Σ over every leg, so it stays right whatever this list
+    says — which is exactly the danger. A code added to `GLAccount` and forgotten
+    here would silently drop out of `assets_paise`, `liabilities_paise` and the
+    account breakdown: a wrong number rather than a missing one, and nothing else
+    would notice. Selling added seven codes at once, which is when this stopped
+    being hypothetical.
+    """
+    from core.gl import GLAccount
+    from finledger.health import ACCOUNTS
+
+    chart = {
+        value
+        for name, value in vars(GLAccount).items()
+        if not name.startswith("_") and isinstance(value, str)
+    }
+    listed = {code for code, _, _ in ACCOUNTS}
+    assert chart - listed == set(), "GL accounts missing a side in finledger.health.ACCOUNTS"
+    assert listed - chart == set(), (
+        "finledger.health.ACCOUNTS names an account that is not in the chart"
+    )
+    assert {side for _, _, side in ACCOUNTS} <= {"asset", "liability", "income", "expense"}
+
+
+@pytest.mark.parametrize(
+    "role_code",
+    [
+        # Admin is the regression: the RBAC matrix gives it_admin `money: none`
+        # (Sheet-1 note 2) and #87 hid Money from its sidebar, but the ledger API
+        # kept a role list with `it_admin` in it and served vendor payables to it.
+        "it_admin",
+        "warehouse",  # money: operate — books an expense, never opens the books
+        "store_manager",  # money: operate — same rung, same denial
+        "brand_manager",  # money: none
+    ],
+)
+def test_books_are_closed_to_everyone_without_money_manage(world, role_code):
+    client = APIClient()
+    client.force_authenticate(_user(role_code))
+    for endpoint in (
+        "/api/finledger/health",
+        "/api/finledger/vendor/balances",
+        "/api/finledger/vendor/entries",
+        "/api/finledger/vendor/ageing",
+        "/api/finledger/cash/summary",
+        "/api/finledger/cash/entries",
+    ):
+        assert client.get(endpoint).status_code == 403, f"{role_code} reached {endpoint}"
+
+
+def test_books_are_open_to_accounts(world):
+    """The other half of the gate: denying everyone would also pass the test above."""
+    client = APIClient()
+    client.force_authenticate(_user("accounts"))
+    assert client.get("/api/finledger/vendor/balances").status_code == 200
 
 
 def test_books_health_is_finance_gated(world):
