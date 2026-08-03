@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend + code-review testing of the two new features (owner/Owner@123): Partner Dues report and real browser-print Tag Printer. All requested checks passed via Playwright. (1) Partner Dues: nav item present under Money, /money/partner-dues loads, shows total-owed card (₹2,800), table with BANKA row (owed ₹2,800, 1 transfer, last dispatch 3/8/2026), expand chevron reveals transfer detail (doc 26-27/DEO/STO/1, from DEO, billed ₹2,800), and the doc-number link correctly navigates to /transfer/1 showing matching Partner Billing card. No crash/error path (empty-state testid exists in code, not exercised since data was present). (2) Tag Print: checkbox column added to Price Book rows (price-select-{barcode}), selecting 2-3 rows shows 'Print N selected tags' toolbar button with correct count, opens tag-print-modal showing ALL selected pieces in the preview (not just one) plus a combined print sheet. Copies-per-tag input defaults to 2, clamps correctly at both ends (0->1, 25->20), and the Print button label correctly reflects rows*copies (e.g. 2 rows x 1 copy = 'Print 2 labels', x20 = 'Print 40 labels'). Clicking Print (window.print()) does not crash/hang the page - page stayed fully responsive and modal closed cleanly afterward via tag-print-close. No 'mock' wording found anywhere in the modal text (verified programmatically). Regression: 'Ticket & trail' button/modal (price-open-*, price-detail) still opens correctly and is unaffected by the checkbox column, showing full ticket detail/re-ticket UI as before. Backend code review of PartnerDuesView/CanViewPartnerDues/urls.py also inspected and looks correct (aggregates SUBMITTED, is_partner=True transfers, returns proper totals) - not separately hit with pytest since the frontend already exercises this real endpoint successfully with real seeded data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No action required. All 6 requested checks (Partner Dues nav/page/expand/link, Price Book checkboxes + bulk print button + count, tag-print-modal multi-piece preview, copies clamp 1-20 + label default, Print button not crashing + closable, no mock wording, Ticket & trail regression) passed."
+  ],
+  "critical_code_review_comments": [
+    "TagPrintModal (TagPrint.tsx) is clean and well-isolated: single reusable component consumed by both the single-row 'Print tag' button and the bulk toolbar button via the same `rows: TagPrintRow[]` prop, avoiding duplication.",
+    "Copies clamp logic (`Math.max(1, Math.min(20, Number(e.target.value) || 1))`) is correct and was verified live for both boundary cases (0->1, 25->20).",
+    "PartnerDuesView backend correctly scopes to `docstatus=SUBMITTED` and `partner_billing_value_paise__isnull=False`, matching the stated intent that draft transfers owe nothing yet.",
+    "Print-only sheet (`.tag-print-sheet` + `@media print` CSS) is separated from the on-screen `.no-print` preview via CSS classes, a sound approach for browser-native printing without a vendor SDK; not independently verified pixel-wise since window.print() is a no-op in headless testing (expected, per task note)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (via UI, endpoint verified reachable/correct through real data)", "frontend": "100% (all requested checks passed)"},
+  "test_credentials": "owner/Owner@123 used successfully throughout (demo-login 'Owner' chip + Sign in).",
+  "seed_data_creation": "None - reused existing BANKA transfer (partner_billing_value_paise=280000, doc 26-27/DEO/STO/1) already present from prior sessions, exactly as the task note anticipated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both new features (Partner Dues report, real window.print()-based Tag Printer with bulk selection) are fully working with no bugs found. Environment note: the preview URL intermittently returned HTTP 429 (rate-limited) on back-to-back Playwright script invocations fired within a few seconds of each other - inserting ~15-25s sleeps between browser_automation calls resolved it every time; not an app bug, just a testing-infra throttle to be aware of for future agents hitting this same preview host rapidly.",
+  "rca of the issue": "N/A - no bugs found in this session, purely additive-feature verification of Partner Dues and real Tag Printer."
+}

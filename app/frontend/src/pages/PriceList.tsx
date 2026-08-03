@@ -20,6 +20,7 @@ import { History, IndianRupee, Printer, Search, Tag } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc } from "../lib/hooks";
+import { TagPrintModal } from "./TagPrint";
 import "./Booking.css";
 import "./OffersPrice.css";
 
@@ -65,7 +66,8 @@ export function PriceListPage() {
   const [term, setTerm] = useState("");
   const [asOf, setAsOf] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [printing, setPrinting] = useState<Row | null>(null);
+  const [printingRows, setPrintingRows] = useState<Row[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const query = `/offers/price-list?q=${encodeURIComponent(term)}${asOf ? `&as_of=${asOf}` : ""}`;
   const { data, loading, reload } = useDoc<{
@@ -74,6 +76,15 @@ export function PriceListPage() {
     truncated: boolean;
     rows: Row[];
   }>(query);
+
+  function toggleSelected(barcode: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(barcode)) next.delete(barcode);
+      else next.add(barcode);
+      return next;
+    });
+  }
 
   return (
     <div className="page-pad">
@@ -103,6 +114,16 @@ export function PriceListPage() {
           />
         </label>
         <span className="spacer" />
+        {selected.size > 0 && (
+          <button
+            type="button"
+            className="btn btn-cta"
+            onClick={() => setPrintingRows((data?.rows || []).filter((r) => selected.has(r.barcode)))}
+            data-testid="price-print-selected"
+          >
+            <Printer size={14} /> Print {selected.size} selected tag{selected.size === 1 ? "" : "s"}
+          </button>
+        )}
         {data && (
           <span className="chip chip-grey" data-testid="price-count">
             {data.count} piece{data.count === 1 ? "" : "s"}
@@ -125,6 +146,7 @@ export function PriceListPage() {
           <table className="data" data-testid="price-table">
             <thead>
               <tr>
+                <th />
                 <th>Piece</th>
                 <th>Season</th>
                 <th className="num">Cost</th>
@@ -137,6 +159,14 @@ export function PriceListPage() {
             <tbody>
               {data.rows.map((row) => (
                 <tr key={row.barcode} data-testid={`price-row-${row.barcode}`}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.barcode)}
+                      onChange={() => toggleSelected(row.barcode)}
+                      data-testid={`price-select-${row.barcode}`}
+                    />
+                  </td>
                   <td>
                     <p className="eyebrow">{row.brand || "(unbranded)"}</p>
                     {row.design} {row.color} {row.size}
@@ -177,7 +207,7 @@ export function PriceListPage() {
                       type="button"
                       className="btn btn-sm"
                       style={{ marginLeft: 6 }}
-                      onClick={() => setPrinting(row)}
+                      onClick={() => setPrintingRows([row])}
                       data-testid={`price-print-tag-${row.barcode}`}
                     >
                       <Printer size={13} /> Print tag
@@ -199,49 +229,7 @@ export function PriceListPage() {
           }}
         />
       )}
-      {printing && <TagPrintModal row={printing} onClose={() => setPrinting(null)} />}
-    </div>
-  );
-}
-
-/** Mocked (Rule 12): no printer is wired up yet — this simulates the ticket a
- *  real one would produce, so Ops can preview the flow while the hardware
- *  integration is scoped as its own ticket. */
-function TagPrintModal({ row, onClose }: { row: Row; onClose: () => void }) {
-  const [sent, setSent] = useState(false);
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="tag-print-modal" style={{ maxWidth: 380 }}>
-        <div className="modal-head">
-          <div>
-            <p className="eyebrow"><Printer size={14} /> Print tag (mock)</p>
-            <h3 className="h3">{row.brand || "(unbranded)"}</h3>
-          </div>
-          <button type="button" className="btn btn-sm" onClick={onClose} data-testid="tag-print-close">Close</button>
-        </div>
-        <div className="card section-card" style={{ marginTop: 14, textAlign: "center" }} data-testid="tag-preview">
-          <p className="eyebrow">{row.item || "Piece"}</p>
-          <p style={{ fontWeight: 700 }}>{row.design} {row.color} {row.size}</p>
-          <p className="mono muted-cell">{row.barcode}</p>
-          <h2 className="h2" style={{ marginTop: 8 }}>{money(row.mrp_paise)}</h2>
-          <p className="muted-cell">MRP incl. of all taxes</p>
-        </div>
-        {sent ? (
-          <p className="ok-note" style={{ marginTop: 14 }} data-testid="tag-print-sent">
-            Sent to printer (mock) — no physical printer is wired up yet.
-          </p>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-cta"
-            style={{ marginTop: 14, width: "100%" }}
-            onClick={() => setSent(true)}
-            data-testid="tag-print-confirm"
-          >
-            <Printer size={15} /> Print
-          </button>
-        )}
-      </div>
+      {printingRows && <TagPrintModal rows={printingRows} onClose={() => setPrintingRows(null)} />}
     </div>
   );
 }
