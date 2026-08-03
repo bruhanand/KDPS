@@ -1,12 +1,10 @@
 """What a sold line is still worth back, and what has already been given back.
 
-One module because there are **two** ways a piece comes back and they share one
-ceiling. Inside a bill it is an exchange leg - a `SaleLine` with
-`direction=return` pointing at the line it gives back (#178). On its own it is a
-plain return - a `ReturnLine` on an `SRT` document (#184, grill Q7). A customer
-who exchanges one of a pair and then brings the other back has used both paths
-against the same sold line, and each path counting only its own table would
-refund that line twice while every individual document stayed perfectly valid.
+One module because there are **two stores of return history** and they share one
+ceiling. New activity is an exchange leg - a `SaleLine` with `direction=return`
+pointing at the line it gives back. Before #273, standalone returns were stored
+as `ReturnLine` rows on `SRT` documents. Both must count for ever or a customer
+could return a piece once through each generation of the counter.
 
 So the ledger of what has been given back is read from both tables, always, and
 under the same lock. The lock is on the *original* line, which is what makes it
