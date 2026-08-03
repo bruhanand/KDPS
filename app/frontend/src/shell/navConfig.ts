@@ -315,7 +315,7 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Price List", to: "/offers/price-list", planned: true },
       { label: "Offers", to: "/offers" },
       { label: "Discounts", to: "/offers/discounts", planned: true },
-      { label: "EOSS Planning", to: "/offers/eoss", planned: true },
+      { label: "EOSS Planning", to: "/offers/eoss" },
     ],
   },
   {
