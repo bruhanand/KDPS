@@ -11,7 +11,7 @@ import {
 
 import { useAuth } from "../../auth/AuthContext";
 import { PageHeader } from "../../components/PageHeader";
-import { api, apiErrorMessage } from "../../lib/api";
+import { apiErrorMessage, typedApi } from "../../lib/api";
 import { Money } from "../../lib/format";
 import { useTill } from "../../till/TillProvider";
 import { useCounterRoom } from "../../till/useCounterRoom";
@@ -43,6 +43,7 @@ import { storeStateCodeOf, taxKindFor } from "../../till/gstin";
 import type { B2bTaxKind } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import {
+  billSearchForCustomer,
   billSeqFrom,
   findQueuedBill,
   findQueuedBillByDoc,
@@ -52,8 +53,9 @@ import {
   searchQueuedBillsByCustomer,
   withQueuedReturns,
 } from "../../till/original";
-import type { FoundBill, SaleDetail, SaleSummary } from "../../till/original";
+import type { FoundBill } from "../../till/original";
 import { LatestRequest } from "../../till/latest";
+import { withStableQueue } from "../../till/sync";
 import { mockPaymentAdapter } from "../../till/payment";
 import type { PaymentAdapter, UpiCharged } from "../../till/payment";
 import { browserPrintAdapter } from "../../till/print";
@@ -114,9 +116,10 @@ import "./Billing.css";
 // printer that is off is a banner and a Reprint button - never a lost sale, and
 // never a bill number spent on nothing (G2).
 //
-// **Nothing here shows cost or margin** (H2), and nothing here asks the server
-// anything: every price, every tax rate and every stock figure comes from the
-// counter's own copy, so the screen behaves identically with the line up or down.
+// **Nothing here shows cost or margin** (H2), and ordinary scanning, pricing and
+// committing ask the server nothing: every price, tax rate and stock figure
+// comes from the counter's own copy. Finding an older return bill is the narrow
+// exception; it asks the local queue first and head-office history only online.
 //
 // The payment panel has three incoming tender modes.
 //
@@ -771,10 +774,11 @@ function Counter({
         );
         return;
       }
-      const { data: matches } = await api.get<{ doc_number: string }[]>("/sell/sales", {
+      const { data: rows } = await typedApi.get("/sell/sales", {
         params: { doc: reference },
       });
       if (!isCurrent()) return;
+      const matches = rows.flatMap((row) => row.doc_number ? [row.doc_number] : []);
       if (!matches.length) {
         setReturnError(`No bill ${reference} at this store.`);
         return;
@@ -783,12 +787,15 @@ function Counter({
         setReturnError("More than one bill matches. Type or scan the full bill number.");
         return;
       }
-      const { data } = await api.get<SaleDetail>(
-        `/sell/sales/${encodeURIComponent(matches[0].doc_number)}`,
-      );
-      if (!isCurrent()) return;
-      const found = await withQueuedReturns(engine.db, fromServer(data));
-      if (isCurrent()) loadReturnBill(found);
+      const found = await withStableQueue(engine.db, async () => {
+        if (!isCurrent()) return null;
+        const { data } = await typedApi.get(
+          `/sell/sales/${encodeURIComponent(matches[0])}` as "/sell/sales/{doc_number}",
+        );
+        if (!isCurrent()) return null;
+        return withQueuedReturns(engine.db, fromServer(data));
+      });
+      if (isCurrent() && found) loadReturnBill(found);
     } catch (error) {
       if (isCurrent()) setReturnError(apiErrorMessage(error));
     } finally {
@@ -856,13 +863,20 @@ function Counter({
       setReturnMatches([...byNumber.values()]);
       if (!till?.online) return;
       try {
-        const { data } = await api.get<SaleSummary[]>("/sell/sales", {
+        const { data } = await typedApi.get("/sell/sales", {
           params: { [key]: term.trim() },
         });
         if (!isCurrent()) return;
         for (const row of data) {
-          if (byNumber.has(row.doc_number)) continue;
-          byNumber.set(row.doc_number, { ...row, local: null });
+          if (!row.doc_number || byNumber.has(row.doc_number)) continue;
+          byNumber.set(row.doc_number, {
+            doc_number: row.doc_number,
+            billed_at: row.billed_at,
+            customer_name: row.customer_name ?? "",
+            customer_mobile: row.customer_mobile ?? "",
+            net_paise: row.net_paise ?? 0,
+            local: null,
+          });
         }
         setReturnMatches([...byNumber.values()]);
       } catch (error) {
@@ -894,12 +908,15 @@ function Counter({
     setReturnLooking(true);
     setReturnError("");
     try {
-      const { data } = await api.get<SaleDetail>(
-        `/sell/sales/${encodeURIComponent(match.doc_number)}`,
-      );
-      if (!isCurrent()) return;
-      const found = await withQueuedReturns(engine.db, fromServer(data));
-      if (isCurrent()) loadReturnBill(found);
+      const found = await withStableQueue(engine.db, async () => {
+        if (!isCurrent()) return null;
+        const { data } = await typedApi.get(
+          `/sell/sales/${encodeURIComponent(match.doc_number)}` as "/sell/sales/{doc_number}",
+        );
+        if (!isCurrent()) return null;
+        return withQueuedReturns(engine.db, fromServer(data));
+      });
+      if (isCurrent() && found) loadReturnBill(found);
     } catch (error) {
       if (isCurrent()) setReturnError(apiErrorMessage(error));
     } finally {
@@ -1826,9 +1843,10 @@ function Counter({
               }}
               onSearch={() => void searchReturnCustomer()}
               onPickCustomer={(known) => {
-                const term = returnSearchKey === "mobile" ? known.mobile : known.name;
-                setReturnSearchTerm(term);
-                void searchReturnCustomer(term, returnSearchKey);
+                const selected = billSearchForCustomer(known);
+                setReturnSearchKey(selected.key);
+                setReturnSearchTerm(selected.term);
+                void searchReturnCustomer(selected.term, selected.key);
               }}
               onPick={(match) => void openReturnMatch(match)}
             />

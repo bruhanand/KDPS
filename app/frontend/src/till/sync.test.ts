@@ -21,6 +21,7 @@ import {
   forceBootstrap,
   reconcileRegister,
   syncDown,
+  withStableQueue,
 } from "./sync";
 import { dataset, draft, fakeServer, freshTill, item, refuse, register, season } from "./testSupport";
 import type { QueueHalt, TillPolicy } from "./types";
@@ -621,6 +622,69 @@ describe("draining the queue", () => {
     await both;
 
     expect(server.offered).toHaveLength(1);
+  });
+
+  it("keeps the queue stable while a server bill is being read", async () => {
+    const { db, storeCode } = till();
+    await commitBill(db, storeCode, draft());
+    let finishRead = () => undefined as void;
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    let readStarted = () => undefined as void;
+    const started = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    const reading = withStableQueue(db, async () => {
+      readStarted();
+      await readGate;
+      return db.queue.count();
+    });
+    await started;
+
+    const server = fakeServer();
+    const draining = drainQueue(db, server);
+    await Promise.resolve();
+    expect(server.offered).toHaveLength(0);
+
+    finishRead();
+    expect(await reading).toBe(1);
+    await draining;
+    expect(server.offered).toHaveLength(1);
+  });
+
+  it("waits for an existing drain before starting a stable read", async () => {
+    const { db, storeCode } = till();
+    await commitBill(db, storeCode, draft());
+    let finishPost = () => undefined as void;
+    const postGate = new Promise<void>((resolve) => {
+      finishPost = resolve;
+    });
+    let postStarted = () => undefined as void;
+    const started = new Promise<void>((resolve) => {
+      postStarted = resolve;
+    });
+    const server = fakeServer();
+    const inner = server.postSale;
+    server.postSale = async (bill) => {
+      postStarted();
+      await postGate;
+      return inner(bill);
+    };
+    const draining = drainQueue(db, server);
+    await started;
+
+    let readStarted = false;
+    const reading = withStableQueue(db, async () => {
+      readStarted = true;
+      return db.queue.count();
+    });
+    await Promise.resolve();
+    expect(readStarted).toBe(false);
+
+    finishPost();
+    await draining;
+    expect(await reading).toBe(0);
   });
 });
 

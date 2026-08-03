@@ -23,6 +23,7 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -51,6 +52,7 @@ from sell.serializers import (
     IrnQueueRowSerializer,
     IrnQueueWriteSerializer,
     RegisterHandoverWriteSerializer,
+    SaleAcceptedSerializer,
     SaleReadSerializer,
     SaleRowSerializer,
     SaleWriteSerializer,
@@ -153,6 +155,10 @@ class SaleListCreateView(APIView):
 
     permission_classes = [IsAuthenticated, CanReadOrBill]
 
+    @extend_schema(
+        request=SaleWriteSerializer,
+        responses={200: SaleAcceptedSerializer, 201: SaleAcceptedSerializer},
+    )
     def post(self, request: Request) -> Response:
         form = SaleWriteSerializer(data=request.data)
         if not form.is_valid():
@@ -171,6 +177,14 @@ class SaleListCreateView(APIView):
             status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("mobile", str, description="Customer mobile contains"),
+            OpenApiParameter("name", str, description="Customer name contains"),
+            OpenApiParameter("doc", str, description="Bill number or document number contains"),
+        ],
+        responses=SaleRowSerializer(many=True),
+    )
     def get(self, request: Request) -> Response:
         mobile = (request.query_params.get("mobile") or "").strip()
         name = (request.query_params.get("name") or "").strip()
@@ -489,6 +503,7 @@ class SaleDetailView(APIView):
 
     permission_classes = [IsAuthenticated, CanReadSales]
 
+    @extend_schema(responses=SaleReadSerializer)
     def get(self, request: Request, doc_number: str) -> Response:
         sale = _sales(request.user).filter(doc_number=doc_number).first()
         if sale is None:

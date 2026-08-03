@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  billSearchForCustomer,
   foundFromExchange,
   searchKnownCustomers,
   findQueuedBillByDoc,
@@ -150,6 +151,14 @@ describe("customer search over the till's own queue", () => {
     expect((await searchKnownCustomers(db, "name", "ravi")).map((row) => row.mobile)).toEqual([
       "9182000000",
     ]);
+  });
+
+  it("opens a picked customer's bill history by unique mobile, not shared name", () => {
+    const first = { mobile: "9835212345", name: "Sunita Devi", gstin: "" };
+    const second = { mobile: "9182000000", name: "Sunita Devi", gstin: "" };
+
+    expect(billSearchForCustomer(first)).toEqual({ key: "mobile", term: "9835212345" });
+    expect(billSearchForCustomer(second)).toEqual({ key: "mobile", term: "9182000000" });
   });
 
   it("reconstructs the against-bill card from an exchange saved in a draft", () => {

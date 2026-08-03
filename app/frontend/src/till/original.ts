@@ -15,6 +15,7 @@
 // price list: what comes back is what was paid (D2), which is a fact about that
 // bill and about no other.
 
+import type { ApiSchemas } from "../lib/api";
 import type { TillDb } from "./db";
 import type { Exchange, ExchangeOriginal, OriginalLine } from "./exchange";
 import { searchCustomers } from "./lookup";
@@ -128,6 +129,16 @@ export async function searchKnownCustomers(
   }
 }
 
+/** A picked master row identifies a person by mobile. Names are deliberately
+ * not reused for the history request: two customers can share one, and the
+ * server's bounded fuzzy-name search cannot promise which one's bills fit. */
+export function billSearchForCustomer(customer: TillKnownCustomer): {
+  key: "mobile";
+  term: string;
+} {
+  return { key: "mobile", term: customer.mobile };
+}
+
 function digitsOf(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -204,42 +215,51 @@ function describedBy(piece: TillItem | undefined) {
   };
 }
 
-/** The read shape of `GET /api/sell/sales/{doc_number}`, narrowed to what a
- *  return needs. Hand-written for the reason `types.ts` gives: this is the
- *  till's copy of a contract, and it has to keep compiling when the generated
- *  schema is not to hand. */
-export interface SaleDetail {
-  doc_number: string;
-  fy: string;
-  till_seq: number;
-  billed_at: string;
-  customer_name: string;
-  customer_mobile: string;
-  net_paise: number;
-  lines: OriginalLine[];
-}
+/** The read shape of `GET /api/sell/sales/{doc_number}`, generated from the
+ * server serializer through the OpenAPI seam (ADR-0001). */
+export type SaleDetail = ApiSchemas["SaleRead"];
 
-/** One result from the existing customer/document bill-search endpoint. */
-export interface SaleSummary {
-  doc_number: string;
-  billed_at: string;
-  customer_name: string;
-  customer_mobile: string;
-  net_paise: number;
+function requiredPaise(value: number | undefined, field: string): number {
+  if (value === undefined) throw new Error(`Head office omitted ${field} from the bill.`);
+  return value;
 }
 
 /** A bill head office holds, in the same shape as a queued one. */
 export function fromServer(detail: SaleDetail): FoundBill {
   return {
-    original: { fy: detail.fy, till_seq: detail.till_seq, doc_number: detail.doc_number },
+    original: {
+      fy: detail.fy,
+      till_seq: detail.till_seq,
+      doc_number: detail.doc_number ?? "",
+    },
     billed_at: detail.billed_at,
-    customer_name: detail.customer_name,
-    customer_mobile: detail.customer_mobile,
-    net_paise: detail.net_paise,
+    customer_name: detail.customer_name ?? "",
+    customer_mobile: detail.customer_mobile ?? "",
+    net_paise: requiredPaise(detail.net_paise, "net_paise"),
     local: false,
     // A bill's own exchange legs are lines too, and they are not returnable -
     // they are pieces that already came back.
-    lines: detail.lines.filter((line) => line.direction !== "return"),
+    lines: detail.lines
+      .filter((line) => line.direction !== "return")
+      .map((line) => ({
+        line_no: line.line_no,
+        barcode: line.barcode,
+        season: line.season ?? "",
+        design: line.design ?? "",
+        color: line.color ?? "",
+        size: line.size ?? "",
+        brand: line.brand ?? "",
+        item: line.item ?? "",
+        hsn: line.hsn ?? "",
+        qty: line.qty,
+        net_paise: requiredPaise(line.net_paise, `line ${line.line_no} net_paise`),
+        gst_rate: line.gst_rate ?? "0.00",
+        gst_paise: requiredPaise(line.gst_paise, `line ${line.line_no} gst_paise`),
+        manual_desc: line.manual_desc ?? "",
+        direction: line.direction ?? "sale",
+        returned_qty: line.returned_qty,
+        returned_paise: line.returned_paise,
+      })),
   };
 }
 

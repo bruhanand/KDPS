@@ -309,6 +309,14 @@ class RegisterHandoverWriteSerializer(serializers.Serializer):
 # --- read shapes -------------------------------------------------
 
 
+class SaleAcceptedSerializer(serializers.Serializer):
+    """The replay-safe acknowledgement returned when the queue lands a bill."""
+
+    doc_number = serializers.CharField()
+    id = serializers.IntegerField()
+    flags = serializers.ListField(child=serializers.CharField())
+
+
 class SaleLineReadSerializer(serializers.ModelSerializer[SaleLine]):
     salesman_code = serializers.CharField(source="salesman.code", read_only=True, default="")
     salesman_name = serializers.CharField(source="salesman.name", read_only=True, default="")
