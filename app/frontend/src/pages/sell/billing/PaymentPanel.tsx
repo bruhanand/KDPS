@@ -72,8 +72,8 @@ export function PaymentPanel({
         </p>
       </div>
 
-      <div className="bill-rail-tile bill-payment-tile">
-        <div className="bill-cash-block">
+      <div className="bill-payment-stack">
+        <div className="bill-payment-method bill-cash-block">
           <TenderRow
             testId="bill-cash"
             label="Cash"
@@ -105,7 +105,7 @@ export function PaymentPanel({
             />
           )}
         </div>
-        <div className="bill-upi-block">
+        <div className="bill-payment-method bill-upi-block">
           <TenderRow
             testId="bill-upi"
             label="UPI"
@@ -121,35 +121,34 @@ export function PaymentPanel({
               />
             }
           />
-          <UpiProof
-            confirmed={split.upi_confirmed}
-            // Disabled rather than hidden, both times: there is nothing to
-            // charge on an empty row, and nothing left to charge on one the
-            // bank has already confirmed. A button that appeared and vanished
-            // as a figure was typed would be a control moving under a
-            // cashier's hand (the standing "never hide a control" rule).
-            locked={locked || split.upi_paise <= 0 || split.upi_confirmed !== null}
-            onShowQr={onShowQr}
+          {(split.upi_paise > 0 || split.upi_confirmed) && (
+            <UpiProof
+              confirmed={split.upi_confirmed}
+              locked={locked || split.upi_confirmed !== null}
+              onShowQr={onShowQr}
+            />
+          )}
+        </div>
+        <div className="bill-payment-method">
+          <TenderRow
+            testId="bill-card"
+            label="Card"
+            icon={<CreditCard size={16} />}
+            paise={payment.card_paise}
+            prefillPaise={offerIf(payment.card_paise === 0, owed)}
+            locked={locked}
+            onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
+            action={
+              <RestButton
+                disabled={locked || !canFillTenderRest(split, "card")}
+                onClick={() => onChange(restTenderPatch(split, "card"))}
+              />
+            }
           />
         </div>
-        <TenderRow
-          testId="bill-card"
-          label="Card"
-          icon={<CreditCard size={16} />}
-          paise={payment.card_paise}
-          prefillPaise={offerIf(payment.card_paise === 0, owed)}
-          locked={locked}
-          onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
-          action={
-            <RestButton
-              disabled={locked || !canFillTenderRest(split, "card")}
-              onClick={() => onChange(restTenderPatch(split, "card"))}
-            />
-          }
-        />
-        <BalanceLine split={split} />
       </div>
 
+      <BalanceLine split={split} />
     </section>
   );
 }

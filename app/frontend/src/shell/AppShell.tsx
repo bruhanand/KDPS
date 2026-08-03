@@ -124,21 +124,18 @@ function UnitSwitcher() {
   );
 }
 
-/** The person, pinned to the bottom corner of the sidebar card: the sidebar
+/** The person, pinned to the flat footer of the sidebar rail: the sidebar
  *  owns who you are, the bar owns where you are (ruled 1 Aug 2026). Opens a
  *  panel with the theme switch and Sign out - the same two actions the top-bar
  *  menu offered, in a new place.
  *
- *  It draws as a tile, not a row: its own filled surface, a soft border and a
- *  chevron, sitting inside the card with a margin so it reads as a separate
- *  object you can press. The bare hover-only row it replaced looked like
- *  nothing at all until you found it with the mouse, and the hairline that used
- *  to separate it from the menu is gone - space does that job now (prototyped
- *  four ways 2 Aug 2026, `prototype/sidebar-foot`; this is variant A).
+ *  It draws as an unboxed row separated from navigation by a hairline. The
+ *  avatar remains the identity anchor; hover, press and focus provide the
+ *  transient interaction feedback.
  *
  *  The panel is portaled to `document.body` and placed by measuring its
  *  trigger, the same pattern as the rail flyout and for the same reason: the
- *  card's scroller would clip a normal descendant, invisibly. Both go through
+ *  rail's scroller would clip a normal descendant, invisibly. Both go through
  *  `usePositionedPopover`, which is that pattern written once.
  *
  *  No `useMobileNavExclusion` here, unlike every top-bar popup. That rule
@@ -176,8 +173,8 @@ function ProfileSection({ rail }: { rail: boolean }) {
             <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
           </span>
         )}
-        {/* The tile has to say it opens something. In the rail there is no
-            room and the initials alone carry it. */}
+        {/* The chevron says the row opens something. In the collapsed rail the
+            initials and native tooltip carry the identity. */}
         {!rail && <ChevronRight size={16} className="profile-chev" />}
       </button>
       {open &&
@@ -277,8 +274,8 @@ function Sidebar({
   // flyout to close.
   const [openFlyout, setOpenFlyout] = useState<string | null>(null);
   const closeFlyout = useCallback(() => setOpenFlyout(null), []);
-  // Portaled out of the card and placed against its trigger, because the
-  // card's own scroller would otherwise clip it invisibly - the whole of that
+  // Portaled out of the rail and placed against its trigger, because the
+  // rail's own scroller would otherwise clip it invisibly - the whole of that
   // reasoning, and the placement rules it implies, live in the hook. The
   // section code is the open key, so moving straight from one section's flyout
   // to the next re-places the popover rather than leaving it over the old row.
@@ -376,8 +373,8 @@ function Sidebar({
         </Link>
       );
     }
-    // The whole row is the link, not just its words: the row draws as a pill
-    // now, and a pill you can only hit on the label is a target that lies.
+    // The whole row is the link, not just its words: its transient hover and
+    // focus treatment must have the same hit target as its label.
     return (
       <div className="nav-group" key={row.key}>
         <Link
@@ -570,7 +567,7 @@ function Sidebar({
       style={{ width: rail ? RAIL_WIDTH : width }}
       data-testid="app-sidebar"
     >
-      {/* Sticky inside the card's own scroller, so the collapse control is
+      {/* Outside the rail's own scroller, so the collapse control is
           under the hand however far down the menu you are. It used to sit at
           the bottom of the sidebar, where a long menu scrolled it out of
           reach; the logo it replaces has moved to the top bar. */}
@@ -697,7 +694,7 @@ export function AppShell({ children, room }: { children: ReactNode; room?: Room 
   }
 
   // One bar across the whole top, then a row beneath it holding the sidebar
-  // card and the page. `.shell` stays the only thing sized to the window and
+  // rail and the page. `.shell` stays the only thing sized to the window and
   // `.content` the only thing that scrolls - every popup cap in this app
   // (`min(70vh, …)`, the rail flyout's `window.innerHeight` clamp) is written
   // against a window that never scrolls.
@@ -754,8 +751,8 @@ export function AppShell({ children, room }: { children: ReactNode; room?: Room 
           mobileOpen={mobileNavOpen}
           onNavigate={() => setMobileNavOpen(false)}
         />
-        {/* In the gutter between the card and the page, and a sibling of the
-            card rather than a child of it: inside the card's own scroller it
+        {/* Straddling the divider between the rail and page, and a sibling of
+            the rail rather than a child of it: inside the rail's own scroller it
             would slide out from under the pointer as the menu scrolls. */}
         <div className="sidebar-resizer" onPointerDown={startResize} data-testid="sidebar-resizer" />
         {mobileNavOpen && (

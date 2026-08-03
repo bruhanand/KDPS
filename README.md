@@ -82,12 +82,13 @@ run the stack, the seeds and the live-API suites at the same time and neither ca
 migrate, seed or drop the other's data. Nothing is shared.
 
 `scripts/workspace-env.sh` is the single place that decides which stack you are.
-Conductor gives each workspace a name and a block of ten ports; the script spends
-three of them and names the Compose project after the workspace:
+Conductor gives each workspace a block of ten ports; the script spends three of
+them and names the Compose project after the stable worktree directory. Retitling
+a Conductor workspace therefore cannot orphan a database project:
 
 | | |
 |---|---|
-| Compose project | `kdps-<workspace>` (volume `kdps-<workspace>_kdps_pgdata`) |
+| Compose project | `kdps-<worktree>` (volume `kdps-<worktree>_kdps_pgdata`) |
 | React PWA | `CONDUCTOR_PORT` |
 | Django API | `CONDUCTOR_PORT + 1` |
 | Postgres | `CONDUCTOR_PORT + 2` |
@@ -102,7 +103,7 @@ npm run dev:where   # which project, which ports, which database — this worksp
 
 **The database lives exactly as long as the workspace does.** Creating a workspace
 provisions it (`setup` in `.conductor/settings.toml`); archiving the workspace runs
-`docker compose -p kdps-<workspace> down -v`, which destroys the container *and*
+`docker compose -p kdps-<worktree> down -v`, which destroys the container *and*
 the volume. Archive is the delete.
 
 `app/backend/.env` carries this workspace's `DATABASE_URL`, and `scripts/dev.sh`
