@@ -198,6 +198,10 @@
 .return-customer-form .input { min-width: 0; flex: 1; }
 .return-customer-form .btn { display: inline-flex; align-items: center; gap: 6px; }
 .return-customer-results { max-height: 280px; overflow-y: auto; margin-top: 10px; }
+.return-known-customers { margin-top: 12px; }
+.return-known-customers > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.return-known-customers .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.return-known-customers small { color: var(--muted); }
 .return-customer-row {
   width: 100%; justify-content: space-between; padding: 10px 8px;
   border: 0; border-top: 1px solid var(--hairline); background: transparent;

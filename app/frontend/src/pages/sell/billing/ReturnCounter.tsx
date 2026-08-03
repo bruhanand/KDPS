@@ -8,6 +8,7 @@ import {
 } from "../../../till/exchange";
 import type { OriginalLine, PickedReturn, PickedReturns } from "../../../till/exchange";
 import type { FoundBill } from "../../../till/original";
+import type { TillKnownCustomer } from "../../../till/types";
 
 export type ReturnSearchKey = "mobile" | "name";
 
@@ -30,10 +31,12 @@ export function ReturnCustomerSearch({
   online,
   looking,
   error,
+  customers,
   matches,
   onSearchKey,
   onTerm,
   onSearch,
+  onPickCustomer,
   onPick,
 }: {
   searchKey: ReturnSearchKey;
@@ -41,10 +44,12 @@ export function ReturnCustomerSearch({
   online: boolean;
   looking: boolean;
   error: string;
+  customers: TillKnownCustomer[];
   matches: ReturnBillMatch[] | null;
   onSearchKey: (key: ReturnSearchKey) => void;
   onTerm: (term: string) => void;
   onSearch: () => void;
+  onPickCustomer: (customer: TillKnownCustomer) => void;
   onPick: (match: ReturnBillMatch) => void;
 }) {
   return (
@@ -93,6 +98,24 @@ export function ReturnCustomerSearch({
           <Search size={15} /> {looking ? "Searching…" : "Search"}
         </button>
       </div>
+      {customers.length > 0 && (
+        <div className="return-known-customers" data-testid="return-known-customers">
+          <span className="eyebrow">Known customers</span>
+          <div>
+            {customers.map((customer) => (
+              <button
+                key={customer.mobile}
+                type="button"
+                className="btn"
+                onClick={() => onPickCustomer(customer)}
+              >
+                <strong>{customer.name || "Unnamed customer"}</strong>
+                <small className="mono">{customer.mobile}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {error && <p className="bill-alert">{error}</p>}
       {matches?.length === 0 && !error && (
         <p className="muted-cell">No bill this counter can see matches that customer.</p>
@@ -150,7 +173,7 @@ export function AgainstBill({
   onOutgoing: (outgoing: boolean) => void;
   onChangeBill: () => void;
 }) {
-  const value = found.lines.reduce((sum, line) => sum + line.net_paise, 0);
+  const value = found.net_paise;
   const marked = Object.values(picked).reduce((sum, choice) => sum + choice.qty, 0);
   return (
     <section className="return-against" data-testid="return-against-bill">

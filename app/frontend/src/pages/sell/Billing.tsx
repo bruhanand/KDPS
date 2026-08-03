@@ -33,6 +33,7 @@ import {
   lateReturnAsk,
   legsFrom,
   markReturnedPiece,
+  pickedFromExchange,
   takeEverythingBack,
 } from "../../till/exchange";
 import type { Exchange, OriginalLine, PickedReturn, PickedReturns } from "../../till/exchange";
@@ -45,10 +46,14 @@ import {
   billSeqFrom,
   findQueuedBill,
   findQueuedBillByDoc,
+  foundFromExchange,
   fromServer,
+  searchKnownCustomers,
   searchQueuedBillsByCustomer,
+  withQueuedReturns,
 } from "../../till/original";
-import type { FoundBill, SaleDetail } from "../../till/original";
+import type { FoundBill, SaleDetail, SaleSummary } from "../../till/original";
+import { LatestRequest } from "../../till/latest";
 import { mockPaymentAdapter } from "../../till/payment";
 import type { PaymentAdapter, UpiCharged } from "../../till/payment";
 import { browserPrintAdapter } from "../../till/print";
@@ -58,7 +63,7 @@ import type { Payment } from "../../till/tender";
 import { covers } from "../../till/pin";
 import type { Ask, Authorisation } from "../../till/pin";
 import type { TillSnapshot } from "../../till/engine";
-import type { QueuedBill, TillCustomer, TillItem } from "../../till/types";
+import type { QueuedBill, TillCustomer, TillItem, TillKnownCustomer } from "../../till/types";
 import { emptyUndo, popUndo, pushUndo } from "../../till/undo";
 import type { UndoStack } from "../../till/undo";
 import { useScanBox } from "../../till/useScanBox";
@@ -144,14 +149,6 @@ import "./Billing.css";
  *  customer's GSTIN on the next customer's tax invoice. */
 const NO_CUSTOMER: TillCustomer = { name: "", mobile: "", gstin: "" };
 
-interface ServerSaleRow {
-  doc_number: string;
-  billed_at: string;
-  customer_name: string;
-  customer_mobile: string;
-  net_paise: number;
-}
-
 /** Stand-in width for the scan box's floating prompts, before either has ever
  *  mounted (`usePositionedPopover`'s first clamp). Kept in step with
  *  `.bill-float`'s width in Billing.css. */
@@ -226,8 +223,10 @@ function Counter({
   const [returnSearchOpen, setReturnSearchOpen] = useState(false);
   const [returnSearchKey, setReturnSearchKey] = useState<ReturnSearchKey>("mobile");
   const [returnSearchTerm, setReturnSearchTerm] = useState("");
+  const [returnCustomers, setReturnCustomers] = useState<TillKnownCustomer[]>([]);
   const [returnMatches, setReturnMatches] = useState<ReturnBillMatch[] | null>(null);
   const [returnAsking, setReturnAsking] = useState<Ask[] | null>(null);
+  const returnRequests = useRef(new LatestRequest());
   const returnPins = useWrongPins();
   useEffect(() => {
     document.documentElement.dataset.counterMode = mode;
@@ -359,16 +358,26 @@ function Counter({
       runSeq.current += 1;
       onScreenRef.current = { cart: payload.cart, customer: payload.customer };
       setCart(payload.cart);
+      const restoredReturn = foundFromExchange(payload.cart.exchange);
+      setReturnFound(restoredReturn);
+      setReturnPicked(pickedFromExchange(payload.cart.exchange));
+      setReturnOutgoing(Boolean(payload.cart.exchange && payload.cart.lines.length));
+      if (payload.cart.exchange) setMode("return");
       setCustomer(payload.customer);
       setUndoStack(emptyUndo());
       setPendingDraft(null);
-      if (!claimsPaper) return true;
-      setPaperAt(payload.paperAt ?? localNow());
-      if (params.get("paper") !== String(payload.paper)) {
-        const next = new URLSearchParams(params);
-        next.set("paper", String(payload.paper));
-        setParams(next, { replace: true });
+      const next = new URLSearchParams(params);
+      let replaceParams = false;
+      if (payload.cart.exchange && params.get("mode") !== "return") {
+        next.set("mode", "return");
+        replaceParams = true;
       }
+      if (claimsPaper) {
+        setPaperAt(payload.paperAt ?? localNow());
+        next.set("paper", String(payload.paper));
+        replaceParams ||= params.get("paper") !== String(payload.paper);
+      }
+      if (replaceParams) setParams(next, { replace: true });
       return true;
     },
     [params, setParams],
@@ -533,13 +542,11 @@ function Counter({
   // showing them a line-level complaint instead would send them looking at the
   // wrong thing.
   const returnBlocked =
-    mode !== "return"
+    mode !== "return" || bill.exchange
       ? ""
       : !returnFound
         ? "Find the original bill before taking anything back."
-        : !bill.exchange
-          ? "Mark at least one piece coming back."
-          : "";
+        : "Mark at least one piece coming back.";
   const blocked = till?.blocked || returnBlocked || whyItCannotClose(bill);
 
   // Nothing may be typed into a bill while it is being committed: the cart is
@@ -662,7 +669,9 @@ function Counter({
   );
 
   function changeMode(nextMode: CounterMode) {
+    returnRequests.current.invalidate();
     setMode(nextMode);
+    setReturnLooking(false);
     setReturnError("");
     clearScan();
     const next = new URLSearchParams(params);
@@ -677,7 +686,19 @@ function Counter({
     setReturnPicked(picked);
     setCart((current) => {
       const exchange: Exchange | null = lines.length
-        ? { original: found.original, lines, billed_at: found.billed_at }
+        ? {
+            original: found.original,
+            lines,
+            billed_at: found.billed_at,
+            original_bill: {
+              lines: found.lines,
+              billed_at: found.billed_at,
+              customer_name: found.customer_name,
+              customer_mobile: found.customer_mobile,
+              net_paise: found.net_paise,
+              local: found.local,
+            },
+          }
         : null;
       const next = { ...current, exchange };
       onScreenRef.current = { ...onScreenRef.current, cart: next };
@@ -686,10 +707,12 @@ function Counter({
   }
 
   function loadReturnBill(found: FoundBill) {
+    setReturnLooking(false);
     setReturnFound(found);
     setReturnPicked({});
     setReturnOutgoing(false);
     setReturnError("");
+    setReturnCustomers([]);
     setReturnMatches(null);
     setReturnSearchOpen(false);
     clearScan();
@@ -702,10 +725,14 @@ function Counter({
   }
 
   function changeReturnBill() {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
     setReturnFound(null);
     setReturnPicked({});
     setReturnOutgoing(false);
     setReturnError("");
+    setReturnCustomers([]);
+    setReturnMatches(null);
     setCart((current) => {
       const next = { ...current, exchange: null, authorisation: null };
       onScreenRef.current = { ...onScreenRef.current, cart: next };
@@ -716,9 +743,11 @@ function Counter({
   }
 
   async function findReturnBill(query: string) {
+    const isCurrent = returnRequests.current.start();
     const reference = query.trim();
     const seq = billSeqFrom(reference);
     if (!engine || !reference) {
+      setReturnLooking(false);
       setReturnError("Type or scan the bill number from the customer's copy.");
       return;
     }
@@ -726,9 +755,12 @@ function Counter({
     setReturnError("");
     try {
       const fy = till?.register?.fy || (await engine.db.queue.orderBy("id").last())?.fy || "";
+      if (!isCurrent()) return;
       const exactLocal = await findQueuedBillByDoc(engine.db, reference);
+      if (!isCurrent()) return;
       const local =
         exactLocal ?? (fy && seq !== null ? await findQueuedBill(engine.db, fy, seq) : null);
+      if (!isCurrent()) return;
       if (local) {
         loadReturnBill(local);
         return;
@@ -742,6 +774,7 @@ function Counter({
       const { data: matches } = await api.get<{ doc_number: string }[]>("/sell/sales", {
         params: { doc: reference },
       });
+      if (!isCurrent()) return;
       if (!matches.length) {
         setReturnError(`No bill ${reference} at this store.`);
         return;
@@ -753,11 +786,13 @@ function Counter({
       const { data } = await api.get<SaleDetail>(
         `/sell/sales/${encodeURIComponent(matches[0].doc_number)}`,
       );
-      loadReturnBill(fromServer(data));
+      if (!isCurrent()) return;
+      const found = await withQueuedReturns(engine.db, fromServer(data));
+      if (isCurrent()) loadReturnBill(found);
     } catch (error) {
-      setReturnError(apiErrorMessage(error));
+      if (isCurrent()) setReturnError(apiErrorMessage(error));
     } finally {
-      setReturnLooking(false);
+      if (isCurrent()) setReturnLooking(false);
     }
   }
 
@@ -789,16 +824,24 @@ function Counter({
     scan.focus();
   }
 
-  async function searchReturnCustomer() {
-    if (!engine || !returnSearchTerm.trim()) return;
+  async function searchReturnCustomer(
+    term = returnSearchTerm,
+    key = returnSearchKey,
+  ) {
+    const isCurrent = returnRequests.current.start();
+    if (!engine || !term.trim()) {
+      setReturnLooking(false);
+      return;
+    }
     setReturnLooking(true);
     setReturnError("");
     try {
-      const local = await searchQueuedBillsByCustomer(
-        engine.db,
-        returnSearchKey,
-        returnSearchTerm,
-      );
+      const [local, knownCustomers] = await Promise.all([
+        searchQueuedBillsByCustomer(engine.db, key, term),
+        searchKnownCustomers(engine.db, key, term),
+      ]);
+      if (!isCurrent()) return;
+      setReturnCustomers(knownCustomers);
       const byNumber = new Map<string, ReturnBillMatch>();
       for (const found of local) {
         byNumber.set(found.original.doc_number, {
@@ -806,43 +849,61 @@ function Counter({
           billed_at: found.billed_at,
           customer_name: found.customer_name,
           customer_mobile: found.customer_mobile,
-          net_paise: found.lines.reduce((sum, line) => sum + line.net_paise, 0),
+          net_paise: found.net_paise,
           local: found,
         });
       }
-      if (till?.online) {
-        const { data } = await api.get<ServerSaleRow[]>("/sell/sales", {
-          params: { [returnSearchKey]: returnSearchTerm.trim() },
+      setReturnMatches([...byNumber.values()]);
+      if (!till?.online) return;
+      try {
+        const { data } = await api.get<SaleSummary[]>("/sell/sales", {
+          params: { [key]: term.trim() },
         });
+        if (!isCurrent()) return;
         for (const row of data) {
           if (byNumber.has(row.doc_number)) continue;
           byNumber.set(row.doc_number, { ...row, local: null });
         }
+        setReturnMatches([...byNumber.values()]);
+      } catch (error) {
+        if (!isCurrent()) return;
+        setReturnError(
+          byNumber.size || knownCustomers.length
+            ? "Head-office bill history could not be reached; results on this till are still shown."
+            : apiErrorMessage(error),
+        );
       }
-      setReturnMatches([...byNumber.values()]);
     } catch (error) {
-      setReturnError(apiErrorMessage(error));
-      setReturnMatches(null);
+      if (isCurrent()) {
+        setReturnError(apiErrorMessage(error));
+        setReturnCustomers([]);
+        setReturnMatches(null);
+      }
     } finally {
-      setReturnLooking(false);
+      if (isCurrent()) setReturnLooking(false);
     }
   }
 
   async function openReturnMatch(match: ReturnBillMatch) {
+    const isCurrent = returnRequests.current.start();
+    if (!engine) return;
     if (match.local) {
       loadReturnBill(match.local);
       return;
     }
     setReturnLooking(true);
+    setReturnError("");
     try {
       const { data } = await api.get<SaleDetail>(
         `/sell/sales/${encodeURIComponent(match.doc_number)}`,
       );
-      loadReturnBill(fromServer(data));
+      if (!isCurrent()) return;
+      const found = await withQueuedReturns(engine.db, fromServer(data));
+      if (isCurrent()) loadReturnBill(found);
     } catch (error) {
-      setReturnError(apiErrorMessage(error));
+      if (isCurrent()) setReturnError(apiErrorMessage(error));
     } finally {
-      setReturnLooking(false);
+      if (isCurrent()) setReturnLooking(false);
     }
   }
 
@@ -1056,6 +1117,7 @@ function Counter({
    * error handling.
    */
   function freshCounter() {
+    returnRequests.current.invalidate();
     skipRestore.current = true;
     runSeq.current += 1;
     onScreenRef.current = { cart: emptyCart(), customer: NO_CUSTOMER };
@@ -1070,7 +1132,9 @@ function Counter({
     setReturnFound(null);
     setReturnPicked({});
     setReturnOutgoing(false);
+    setReturnLooking(false);
     setReturnError("");
+    setReturnCustomers([]);
     setReturnMatches(null);
     setReturnSearchOpen(false);
     clearScan();
@@ -1322,6 +1386,8 @@ function Counter({
   }, [clearScan, scan]);
 
   const dismissCounterError = useCallback(() => {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
     setNote("");
     setPrintProblem("");
     setReturnError("");
@@ -1329,12 +1395,16 @@ function Counter({
   }, [closeScanFloat]);
 
   const closeReturnSearch = useCallback(() => {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
     setReturnSearchOpen(false);
     scan.focus();
   }, [scan]);
 
   function openLookup() {
     if (mode === "return") {
+      returnRequests.current.invalidate();
+      setReturnLooking(false);
       setReturnSearchOpen(true);
       setReturnError("");
       return;
@@ -1403,7 +1473,7 @@ function Counter({
             mode={mode}
             boxRef={mergeRefs(scan.ref, scanFloat.triggerRef, returnSearchFloat.triggerRef)}
             value={typed}
-            disabled={locked || counterBlocked || finishOpen}
+            disabled={locked || counterBlocked || finishOpen || returnLooking}
             placeholder={
               mode === "sale" || returnOutgoing
                 ? "Scan a tag, or type a design number"
@@ -1740,13 +1810,26 @@ function Counter({
               online={Boolean(till?.online)}
               looking={returnLooking}
               error={returnError}
+              customers={returnCustomers}
               matches={returnMatches}
               onSearchKey={(key) => {
+                returnRequests.current.invalidate();
+                setReturnLooking(false);
                 setReturnSearchKey(key);
+                setReturnCustomers([]);
                 setReturnMatches(null);
               }}
-              onTerm={setReturnSearchTerm}
+              onTerm={(term) => {
+                returnRequests.current.invalidate();
+                setReturnLooking(false);
+                setReturnSearchTerm(term);
+              }}
               onSearch={() => void searchReturnCustomer()}
+              onPickCustomer={(known) => {
+                const term = returnSearchKey === "mobile" ? known.mobile : known.name;
+                setReturnSearchTerm(term);
+                void searchReturnCustomer(term, returnSearchKey);
+              }}
               onPick={(match) => void openReturnMatch(match)}
             />
           </div>,

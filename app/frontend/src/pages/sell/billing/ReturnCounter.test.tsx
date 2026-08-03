@@ -9,6 +9,7 @@ const found: FoundBill = {
   billed_at: "2026-07-30T12:31:00Z",
   customer_name: "Mrs Sharma",
   customer_mobile: "9876543210",
+  net_paise: 299800,
   local: false,
   lines: [
     {
@@ -68,10 +69,12 @@ describe("the return counter", () => {
         online={false}
         looking={false}
         error=""
+        customers={[]}
         matches={[]}
         onSearchKey={() => undefined}
         onTerm={() => undefined}
         onSearch={() => undefined}
+        onPickCustomer={() => undefined}
         onPick={() => undefined}
       />,
     );

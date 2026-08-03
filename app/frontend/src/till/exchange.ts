@@ -85,6 +85,16 @@ export interface Exchange {
   /** Original bill time, kept on the local cart so a restored in-progress
    * exchange still knows whether Save & Print needs the late-window manager. */
   billed_at?: string;
+  /** The against-bill card, snapshotted with the cart so a refresh can restore
+   * return picking without another network request. Omitted on older drafts. */
+  original_bill?: {
+    lines: OriginalLine[];
+    billed_at: string;
+    customer_name: string;
+    customer_mobile: string;
+    net_paise: number;
+    local: boolean;
+  };
   /** The manager's late-window approval, when this exchange needed one. Optional
    *  so an exchange parked by an older till still restores safely. */
   authorisation?: Authorisation | null;
@@ -100,6 +110,16 @@ export interface PickedReturn {
 }
 
 export type PickedReturns = Record<number, PickedReturn>;
+
+/** Picker decisions carried by an exchange restored from the autosaved cart. */
+export function pickedFromExchange(exchange: Exchange | null): PickedReturns {
+  return Object.fromEntries(
+    (exchange?.lines ?? []).map((line) => [
+      line.original_line,
+      { qty: line.qty, reason: line.reason, condition: line.condition },
+    ]),
+  );
+}
 
 /** The part of a found bill the return picker needs. `FoundBill` satisfies this
  * shape, but keeping the picker independent avoids making exchange arithmetic

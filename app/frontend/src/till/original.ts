@@ -16,8 +16,9 @@
 // bill and about no other.
 
 import type { TillDb } from "./db";
-import type { ExchangeOriginal, OriginalLine } from "./exchange";
-import type { QueuedBill, TillItem } from "./types";
+import type { Exchange, ExchangeOriginal, OriginalLine } from "./exchange";
+import { searchCustomers } from "./lookup";
+import type { QueuedBill, TillItem, TillKnownCustomer } from "./types";
 
 /** A bill found, and where it was found. */
 export interface FoundBill {
@@ -26,6 +27,9 @@ export interface FoundBill {
   billed_at: string;
   customer_name: string;
   customer_mobile: string;
+  /** The Sale's own authoritative net, including any exchange it originally
+   * carried. Never reconstructed from the filtered returnable lines. */
+  net_paise: number;
   /** True when this bill is still in the counter's own queue. */
   local: boolean;
 }
@@ -103,6 +107,27 @@ export async function searchQueuedBillsByCustomer(
     .map((bill) => fromQueued(bill, alreadyGivenBack(queue, bill.fy, bill.till_seq), items));
 }
 
+/** Matching people from the all-KDPS customer master. Mobile uses its index;
+ * name is the rarer deliberate scan, capped before it can become a result dump. */
+export async function searchKnownCustomers(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+  limit = 8,
+): Promise<TillKnownCustomer[]> {
+  if (key === "mobile") return searchCustomers(db, term, limit);
+  const wanted = term.trim().toLocaleLowerCase();
+  if (wanted.length < 2) return [];
+  try {
+    return await db.customers
+      .filter((row) => row.name.toLocaleLowerCase().includes(wanted))
+      .limit(limit)
+      .toArray();
+  } catch {
+    return [];
+  }
+}
+
 function digitsOf(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -117,6 +142,7 @@ function fromQueued(
     billed_at: bill.billed_at,
     customer_name: bill.customer?.name ?? "",
     customer_mobile: bill.customer?.mobile ?? "",
+    net_paise: bill.totals.net_paise,
     local: true,
     lines: bill.lines
       .filter((line) => line.direction !== "return")
@@ -189,7 +215,17 @@ export interface SaleDetail {
   billed_at: string;
   customer_name: string;
   customer_mobile: string;
+  net_paise: number;
   lines: OriginalLine[];
+}
+
+/** One result from the existing customer/document bill-search endpoint. */
+export interface SaleSummary {
+  doc_number: string;
+  billed_at: string;
+  customer_name: string;
+  customer_mobile: string;
+  net_paise: number;
 }
 
 /** A bill head office holds, in the same shape as a queued one. */
@@ -199,9 +235,39 @@ export function fromServer(detail: SaleDetail): FoundBill {
     billed_at: detail.billed_at,
     customer_name: detail.customer_name,
     customer_mobile: detail.customer_mobile,
+    net_paise: detail.net_paise,
     local: false,
     // A bill's own exchange legs are lines too, and they are not returnable -
     // they are pieces that already came back.
     lines: detail.lines.filter((line) => line.direction !== "return"),
   };
+}
+
+/** Include return legs that this till has committed but head office has not yet
+ * accepted. Without them a server bill can offer the same piece twice. */
+export async function withQueuedReturns(db: TillDb, found: FoundBill): Promise<FoundBill> {
+  const queue = await db.queue.orderBy("id").toArray();
+  const pending = alreadyGivenBack(queue, found.original.fy, found.original.till_seq);
+  if (!pending.size) return found;
+  return {
+    ...found,
+    lines: found.lines.map((line) => {
+      const back = pending.get(line.line_no);
+      return back
+        ? {
+            ...line,
+            returned_qty: Math.min(line.qty, line.returned_qty + back.qty),
+            returned_paise: Math.min(line.net_paise, line.returned_paise + back.paise),
+          }
+        : line;
+    }),
+  };
+}
+
+/** The against-bill card persisted inside a direct-cart exchange, if this draft
+ * was written by a build new enough to carry it. */
+export function foundFromExchange(exchange: Exchange | null): FoundBill | null {
+  const bill = exchange?.original_bill;
+  if (!exchange || !bill) return null;
+  return { original: exchange.original, ...bill };
 }
