@@ -86,7 +86,19 @@ class Offer(TimeStampedModel):
         LIVE = "live", "Live"
         ENDED = "ended", "Ended"
 
+    class Mode(models.TextChoices):
+        REGULAR = "regular", "Regular"
+        EOSS = "eoss", "End-of-season sale"
+
     name = models.CharField(max_length=160)
+    mode = models.CharField(
+        max_length=8,
+        choices=Mode.choices,
+        default=Mode.REGULAR,
+        help_text="A tag for margin-attribution reporting only (D5): an EOSS offer "
+        "runs through the exact same engine as any other. Nothing is reclaimed "
+        "from a brand because a rule is tagged EOSS - it only marks the report.",
+    )
     brand = models.ForeignKey(
         "masters.Brand",
         on_delete=models.PROTECT,
@@ -221,3 +233,160 @@ class Offer(TimeStampedModel):
             "combinable": self.combinable,
             "priority": self.priority,
         }
+
+
+
+# ---------------------------------------------------------------------------
+# EOSS planning - a sell-through-triggered markdown ladder (D5, docs/05-offers).
+#
+# EOSS is not a new discount mechanic: "the same offer patterns, tagged" is the
+# whole design. What was missing was the *decision* in front of it - when is a
+# style behind its clearance target, how deep should the markdown go, and is
+# there still margin room to give it. These three models are that decision,
+# kept deliberately rule-based (no ML): a per-brand sell-through target curve,
+# a per-brand markdown ladder, and the recommendation a human approves or
+# rejects before it ever becomes a live `Offer`.
+# ---------------------------------------------------------------------------
+
+
+class SellThroughTarget(TimeStampedModel):
+    """What percent of a brand's buy should be sold by week N of the season.
+
+    `brand=None` is the network default curve, read by any brand that has not
+    negotiated its own. A shallow, early curve (few tables) is preferred to a
+    steep one - the research behind this slice found late, deep markdowns cost
+    more margin than early, shallow ones.
+    """
+
+    brand = models.ForeignKey(
+        "masters.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="sell_through_targets",
+        help_text="Empty = the network default curve.",
+    )
+    week_number = models.PositiveIntegerField(help_text="Weeks since the style first arrived.")
+    target_pct = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ["brand_id", "week_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "week_number"], name="uq_sellthrough_brand_week"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.brand.code if self.brand else 'default'} wk{self.week_number} → {self.target_pct}%"
+
+
+class EossLadderStep(TimeStampedModel):
+    """One rung of a brand's markdown ladder: past this trigger, offer this much.
+
+    Ordered by `step_no`; the engine walks the ladder and takes the deepest
+    rung whose trigger the style has actually crossed - "act early and shallow"
+    is enforced by the data (small steps first), never by code.
+    """
+
+    class Trigger(models.TextChoices):
+        SELL_THROUGH_GAP = "gap", "Points behind the sell-through target"
+        AGE_WEEKS = "age", "Weeks in stock"
+
+    brand = models.ForeignKey(
+        "masters.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="eoss_ladder_steps",
+        help_text="Empty = the network default ladder.",
+    )
+    step_no = models.PositiveIntegerField()
+    trigger_type = models.CharField(
+        max_length=8, choices=Trigger.choices, default=Trigger.SELL_THROUGH_GAP
+    )
+    trigger_value = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Points behind target (gap) or weeks in stock (age), whichever trigger_type says.",
+    )
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ["brand_id", "step_no"]
+        constraints = [
+            models.UniqueConstraint(fields=["brand", "step_no"], name="uq_eoss_ladder_brand_step"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.brand.code if self.brand else 'default'} step {self.step_no} → {self.discount_pct}%"
+
+
+class EossRecommendation(TimeStampedModel):
+    """One style-colour's markdown recommendation for one season.
+
+    Recomputed by `offers.eoss_engine.generate_recommendations` from real stock
+    and sales positions - never typed by hand. A row already decided (approved
+    or rejected) is left alone by the next run, so re-running never overwrites
+    a human's call.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    season = models.ForeignKey(
+        "masters.Season", on_delete=models.CASCADE, related_name="eoss_recommendations"
+    )
+    brand = models.ForeignKey(
+        "masters.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="eoss_recommendations",
+    )
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+
+    weeks_in_stock = models.IntegerField(default=0)
+    on_hand_qty = models.IntegerField(default=0)
+    sold_qty = models.IntegerField(default=0)
+    sell_through_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    target_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gap_pct = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    broken_size_run = models.BooleanField(default=False)
+    margin_floor_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="The deepest discount possible before the price falls below unit cost.",
+    )
+    recommended_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    reason = models.TextField(blank=True, default="")
+
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
+    decided_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    offer = models.ForeignKey(
+        Offer, null=True, blank=True, on_delete=models.SET_NULL, related_name="eoss_recommendation"
+    )
+
+    class Meta:
+        ordering = ["-gap_pct", "design"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["season", "brand", "design", "color"], name="uq_eoss_reco_style"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["season", "status"], name="eoss_reco_season_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.design} {self.color} ({self.season.code}) → {self.recommended_discount_pct}%"

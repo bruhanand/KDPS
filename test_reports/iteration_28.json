@@ -1,0 +1,47 @@
+{
+  "summary": "Full test pass for the new EOSS Planning module (backend + frontend). 13/13 backend pytest cases pass. Frontend flows verified end-to-end for owner: season defaults to AW25, 4 seeded rows render with correct statuses/counts (2 pending / 1 approved / 1 rejected), broken-size-run badge shows on U.S. Polo, config panel opens with 3 ladder steps + 8 target rows and brand switching works, override+approve on Van Heusen moves the row from Pending -> Approved, Recalculate plan runs without error and preserves already-decided rows, sidebar EOSS Planning is a real page (no 'coming soon'), /offers list page still loads clean. ONE cross-cutting issue: owner role cannot save ladder/target config (PUT /api/offers/eoss/config -> 403 'You may read the offers_price section, but not write in it'), which contradicts the frontend spec that expects owner to Save without error. Admin/it_admin can save fine.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/offers/eoss/config",
+        "issue": "Endpoint requires offers_price:manage capability but 'owner' role only has offers_price:approve, so owner gets 403 when saving ladder/targets. Spec says owner should be able to Save. Either grant owner the manage capability for offers_price, or downgrade EossConfigView.CanManageConfig to write_minimum=CAP_APPROVE (currently CAP_MANAGE in offers/eoss_views.py line 34)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Ladder & targets -> Save (as owner)",
+        "issue": "Save fails with 'You may read the offers_price section, but not write in it.' (403 from PUT /api/offers/eoss/config). Root cause is backend permission (see backend_issues.minor). Frontend correctly surfaces the error inside the config panel.",
+        "affected_selectors": ["[data-testid=\"eoss-config-save\"]", "[data-testid=\"eoss-config-panel\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_offers_eoss.py",
+    "/app/test_reports/pytest/eoss_results.xml"
+  ],
+  "action_items": [
+    "Align permissions between spec and code for EOSS ladder/targets config: either give the 'owner' role the offers_price:manage capability, or relax EossConfigView write_minimum from CAP_MANAGE to CAP_APPROVE. Currently only it_admin/admin/superadmin can save the ladder, which blocks the owner-facing demo flow described in the review request."
+  ],
+  "critical_code_review_comments": [
+    "eoss_views.py: EossRecommendationDecisionView correctly uses select_for_update + status guard to prevent double-decide race — good.",
+    "eoss_engine.py: MIN_UNITS_FOR_SELL_THROUGH=5 fallback to age-based ladder is documented and correct; sell_through can divide-by-zero-safely because it's gated by total_units. Solid.",
+    "eoss_views.py PUT config replaces the whole ladder/targets for a brand atomically inside a transaction — matches the module docstring's stated invariant.",
+    "OffersEoss.tsx (~500 lines) is borderline for the >700-line rule but not yet in violation; the embedded EossConfigPanel could be a candidate to split if it grows further.",
+    "Permission mismatch (see action item) is the only real issue found — everything else in the module is well structured, has data-testid coverage, and handles loading/error/success states."
+  ],
+  "updated_files": [
+    "/app/tests/test_offers_eoss.py (new file — 13 pytest cases for EOSS list/generate/decide + config)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "~92% (config Save blocked by permission gap)"},
+  "test_credentials": "owner/Owner@123 (used for approve/reject + full frontend flow); admin/Admin@123 (used for config PUT round-trip tests, since owner lacks offers_price:manage).",
+  "seed_data_creation": "None — used existing seed_eoss_demo AW25 data; the module test that regenerates the plan is idempotent and preserves the already-approved (Allen Solly) and already-rejected (U.S. Polo) rows. Test run additionally approved the Van Heusen pending row with a 15% override as part of the frontend flow — DB now has 2 approved + 1 rejected + 1 pending (Peter England) for AW25.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "EOSS Planning module is functionally complete. Only outstanding concern is the owner-vs-manage capability mismatch on PUT /api/offers/eoss/config. If main agent fixes by relaxing to CAP_APPROVE, re-run test_offers_eoss.py::TestEossConfig::test_owner_cannot_manage_config — it currently asserts 403 and will need to flip to expect 200. Seed state has been mutated (Van Heusen now approved 15%). Re-run seed_eoss_demo to reset if you need the exact starting demo state.",
+  "rca of the issue": "EossConfigView is decorated with require_section('offers_price', CAP_VIEW, write_minimum=CAP_MANAGE). Per accounts.sections capability tiers, the 'owner' role is granted view/approve on offers_price but not manage. Frontend UX embeds the ladder/targets panel inside the same EOSS page an owner is expected to operate, so an owner sees the Save button but the PUT is rejected server-side with 403. Fix options: (a) change write_minimum to CAP_APPROVE for EossConfigView, matching EossRecommendationDecisionView, since editing the ladder is arguably at the same authority level as approving markdowns; or (b) elevate owner's offers_price capability to manage in the RBAC matrix. Option (a) is the smaller/safer change."
+}
