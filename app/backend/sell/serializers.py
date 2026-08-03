@@ -475,6 +475,10 @@ class SaleRowSerializer(serializers.ModelSerializer[Sale]):
 
     store_code = serializers.CharField(source="store.code", read_only=True)
     lines_summary = serializers.SerializerMethodField()
+    #: Total pieces sold (SALE direction only), for the recent-bill pick list.
+    pieces = serializers.SerializerMethodField()
+    #: Unique salespeople on the bill, for the recent-bill pick list.
+    salespeople = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
@@ -487,6 +491,8 @@ class SaleRowSerializer(serializers.ModelSerializer[Sale]):
             "customer_mobile",
             "net_paise",
             "lines_summary",
+            "pieces",
+            "salespeople",
         ]
 
     def get_lines_summary(self, obj: Sale) -> str:
@@ -498,6 +504,25 @@ class SaleRowSerializer(serializers.ModelSerializer[Sale]):
             shown = f"{shown} +{len(brands) - 2}"
         piece_word = "piece" if pieces == 1 else "pieces"
         return f"{pieces} {piece_word} · {shown}" if shown else f"{pieces} {piece_word}"
+
+    def get_pieces(self, obj: Sale) -> int:
+        return sum(
+            line.qty for line in obj.lines.all() if line.direction == SaleLine.Direction.SALE
+        )
+
+    def get_salespeople(self, obj: Sale) -> list[str]:
+        # `display_name` from `approvals.names` — the project's one canonical
+        # spelling of a person's name, with a username fallback.
+        seen: set[str] = set()
+        names: list[str] = []
+        for line in obj.lines.all():
+            if line.salesman_id is None:
+                continue
+            name = display_name(line.salesman)
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return names
 
 
 class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):

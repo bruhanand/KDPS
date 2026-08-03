@@ -291,3 +291,76 @@ export function foundFromExchange(exchange: Exchange | null): FoundBill | null {
   if (!exchange || !bill) return null;
   return { original: exchange.original, ...bill };
 }
+
+// ── Recent-bills helpers (for the three return-start doors) ──────────────────
+//
+// These are pure convenience over the existing queue and search paths - no new
+// contract, no new server endpoint required for local bills. The server `?recent=N`
+// query is fetched by the caller (Billing.tsx) and passed in as `server` rows.
+
+/** A thin summary of a bill: enough for the recent-bills pick list without
+ *  fetching or loading any line detail. */
+export interface RecentBillSummary {
+  doc_number: string;
+  billed_at: string;
+  customer_name: string;
+  customer_mobile: string;
+  net_paise: number;
+  local: FoundBill | null;
+}
+
+/** Up to `limit` (default 3) most-recent bills from this counter's own queue,
+ *  newest-first, as pick-list summaries.
+ *
+ *  Local first and always: a bill the counter rang up ten minutes ago may still
+ *  be in the queue, and the server cannot answer about it at all. This is the
+ *  same local-first principle that governs `findQueuedBill`. */
+export async function recentQueuedBills(db: TillDb, limit = 3): Promise<RecentBillSummary[]> {
+  const queue = await db.queue.orderBy("id").reverse().toArray();
+  const items = await db.items.toArray();
+  return queue.slice(0, limit).map((bill) => {
+    const given = alreadyGivenBack(queue, bill.fy, bill.till_seq);
+    const full = fromQueued(bill, given, items);
+    return {
+      doc_number: bill.doc_number,
+      billed_at: bill.billed_at,
+      customer_name: bill.customer?.name ?? "",
+      customer_mobile: bill.customer?.mobile ?? "",
+      net_paise: bill.totals.net_paise,
+      local: full,
+    };
+  });
+}
+
+/** Merge a local-queue list and a server list of recent-bill summaries.
+ *  Deduplicates by `doc_number` (local wins), sorts newest-first, returns at
+ *  most `limit` rows.
+ *
+ *  A bill the counter has not yet synced appears on both sides: the queue copy
+ *  wins so the caller never has to wait for an extra server round-trip. */
+export function mergeRecentBills(
+  local: RecentBillSummary[],
+  server: RecentBillSummary[],
+  limit = 3,
+): RecentBillSummary[] {
+  const seen = new Set(local.map((b) => b.doc_number));
+  const merged = [
+    ...local,
+    ...server.filter((b) => !seen.has(b.doc_number)),
+  ];
+  merged.sort((a, b) => b.billed_at.localeCompare(a.billed_at));
+  return merged.slice(0, limit);
+}
+
+/** Resolve a recent-bill summary to a full `FoundBill`.
+ *
+ *  If the summary carries a `local` copy (queue bill), it is returned directly.
+ *  Otherwise, `GET /api/sell/sales/{doc_number}` is fetched and converted by
+ *  `fromServer` — identical path to the existing bill-search flow. */
+export async function resolveRecentMatch(summary: RecentBillSummary): Promise<FoundBill> {
+  if (summary.local) return summary.local;
+  const res = await fetch(`/api/sell/sales/${encodeURIComponent(summary.doc_number)}`);
+  if (!res.ok) throw new Error(`Head office returned ${res.status} for ${summary.doc_number}`);
+  const detail: SaleDetail = await res.json();
+  return fromServer(detail);
+}

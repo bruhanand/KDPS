@@ -8,7 +8,6 @@
 // number and prints a second receipt for a bill that is already in a customer's
 // hand, leaving the hole exactly where it was.
 
-// @ts-expect-error Vitest runs in Node, while the production frontend deliberately excludes Node types.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -28,9 +27,11 @@ describe("the counter frame", () => {
     expect(billingRules).toMatch(/\.bill-page\s*{[^}]*max-width:\s*none;/s);
   });
 
-  it("reserves the rail width and pins the rail flush to the content edge", () => {
-    expect(billingRules).toMatch(/\.bill-page\s*{[^}]*padding:\s*0 368px 16px 16px;/s);
-    expect(billingRules).toMatch(/\.bill-pay\s*{[^}]*right:\s*0;[^}]*bottom:\s*0;/s);
+  it("uses a CSS grid with a 352px rail column rather than an absolute overlay", () => {
+    // The rail is a real grid child, not position:absolute + compensating padding.
+    expect(billingRules).toMatch(/\.bill-page\s*{[^}]*grid-template-columns:[^}]*352px/s);
+    expect(billingRules).not.toMatch(/\.bill-pay\s*{[^}]*position:\s*absolute/s);
+    expect(billingRules).not.toMatch(/\.bill-page\s*{[^}]*padding:\s*0 368px 16px 16px/s);
   });
 
   it("wraps all three valid cash suggestions inside the clipped payment tile", () => {
@@ -38,6 +39,18 @@ describe("the counter frame", () => {
     // Mono makes that row wider than the rail for five-digit amounts, and the
     // tile deliberately clips overflow, so nowrap silently cuts off chip 3.
     expect(billingRules).toMatch(/\.bill-chips\s*{[^}]*flex-wrap:\s*wrap;/s);
+  });
+
+  it("does not render a Look-up button in the BillBar source (F3 / ScanHero is the door)", () => {
+    // Removing the Look-up button was a spec requirement; its `data-testid` or
+    // aria-label appearing in BillBar.tsx would mean it snuck back.
+    const billBarSource = readFileSync(new URL("./billing/BillBar.tsx", import.meta.url), "utf8");
+    expect(billBarSource).not.toMatch(/bill-lookup|Look up|onLookup/);
+  });
+
+  it("RailFoot primary button says 'Exchange & print' in return mode", () => {
+    const railFootSource = readFileSync(new URL("./billing/RailFoot.tsx", import.meta.url), "utf8");
+    expect(railFootSource).toContain("Exchange & print");
   });
 });
 

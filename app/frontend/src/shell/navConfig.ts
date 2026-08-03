@@ -431,6 +431,9 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/edges/integrations", "/setup/settings"],
   ["/edges/pos", "/setup/settings"],
   ["/edges/config", "/setup/settings"],
+  // The standalone /sell/returns route was merged into the counter in return
+  // mode: /sell?mode=return. Any saved link or bookmark still arrives correctly.
+  ["/sell/returns", "/sell?mode=return"],
 ].sort((a, b) => b[0].length - a[0].length) as [string, string][];
 
 /** Every address the manifest has moved away from. The route table reads it to

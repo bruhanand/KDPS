@@ -1,39 +1,76 @@
-/* Billing (#181, revamped to a fixed one-screen frame by #243). House tokens
-   only - no colour is spelled out here, so the dark theme's one override
-   block keeps working without touching this file.
+/* Billing (#181, revamped to a fixed one-screen frame by #243; two-column
+   CSS grid by this branch). House tokens only - no colour is spelled out here,
+   so the dark theme's one override block keeps working without touching this file.
 
-   The frame (design.md, G-2): three fixed bands - `.bill-top` (identity: the
-   scan box and the bill's lifecycle actions, plus the one alert line), then
-   `.bill-work` (the only band that scrolls - the line grid left, the payment
-   and customer rail fixed right). The rail itself spans both bands and owns the
-   fixed Reprint / Save & Print commit point. `.bill-page` sizes itself to `.content`'s own box exactly, so
-   `.content` never scrolls on this route (the shell contract, AppShell.css
-   L1-5) - below 1280px that guarantee is deliberately given up and the page
-   scrolls honestly again (G-2). */
+   The frame (G-2): `.bill-page` is a two-row × two-column CSS grid.
+   Row 1: BillBar spanning both columns (grid-column 1/-1).
+   Row 2: left column is the scrolling work area; right column is the payment
+   rail, which is a flex column pinned to the same row height with no
+   independent scrollbar at 1366×768. Below 1280px the grid collapses to a
+   single column and the page scrolls normally again (G-2). */
 
 .bill-page {
-  /* Must equal `.content`'s box exactly (`flex:1` under a `60px` topbar) or
-     the two nest: a `.bill-page` even one pixel taller than this makes
-     `.content` scroll too, on top of `.bill-lines` scrolling underneath it -
-     two scrollbars for what reads as one page. Padding is included on
-     purpose (`* { box-sizing: border-box }`), so it does not need repeating
-     rooms here. */
+  /* Two-row × two-column grid. Row 1 = BillBar (full width). Row 2 = work
+     area (left, scrolls) + payment rail (right, fixed). No padding-right
+     compensation: the rail is a real grid child, not an overlay.
+     Height equals `.content`'s box exactly so `.content` never scrolls. */
   height: calc(100dvh - var(--topbar-h));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 352px;
   overflow: hidden;
-  position: relative;
   width: 100%;
   max-width: none;
-  padding: 0 368px 16px 16px;
+  padding: 0 0 0 16px;
 }
 
-/* The counter's own bill bar replaces the generic page chrome. */
-.bill-top { min-height: 0; }
+/* The BillBar spans the full width across both columns. */
+.bill-bar { grid-column: 1 / -1; }
 
-.bill-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 8px 0 12px; border-bottom: 1px solid var(--hairline);
+/* The work area and the rail share row 2 side by side.
+   Both are flex columns pinned to 100% of row 2's height with overflow: hidden. */
+.bill-lines {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+.bill-pay {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--hairline);
+  padding-bottom: 12px;
+}
+
+/* The rail body takes remaining space above RailFoot and scrolls if needed. */
+.bill-rail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The counter's top area (ScanHero + alerts) stays fixed at top of work area. */
+.bill-top { flex: 0 0 auto; min-height: 0; margin-bottom: 12px; }
+
+/* BillBar: spans full width (grid-column: 1/-1 above). 16px 24px padding,
+   16px between major groups, 8px within controls (spec §Counter frame). */
+.bill-bar-inner {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 24px; border-bottom: 1px solid var(--hairline);
+  padding-right: 24px; /* right edge has its own 24px, not the work area's 16px */
 }
 .bill-mode { display: inline-flex; padding: 3px; border: 1px solid var(--hairline); border-radius: 9px; }
 .bill-mode-button {
@@ -42,10 +79,14 @@
 }
 .bill-mode-button.is-active { background: var(--navy-fill); color: #fff; }
 .bill-mode-button:disabled { cursor: not-allowed; opacity: .55; }
-.bill-identity { display: flex; flex-direction: column; min-width: 144px; gap: 1px; font-size: 12.5px; }
+/* Mode+identity group, separated from Sold-by by a vertical divider. */
+.bill-bar-left { display: flex; align-items: center; gap: 8px; }
+.bill-bar-divider { width: 1px; height: 28px; background: var(--hairline); flex-shrink: 0; }
+.bill-identity { display: flex; flex-direction: column; min-width: 136px; gap: 1px; font-size: 12.5px; }
 .bill-identity strong { color: var(--ink); }
-.bill-sold-by { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
-.bill-sold-by .select { min-width: 128px; padding: 6px 8px; font-size: 12.5px; }
+/* Sold-by as a self-contained field (label + select). */
+.bill-sold-by-field { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.bill-sold-by-field .select { min-width: 120px; padding: 6px 8px; font-size: 12.5px; }
 .bill-bar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 .bill-bar-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bill-scan-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
@@ -266,15 +307,7 @@
 .bill-pending-draft-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .bill-pending-draft-actions .btn { margin-left: 0; }
 
-/* The work area (#243): left the grid, right the rail (payment above,
-   customer below - both "today's 264px rail is too narrow for tender rows
-   plus chips; ~340px is the floor", design.md). `min-height: 0` is load-bearing
-   twice over - here, so this row can shrink inside `.bill-page`'s `1fr` track
-   instead of growing to fit the grid's content; again on `.bill-lines`, so
-   *it* can shrink inside this row and hand the leftover space to its own
-   `overflow-y: auto` rather than pushing `.bill-work` taller than the frame. */
-.bill-work { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
-.bill-lines { min-width: 0; min-height: 0; overflow-y: auto; }
+.bill-work { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .bill-empty {
   display: block; padding: 40px 0; text-align: center; font-size: 14px;
   border: 1px dashed var(--hairline); border-radius: var(--radius);
@@ -405,32 +438,18 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 .bill-empty > span:last-child { max-width: 330px; text-align: center; line-height: 1.5; }
 .bill-empty-barcode { color: var(--caption); font-family: var(--mono); font-size: 26px; letter-spacing: 2px; }
 
-/* The rail (#243): "both always visible" (design.md) holds whenever the
-   payment card plus the customer card fit the available height. When they do
-   not, the column scrolls on its own rather than the alternative, which is
-   worse: its bottom half sliding under the footer with no way to reach it at
-   all. `.bill-lines` gets the same treatment (`min-height: 0` + its own
-   `overflow-y: auto`) for the identical reason.
-
-   grill-decisions amendment 12 made that scroll a *temporary* exception, to be
-   deleted once #246 and #249 had trimmed the two cards enough to fit 1366×768.
-   Both have now trimmed them, and it does not fit - measured on this branch at
-   that size, as `deo.cashier`, with an empty bill: the rail's content is 532px
-   (payment 300 + gap 16 + customer 216, itself down from ~300) against 375px
-   of work area. The height is not in the cards. It is in the bands around
-   them - a 209px top strip (a persona tab row, then a page header carrying
-   eyebrow, title and bill number stacked), a 50px footer and 74px of page
-   padding - which is #243's frame, not this ticket's cards. So the exception
-   stays until that is ruled on, and it stays as `auto`, which means a counter
-   whose bands do leave room never sees a scrollbar at all. */
+/* The rail: now a true CSS grid child (column 2, row 2) rather than an
+   absolute overlay. No independent scrollbar target at 1366×768: payment
+   and customer sections are trimmed to fit within row-2 height. Below 1280px
+   the column collapses and the rail stacks below the work area (media query
+   at the bottom of this file). */
 .bill-pay {
-  position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; width: 352px;
-  display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--hairline);
-  background: var(--sidebar);
+  display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--hairline); background: var(--sidebar);
 }
 .bill-rail-body {
-  flex: 1; min-height: 0; overflow-y: auto; padding: 22px 16px 16px;
-  display: flex; flex-direction: column; gap: 14px;
+  flex: 1; min-height: 0; overflow-y: visible; padding: 16px 16px 12px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 .bill-panel { padding: 14px 16px; }
 .bill-panel .field { margin-top: 10px; }
@@ -439,16 +458,17 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 .bill-payment-heading .eyebrow { margin: 0; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
 .bill-due { font: 600 40px/1.1 var(--mono); letter-spacing: -.03em; color: var(--ink); margin: 4px 0 0; }
 .bill-page[data-mode="return"] .bill-due { color: var(--counter-return-blue, var(--blue)); }
+/* A connected rail tile: one border wraps multiple sections separated by
+   internal hairline dividers (spec §Payment and customer rail). */
 .bill-rail-tile { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--inner); box-shadow: var(--shadow-rest); }
-.bill-payment-tile { margin-top: 10px; }
-/* The payment panel: three incoming modes. One column of label-then-amount rows,
-   so a cashier's eye runs down the
-   amounts rather than hunting for them. */
-.bill-payment-stack { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-.bill-payment-method {
-  overflow: hidden; border: 1px solid var(--sidebar-border); border-radius: 14px;
-  background: transparent; box-shadow: none;
-}
+.bill-tile-divider { margin: 0; border: 0; border-top: 1px solid var(--hairline); }
+/* Payment tile: single connected card, internal dividers only. */
+.bill-payment-tile { /* no top margin: rail-body gap handles spacing */ }
+/* The payment panel: three incoming modes, separated by .bill-tile-divider. */
+.bill-payment-stack { display: flex; flex-direction: column; }
+/* Individual tender rows are no longer separate cards; they sit inside the
+   shared tile and are separated only by its internal dividers. */
+.bill-payment-method { background: transparent; box-shadow: none; }
 .bill-tender { display: grid; grid-template-columns: minmax(0, 1fr) auto 104px; align-items: center; gap: 8px; padding: 10px 12px; }
 /* Cash, its chips and the cash-received box read as one block (#246): they are
    three parts of one question - how much of this bill is cash, what did the
@@ -531,12 +551,8 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 }
 .bill-balance-line [data-testid="bill-balance"] { font: 700 19px/1 var(--mono); }
 
-/* The customer card (#249). Two short fields on one row instead of three
-   stacked ones, and the registration behind a disclosure - between them that is
-   the height grill-decisions amendment 12 sent this ticket to find, so the rail
-   holds both cards at 1366×768 without a scrollbar of its own. A mobile number
-   and a first name both read fine in half of a 340px rail; a GSTIN does not,
-   which is the other reason it is the one that folds away. */
+/* The customer section: joined to the payment tile as a footer row within the
+   same .bill-rail-tile, separated by a .bill-tile-divider. */
 .bill-customer-card { padding-top: 14px; border-top: 1px solid var(--hairline); }
 .bill-customer-heading { display: flex; align-items: baseline; gap: 8px; padding: 0; }
 .bill-customer-heading .eyebrow { margin: 0; color: var(--muted); font-size: 10px; letter-spacing: .13em; }
@@ -759,18 +775,25 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
    stops being its own scroller (so the twelve-column grid gets its
    horizontal safety net back too - see the sticky-header comment above). */
 @media (max-width: 1279px) {
-  .bill-page { height: auto; display: block; overflow: visible; padding-right: 0; }
-  .bill-top, .bill-work, .bill-foot { display: block; }
-  .bill-work { min-height: auto; }
-  .bill-lines { min-height: auto; overflow-y: visible; }
+  /* Collapse to single-column, restore page scrolling (G-2). */
+  .bill-page {
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    overflow: visible;
+    padding: 0 16px;
+  }
+  .bill-bar  { grid-column: 1; }
+  .bill-lines { grid-column: 1; height: auto; min-height: auto; overflow: visible; padding-bottom: 0; }
+  .bill-pay  { grid-column: 1; height: auto; min-height: auto; border-left: 0; border-top: 1px solid var(--hairline); margin-top: 16px; padding-bottom: 0; overflow: visible; }
+  .bill-rail-body { overflow: visible; flex: none; }
+  .bill-top { flex: none; margin-bottom: 0; }
+  .bill-grid-card { flex: none; height: auto; overflow: visible; }
+  .bill-grid-scroll { flex: none; overflow-y: visible; }
   /* Same two-class selector as the desktop rule above, or this loses to it on
      specificity regardless of which comes later in the cascade. */
   .table-wrap.bill-grid-wrap { overflow: auto; }
   table.data.bill-grid thead th { position: static; }
-  .bill-pay { position: static; width: auto; margin: 16px 0 0; }
-  .bill-rail-body { overflow: visible; }
-  /* Element-qualified for the same reason the desktop rule above is, and it
-     has to be, or it loses to that rule on specificity regardless of order. */
   .scan-hero { padding-top: 10px; }
 }
 
@@ -795,3 +818,64 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
   .scan-hero-state { display: none; }
   .scan-hero-error { flex-wrap: wrap; }
 }
+
+/* ── Progressive-disclosure item popover ──────────────────────────────────────
+   Secondary metadata (design, colour, season, HSN) is hidden by default and
+   revealed via an anchored popover without increasing the row height.
+   The disclosure button wraps the item identity cell; it is stripped visually
+   but remains keyboard-accessible (aria-expanded / aria-controls). */
+.bill-item-disclosure-btn {
+  display: block; width: 100%; text-align: left; background: none;
+  border: 0; padding: 0; cursor: pointer; font: inherit; color: inherit;
+  border-bottom: 1px dashed transparent;
+}
+.bill-item-disclosure-btn:hover { border-bottom-color: var(--caption); }
+.bill-item-disclosure-btn[aria-expanded="true"] { border-bottom-color: var(--navy-fill); }
+
+/* The popover itself: portaled to document.body, placed by
+   usePositionedPopover("below"). Fixed width so it is independent of the
+   column it anchors to. A max-height + overflow-y so it never runs below
+   the fold on short viewports. */
+.bill-item-popover {
+  position: fixed; z-index: 40; width: 300px; max-width: calc(100vw - 32px);
+  max-height: 360px; overflow-y: auto;
+  padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow-lift);
+}
+.bill-item-popover .eyebrow { margin: 0 0 10px; font-size: 9.5px; letter-spacing: .12em; }
+.bill-item-popover-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12.5px; }
+.bill-item-popover-row label { color: var(--caption); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; }
+.bill-item-popover-row .select { min-width: 0; flex: 1; }
+.bill-item-popover-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Payment tile: return-mode not-ready state ────────────────────────────────
+   When the counter is in return mode but no original bill has been found yet,
+   the tender inputs are disabled and a short explanation replaces the "To pay"
+   figure. */
+.bill-payment-panel[data-return-ready="false"] .bill-due,
+.bill-payment-panel[data-return-ready="false"] .bill-payment-stack { opacity: .45; pointer-events: none; }
+.bill-payment-panel[data-return-ready="false"] .bill-due { font-size: 16px; }
+.bill-payment-return-hint {
+  margin: 10px 12px 4px; font-size: 12px; color: var(--muted); line-height: 1.4;
+}
+
+/* ── Recent bills in the empty return grid ────────────────────────────────────
+   Three most-recent bills shown as pick buttons while mode=return and no
+   original bill is loaded yet. Lives inside .bill-lines (scrolling area),
+   above the empty grid placeholder. */
+.bill-recent-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 16px 8px; }
+.bill-recent-head .eyebrow { margin: 0; }
+.bill-recent-rows { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+.bill-recent-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 11px 14px; border: 1px solid var(--hairline); border-radius: 10px;
+  background: var(--surface); text-align: left; font-size: 13px; font-weight: 500;
+  cursor: pointer; width: 100%;
+}
+.bill-recent-row:hover { background: var(--inner); }
+.bill-recent-row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bill-recent-row-left strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.bill-recent-row-left small { color: var(--muted); font-size: 11px; }
+.bill-recent-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.bill-recent-row-right strong { font: 700 14px/1.2 var(--mono); }
+.bill-recent-row-right small { color: var(--muted); font-size: 10.5px; }

@@ -5,12 +5,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   billSearchForCustomer,
   foundFromExchange,
+  mergeRecentBills,
+  recentQueuedBills,
   searchKnownCustomers,
   findQueuedBillByDoc,
   searchQueuedBillsByCustomer,
   withQueuedReturns,
 } from "./original";
-import type { FoundBill } from "./original";
+import type { FoundBill, RecentBillSummary } from "./original";
 import { draft, freshTill } from "./testSupport";
 import type { TillDb } from "./db";
 import type { QueuedBill } from "./types";
@@ -183,3 +185,45 @@ describe("customer search over the till's own queue", () => {
     });
   });
 });
+
+describe("recent bills helpers (return-start doors)", () => {
+  it("returns up to limit local queued bills newest-first", async () => {
+    const till = freshTill();
+    opened.push(till);
+    const db: TillDb = till.db;
+    await db.queue.bulkAdd([
+      { ...queued(1, "A", "9000000001"), billed_at: "2026-08-01T10:00:00Z" },
+      { ...queued(2, "B", "9000000002"), billed_at: "2026-08-02T10:00:00Z" },
+      { ...queued(3, "C", "9000000003"), billed_at: "2026-08-03T10:00:00Z" },
+      { ...queued(4, "D", "9000000004"), billed_at: "2026-08-04T10:00:00Z" },
+    ]);
+
+    const recent = await recentQueuedBills(db, 3);
+    expect(recent.length).toBe(3);
+    // Reverse queue order: 4, 3, 2
+    expect(recent.map((r) => r.doc_number)).toEqual([
+      "26-27/DEO/SAL/4",
+      "26-27/DEO/SAL/3",
+      "26-27/DEO/SAL/2",
+    ]);
+  });
+
+  it("merges local and server bills, deduplicating by doc_number", () => {
+    const local: RecentBillSummary[] = [
+      { doc_number: "BILL-2", billed_at: "2026-08-02T10:00:00Z", customer_name: "Local B", customer_mobile: "", net_paise: 10000, local: null },
+      { doc_number: "BILL-1", billed_at: "2026-08-01T10:00:00Z", customer_name: "Local A", customer_mobile: "", net_paise: 20000, local: null },
+    ];
+    const server: RecentBillSummary[] = [
+      { doc_number: "BILL-3", billed_at: "2026-08-03T10:00:00Z", customer_name: "Server C", customer_mobile: "", net_paise: 30000, local: null },
+      { doc_number: "BILL-2", billed_at: "2026-08-02T10:00:00Z", customer_name: "Server B", customer_mobile: "", net_paise: 10000, local: null },
+    ];
+
+    const merged = mergeRecentBills(local, server, 3);
+    expect(merged.length).toBe(3);
+    // Ordered newest-first: BILL-3, BILL-2 (local), BILL-1
+    expect(merged.map((m) => m.doc_number)).toEqual(["BILL-3", "BILL-2", "BILL-1"]);
+    // Local copy of BILL-2 was kept, not server
+    expect(merged[1].customer_name).toBe("Local B");
+  });
+});
+
