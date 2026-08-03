@@ -301,6 +301,7 @@ export const SECTIONS: NavSectionDef[] = [
       // Setup's `sell: manage` rung (as it briefly was) walled Owner out of a
       // screen the API itself lets them read and write.
       { label: "Partner Billing", to: "/money/partner-billing" },
+      { label: "Partner Dues", to: "/money/partner-dues" },
       // The B2B bills head office still owes an e-invoice reference (#187).
       //
       // Filed under Money rather than Sell, and that is the gate deciding the

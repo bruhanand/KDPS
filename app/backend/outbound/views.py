@@ -76,6 +76,7 @@ from outbound.permissions import (
     CanManageBillingPolicy,
     CanReadReturnToBrand,
     CanReadTransferPT,
+    CanViewPartnerDues,
     CanWriteReturnToBrand,
     CanWriteStockCount,
     CanWriteTransfer,
@@ -740,6 +741,66 @@ class BillingPolicyView(APIView):
         policy.set_by = request.user
         policy.save(update_fields=["mode", "set_by", "updated_at"])
         return Response(BillingPolicySerializer(policy).data)
+
+
+class PartnerDuesView(APIView):
+    """What each partner store owes, summed off the figure every transfer to
+    it already carries (`partner_billing_value_paise`) — a read-only report
+    over data that exists regardless of `BillingPolicy.mode`, so it means the
+    same thing whether or not that figure ever reached the ledger. A dispatch
+    still in DRAFT owes nothing yet: this only counts SUBMITTED transfers,
+    the same rung `posting._bill_partner_store` only ever sets the figure at."""
+
+    permission_classes = [IsAuthenticated, CanViewPartnerDues]
+
+    def get(self, request: Request) -> Response:
+        transfers = (
+            StoreTransfer.objects.filter(
+                destination_store__is_partner=True,
+                docstatus=DocStatus.SUBMITTED,
+                partner_billing_value_paise__isnull=False,
+            )
+            .select_related("source_store", "destination_store")
+            .order_by("-dispatch_date")
+        )
+
+        by_store: dict[int, dict] = {}
+        for t in transfers:
+            store = t.destination_store
+            row = by_store.setdefault(
+                store.id,
+                {
+                    "store_id": store.id,
+                    "store_code": store.code,
+                    "store_name": store.name,
+                    "total_owed_paise": 0,
+                    "transfer_count": 0,
+                    "last_dispatch_date": None,
+                    "transfers": [],
+                },
+            )
+            row["total_owed_paise"] += t.partner_billing_value_paise
+            row["transfer_count"] += 1
+            if row["last_dispatch_date"] is None:
+                row["last_dispatch_date"] = t.dispatch_date
+            row["transfers"].append(
+                {
+                    "id": t.id,
+                    "doc_number": t.doc_number,
+                    "source_store_code": t.source_store.code,
+                    "dispatch_date": t.dispatch_date,
+                    "partner_billing_value_paise": t.partner_billing_value_paise,
+                }
+            )
+
+        stores = sorted(by_store.values(), key=lambda r: r["total_owed_paise"], reverse=True)
+        return Response(
+            {
+                "stores": stores,
+                "total_owed_paise": sum(r["total_owed_paise"] for r in stores),
+                "billing_mode": BillingPolicy.current().mode,
+            }
+        )
 
 
 # ---------------------------------------------------------------------------

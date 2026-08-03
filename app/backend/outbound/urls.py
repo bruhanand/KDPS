@@ -41,6 +41,7 @@ from outbound.views import (
     GapClosureDetailView,
     GapClosureSubmitView,
     MarkDamagedView,
+    PartnerDuesView,
     RequestApprovalView,
     ReturnablePoolView,
     RTVCreditNoteView,
@@ -121,6 +122,8 @@ urlpatterns = [
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
     # The chain-wide partner-billing dial (#271's pattern, applied here).
     path("partner-billing-policy", BillingPolicyView.as_view(), name="partner-billing-policy"),
+    # What each partner store owes, summed off that same dial's own figures.
+    path("partner-dues", PartnerDuesView.as_view(), name="partner-dues"),
     # Stock requests — the pull side of a transfer (#74)
     path("stock-search", CrossLocationStockSearchView.as_view(), name="stock-search"),
     path("stock-requests", StockRequestListCreateView.as_view(), name="stock-request-list"),

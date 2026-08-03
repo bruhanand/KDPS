@@ -91,6 +91,10 @@ CanFlipOwnership = require_section("stock", CAP_MANAGE)
 #: ``money: view`` (mirrors ``sell.CanReadOrManagePolicy``, #271's pattern).
 CanManageBillingPolicy = require_section("money", CAP_VIEW, write_minimum=CAP_MANAGE)
 
+#: What each partner store owes, summed off `partner_billing_value_paise`. A
+#: read-only report, same rung as reading the billing dial itself.
+CanViewPartnerDues = require_section("money", CAP_VIEW)
+
 
 class CanExecuteVFlip(BasePermission):
     """Live policy above the immutable Accounts/Owner value-posting floor."""

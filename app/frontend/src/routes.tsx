@@ -17,6 +17,7 @@ import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, User
 import { AccessMatrixPage } from "./pages/AccessMatrix";
 import { SellPolicySettingsPage } from "./pages/SellPolicySettings";
 import { PartnerBillingPage } from "./pages/PartnerBilling";
+import { PartnerDuesPage } from "./pages/PartnerDues";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -155,6 +156,7 @@ const BUILT: Screen[] = [
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
   { id: "irn-queue", path: "/money/irn-queue", element: <IrnQueue /> },
   { id: "partner-billing", path: "/money/partner-billing", element: <PartnerBillingPage /> },
+  { id: "partner-dues", path: "/money/partner-dues", element: <PartnerDuesPage /> },
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },
