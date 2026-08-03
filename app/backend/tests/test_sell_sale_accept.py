@@ -881,6 +881,9 @@ def test_a_part_return_is_rounded_half_up_and_the_parts_sum_to_the_whole(counter
     where half-up gives 503 - and the till, which computed it correctly, would
     have its printed bill refused.
     """
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = 100
+    policy.save(update_fields=["manual_discount_cap_percent"])
     stock_in(counter["store"], 9)
     paid = 1000  # three pieces for ten rupees: a third does not divide
     sale = bill_payload(counter["store"], counter["salesman"], till_seq=1, qty=3, mrp_paise=1000)
@@ -895,7 +898,6 @@ def test_a_part_return_is_rounded_half_up_and_the_parts_sum_to_the_whole(counter
         "round_paise": 0,
     }
     sale["tenders"] = [{"mode": "cash", "amount_paise": paid}]
-    sale["override"] = {"user_id": counter["manager"].id}
     created = _post(counter, sale)
     assert created.status_code == 201, created.json()
     original = Sale.objects.get(pk=created.json()["id"])

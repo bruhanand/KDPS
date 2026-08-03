@@ -439,7 +439,7 @@ def test_the_rulebook_is_read_as_of_the_day_the_bill_was_printed(counter):
     """A counter bills offline under the rules it holds, and syncs days later.
 
     Resolving against *today's* rulebook would refuse a bill the store priced
-    honestly - `OVERRIDE_REQUIRED` on a printed receipt, with the whole queue
+    honestly - `DISCOUNT_OVER_CAP` on a printed receipt, with the whole queue
     stopped behind it. An ended rule is still consulted for a bill printed inside
     its dates, because it was running when that bill was printed.
     """
@@ -565,7 +565,7 @@ def test_a_bill_priced_before_a_piece_was_flagged_no_discount_still_lands(counte
     The counter billed honestly under a rule it held; head office then marked the
     piece never-discountable. `no_discount` is a live column with no history, so
     the server's re-price now says the customer was owed nothing and the whole
-    discount looks unauthorised. Refusing would be `OVERRIDE_REQUIRED` on a
+    discount looks manual. Refusing would be `DISCOUNT_OVER_CAP` on a
     printed receipt, with every bill behind it stuck in the queue.
     """
     offer = _live_rule(counter["store"].code)

@@ -33,4 +33,15 @@ class Migration(migrations.Migration):
                 max_digits=5,
             ),
         ),
+        migrations.AlterField(
+            model_name="sale",
+            name="override_kind",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: "
+                "credit_note when a manager accepted a note the till could not verify.",
+                max_length=40,
+            ),
+        ),
     ]

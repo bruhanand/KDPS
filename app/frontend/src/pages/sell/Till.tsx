@@ -514,7 +514,7 @@ function messageOf(error: unknown): string {
  * that (`may_hold_till_pin`), and refuses the write besides.
  *
  * They type it themselves, and prove who they are with their own password. An
- * administrator who could set a manager's PIN could authorise a discount in that
+ * administrator who could set a manager's PIN could accept an exception in that
  * manager's name, which would leave the evidence on a bill worth nothing.
  */
 function CounterPin() {

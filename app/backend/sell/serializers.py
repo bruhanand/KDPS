@@ -177,6 +177,8 @@ class SellPolicyWriteSerializer(serializers.Serializer):
     manual_discount_on_offer_lines = serializers.BooleanField()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(self.initial_data.get("manual_discount_cap_percent"), str):
+            raise serializers.ValidationError("Discount cap must be a two-decimal string.")
         cap = attrs["manual_discount_cap_percent"]
         if not re.fullmatch(r"(?:0|[1-9][0-9]{0,2})\.[0-9]{2}", cap):
             raise serializers.ValidationError("Discount cap must be a two-decimal string.")
@@ -198,7 +200,7 @@ class _OverrideWriteSerializer(serializers.Serializer):
         choices=OVERRIDE_KINDS, allow_blank=True, required=False, default=""
     )
     #: When the manager's PIN was accepted at the counter. A separate moment from
-    #: `billed_at` - a manager authorises a discount and the cashier goes on
+    #: `billed_at` - a manager authorises an exception and the cashier goes on
     #: scanning - and the whole point of the evidence is the gap between the two.
     #: Optional, because a till that predates this field is still a till.
     at = serializers.DateTimeField(required=False, allow_null=True, default=None)

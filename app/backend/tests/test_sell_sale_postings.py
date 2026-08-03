@@ -51,7 +51,7 @@ from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.posting import UnbalancedError, cr, dr, post_entries
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from masters.models import Brand
-from sell.models import DeferredCosting, Sale, SaleLine
+from sell.models import DeferredCosting, Sale, SaleLine, SellPolicy
 from sell.services.postings import resolve_cost_plan
 
 GOLDEN = Path(__file__).parent / "golden" / "sale-postings"
@@ -483,13 +483,15 @@ def test_a_discount_never_moves_what_the_brand_is_owed(counter):
     """
     build_supplier(build_brand("SOR"))
     stock_in(counter["store"], 3, model="SOR")
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = 100
+    policy.save(update_fields=["manual_discount_cap_percent"])
     half_off = MRP_PAISE // 2
     payload = bill_payload(
         counter["store"],
         counter["salesman"],
         till_seq=1,
         disc_paise=half_off,
-        override={"user_id": counter["manager"].id, "kind": "over_cap_discount"},
     )
     response = counter["client"].post(SALES_URL, payload, format="json")
 

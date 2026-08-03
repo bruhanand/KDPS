@@ -333,6 +333,12 @@ function RateCell({ line, locked, onEdit }: CellProps) {
  */
 function DiscountCell({ line, locked, onEdit }: CellProps) {
   const lockedOnOffer = !line.manual_discount_allowed;
+  const allowedPaise = lockedOnOffer ? 0 : line.cap_paise;
+  // A held/restored bill or a freshly-triggered threshold offer can make an
+  // amount that was valid when typed invalid now. Keep that existing value
+  // editable until the cashier removes it; otherwise the close guard blocks the
+  // bill while the disabled field leaves no way to fix it.
+  const needsCorrection = line.disc_paise > allowedPaise;
   return (
     <>
       <span
@@ -346,12 +352,23 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
           testId={`bill-disc-${line.line_no}`}
           label={`Discount, line ${line.line_no}`}
           paise={line.disc_paise}
-          locked={locked || line.cap_paise === 0 || lockedOnOffer}
+          locked={locked || (!needsCorrection && allowedPaise === 0)}
           placeholder="0"
-          maxPaise={line.cap_paise}
-          onChange={(paise) => onEdit(line.key, { disc_paise: clampManualDiscount(paise ?? 0, line.cap_paise) })}
+          maxPaise={allowedPaise}
+          onChange={(paise) =>
+            onEdit(line.key, {
+              disc_paise: clampManualDiscount(paise ?? 0, allowedPaise),
+            })
+          }
         />
       </span>
+      {needsCorrection && (
+        <span className="warn-note" data-testid={`bill-disc-correction-${line.line_no}`}>
+          {lockedOnOffer
+            ? "Remove this manual discount: Head Office has turned offer stacking off."
+            : `Reduce this discount to ${formatINR(allowedPaise)}: Head Office's limit is ${line.cap_percent}%.`}
+        </span>
+      )}
       {/* Information, not a gate - and deliberately so. The rulebook (#183) does
           obey this flag: no offer, of any layer, reaches a no-discount piece.
           But nothing in the corpus says a *cashier's* keyed-in discount is
