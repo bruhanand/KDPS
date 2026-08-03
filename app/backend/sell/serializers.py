@@ -10,6 +10,8 @@ So a serializer failure here is always `VALIDATION` / 400, and never anything el
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from rest_framework import serializers
@@ -165,11 +167,31 @@ class _TotalsWriteSerializer(serializers.Serializer):
 #: What is *stored* is derived from what the pipeline itself found
 #: (`accept._authorised_kind`), never from what arrives here - this validation
 #: only keeps the wire honest about what the till believes it is asking for.
-OVERRIDE_KINDS = (
-    "over_cap_discount",
-    "credit_note",
-    "over_cap_discount+credit_note",
-)
+OVERRIDE_KINDS = ("credit_note",)
+
+
+class SellPolicyWriteSerializer(serializers.Serializer):
+    """The two policy dials are sent together, as one HO decision."""
+
+    manual_discount_cap_percent = serializers.CharField()
+    manual_discount_on_offer_lines = serializers.BooleanField()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(self.initial_data.get("manual_discount_cap_percent"), str):
+            raise serializers.ValidationError("Discount cap must be a two-decimal string.")
+        cap = attrs["manual_discount_cap_percent"]
+        if not re.fullmatch(r"(?:0|[1-9][0-9]{0,2})\.[0-9]{2}", cap):
+            raise serializers.ValidationError("Discount cap must be a two-decimal string.")
+        try:
+            percent = Decimal(cap)
+        except InvalidOperation as exc:  # pragma: no cover - regex excludes this shape
+            raise serializers.ValidationError("Discount cap must be a decimal.") from exc
+        if not Decimal("0.00") <= percent <= Decimal("100.00"):
+            raise serializers.ValidationError("Discount cap must be between 0.00 and 100.00.")
+        if not isinstance(self.initial_data.get("manual_discount_on_offer_lines"), bool):
+            raise serializers.ValidationError("Manual-on-offer must be a boolean.")
+        attrs["manual_discount_cap_percent"] = percent
+        return attrs
 
 
 class _OverrideWriteSerializer(serializers.Serializer):
@@ -178,7 +200,7 @@ class _OverrideWriteSerializer(serializers.Serializer):
         choices=OVERRIDE_KINDS, allow_blank=True, required=False, default=""
     )
     #: When the manager's PIN was accepted at the counter. A separate moment from
-    #: `billed_at` - a manager authorises a discount and the cashier goes on
+    #: `billed_at` - a manager authorises an exception and the cashier goes on
     #: scanning - and the whole point of the evidence is the gap between the two.
     #: Optional, because a till that predates this field is still a till.
     at = serializers.DateTimeField(required=False, allow_null=True, default=None)

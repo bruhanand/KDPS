@@ -23,7 +23,7 @@ import {
   syncDown,
 } from "./sync";
 import { dataset, draft, fakeServer, freshTill, item, refuse, register, season } from "./testSupport";
-import type { QueueHalt } from "./types";
+import type { QueueHalt, TillPolicy } from "./types";
 
 let close = () => undefined as void;
 afterEach(() => close());
@@ -35,6 +35,32 @@ function till() {
 }
 
 describe("the dataset landing", () => {
+  it("fails closed while an older dataset has no discount policy", async () => {
+    const { db } = till();
+    const old = dataset({});
+    delete (old as { policy?: unknown }).policy;
+
+    await applyDataset(db, old);
+
+    expect(await readMeta<TillPolicy>(db, META.policy, { manual_discount_cap_percent: "99.00", manual_discount_on_offer_lines: true })).toEqual({
+      manual_discount_cap_percent: "0.00",
+      manual_discount_on_offer_lines: false,
+    });
+  });
+
+  it("defaults a rolling server's missing stacking dial to off", async () => {
+    const { db } = till();
+    const old = dataset({ policy: { manual_discount_cap_percent: "7.50" } as TillPolicy });
+    delete (old.policy as { manual_discount_on_offer_lines?: unknown }).manual_discount_on_offer_lines;
+
+    await applyDataset(db, old);
+
+    expect(await readMeta<TillPolicy>(db, META.policy, { manual_discount_cap_percent: "0.00", manual_discount_on_offer_lines: true })).toEqual({
+      manual_discount_cap_percent: "7.50",
+      manual_discount_on_offer_lines: false,
+    });
+  });
+
   it("fills the counter's copy from a bootstrap", async () => {
     const { db } = till();
 

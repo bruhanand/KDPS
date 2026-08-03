@@ -410,35 +410,33 @@ def test_a_store_whose_count_says_zero_still_sells_the_piece_in_its_hand(counter
     assert StockOnHand.objects.get(store=counter["store"], sku_code="8901000000011").net_qty == -1
 
 
-# --- the manager's tap -----------------------------------------------------
+# --- the absolute discount dials -------------------------------------------
 
 
-def test_a_discount_the_rulebook_did_not_produce_needs_a_manager(counter):
+def test_a_discount_over_the_cap_is_refused_even_when_a_manager_is_named(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
 
     response = _post(counter, payload)
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
     assert not Sale.objects.exists()
 
 
-def test_the_manager_who_approved_it_is_recorded_on_the_line(counter):
-    """H3 - an override is evidence, so it names a person and stays on the bill."""
+def test_a_manager_cannot_override_the_discount_cap(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["override"] = {"user_id": counter["manager"].id, "kind": "over_cap_discount"}
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    assert SaleLine.objects.get().override_by == counter["manager"]
-    # And on the bill, which is where an override with no line of its own lands.
-    assert Sale.objects.get().override_by == counter["manager"]
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
 
 
-def test_a_cashier_cannot_be_their_own_manager(counter):
+def test_a_cashier_cannot_turn_a_discount_refusal_into_an_override(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["override"] = {"user_id": counter["cashier"].id}
@@ -446,10 +444,10 @@ def test_a_cashier_cannot_be_their_own_manager(counter):
     response = _post(counter, payload)
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
-def test_a_manager_from_another_store_is_not_a_manager_at_this_counter(counter):
+def test_a_manager_from_another_store_cannot_lift_the_discount_cap(counter):
     elsewhere = build_store(code="SEL-RAN", state="20")
     stranger = build_manager(elsewhere, username="sell_other_manager")
     _shelf(counter["store"], 3)
@@ -459,7 +457,7 @@ def test_a_manager_from_another_store_is_not_a_manager_at_this_counter(counter):
     response = _post(counter, payload)
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_a_discount_inside_the_cap_needs_nobody(counter):
@@ -482,7 +480,7 @@ def test_a_till_cannot_lift_its_own_cap_by_calling_a_discount_an_offer(counter):
 
     `offer_evidence.saved_paise` arrives in the payload. If the cap subtracted it,
     a till - or anything posting as one - would set it to the whole discount and
-    OVERRIDE_REQUIRED could never fire again. Since #183 the cap subtracts the
+    DISCOUNT_OVER_CAP could never fire again. Since #183 the cap subtracts the
     *server's* own resolution instead, and there is no rulebook here at all, so
     the claim buys nothing and the cap covers the whole discount.
     """
@@ -493,7 +491,7 @@ def test_a_till_cannot_lift_its_own_cap_by_calling_a_discount_an_offer(counter):
     response = _post(counter, payload)
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_the_evidence_is_still_kept_on_the_line_for_the_daily_check(counter):
@@ -503,7 +501,9 @@ def test_the_evidence_is_still_kept_on_the_line_for_the_daily_check(counter):
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     evidence = {"layer": "brand", "id": 1, "saved_paise": 20000}
     payload["lines"][0]["offer_evidence"] = evidence
-    payload["override"] = {"user_id": counter["manager"].id}
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = 20
+    policy.save(update_fields=["manual_discount_cap_percent"])
 
     response = _post(counter, payload)
 
@@ -605,8 +605,7 @@ def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter)
     assert sale.override_at.isoformat() == "2026-07-30T12:29:00+00:00"
 
 
-def test_a_bill_that_needed_two_things_approving_says_so_in_one_word(counter):
-    """The daily check groups on this value, so the pair has one spelling."""
+def test_a_note_manager_override_cannot_lift_the_discount_cap(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["tenders"] = [
@@ -615,13 +614,13 @@ def test_a_bill_that_needed_two_things_approving_says_so_in_one_word(counter):
     ]
     payload["override"] = {
         "user_id": counter["manager"].id,
-        "kind": "over_cap_discount+credit_note",
+        "kind": "credit_note",
     }
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    assert Sale.objects.get().override_kind == "over_cap_discount+credit_note"
+    assert response.status_code == 422
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_a_kind_nothing_recognises_is_refused(counter):
@@ -635,18 +634,15 @@ def test_a_kind_nothing_recognises_is_refused(counter):
     assert not Sale.objects.exists()
 
 
-def test_what_was_authorised_is_what_the_server_found_not_what_the_till_said(counter):
-    """The daily check groups on this field, and the till is the party the
-    override constrains - so a bill cannot file an over-cap discount under
-    "credit_note" and have neither counted honestly."""
+def test_a_credit_note_override_does_not_authorise_a_discount(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
     payload["override"] = {"user_id": counter["manager"].id, "kind": "credit_note"}
 
     response = _post(counter, payload)
 
-    assert response.status_code == 201
-    assert Sale.objects.get().override_kind == "over_cap_discount"
+    assert response.status_code == 422
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
@@ -666,11 +662,12 @@ def test_an_override_naming_somebody_who_is_not_a_manager_leaves_no_evidence(cou
     it does not exist, because the discount it was offered for is refused."""
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
-    payload["override"] = {"user_id": counter["cashier"].id, "kind": "over_cap_discount"}
+    payload["override"] = {"user_id": counter["cashier"].id, "kind": "credit_note"}
 
     response = _post(counter, payload)
 
     assert response.status_code == 422
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
     assert not Sale.objects.exists()
 
 
@@ -884,6 +881,9 @@ def test_a_part_return_is_rounded_half_up_and_the_parts_sum_to_the_whole(counter
     where half-up gives 503 - and the till, which computed it correctly, would
     have its printed bill refused.
     """
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = 100
+    policy.save(update_fields=["manual_discount_cap_percent"])
     stock_in(counter["store"], 9)
     paid = 1000  # three pieces for ten rupees: a third does not divide
     sale = bill_payload(counter["store"], counter["salesman"], till_seq=1, qty=3, mrp_paise=1000)
@@ -898,7 +898,6 @@ def test_a_part_return_is_rounded_half_up_and_the_parts_sum_to_the_whole(counter
         "round_paise": 0,
     }
     sale["tenders"] = [{"mode": "cash", "amount_paise": paid}]
-    sale["override"] = {"user_id": counter["manager"].id}
     created = _post(counter, sale)
     assert created.status_code == 201, created.json()
     original = Sale.objects.get(pk=created.json()["id"])

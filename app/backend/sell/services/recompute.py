@@ -19,7 +19,7 @@ is printed and the customer has gone.
 reason the two uses can share one function without the first becoming a hazard.
 A counter bills offline under the rules it holds; by the time the bill syncs, an
 offer may have ended and another started. Resolving against *today's* rulebook
-would refuse a bill the store priced honestly - `OVERRIDE_REQUIRED` on a receipt
+would refuse a bill the store priced honestly - `DISCOUNT_OVER_CAP` on a receipt
 already in a customer's hand, with the whole queue stopped behind it. So an
 `ended` rule is still consulted for a bill printed inside its dates: it was
 running when that bill was printed, and that is the only question being asked.
@@ -129,8 +129,8 @@ def credit_from_cited_rule(
     The server reads its rulebook live; the till read its copy whenever it last
     synced. Between the two, head office can flip a piece's no-discount flag or
     edit the master data a rule aims by - and a bill priced honestly under the
-    till's copy then looks, to the server, like a discount nobody authorised.
-    Refusing it would be `OVERRIDE_REQUIRED` on a receipt already in a customer's
+    till's copy then looks, to the server, like a manual discount.
+    Refusing it would be `DISCOUNT_OVER_CAP` on a receipt already in a customer's
     hand, with every bill behind it stuck in the queue: exactly the "block what
     the business has already absorbed" this pipeline exists not to do.
 

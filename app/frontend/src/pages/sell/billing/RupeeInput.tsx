@@ -23,6 +23,7 @@ export function RupeeInput({
   locked,
   placeholder,
   prefillPaise = null,
+  maxPaise,
   onChange,
 }: {
   testId: string;
@@ -45,6 +46,8 @@ export function RupeeInput({
    * split.
    */
   prefillPaise?: number | null;
+  /** A hard local ceiling for an amount such as a policy-bound discount. */
+  maxPaise?: number;
   onChange: (paise: number | null) => void;
 }) {
   const [text, setText] = useState(paise ? paiseToRupees(paise) : "");
@@ -108,8 +111,14 @@ export function RupeeInput({
         // the cart until it is one.
         const parsed = rupeesToPaise(e.target.value);
         if (parsed === null) return;
-        shown.current = parsed;
-        onChange(parsed);
+        // Keep the box itself honest, not just the cart it writes through. A
+        // parent re-render normally reflects a capped value back here, but a
+        // disconnected browser must never leave a larger typed amount on screen
+        // while that render is delayed or interrupted.
+        const accepted = maxPaise === undefined ? parsed : Math.min(parsed, maxPaise);
+        shown.current = accepted;
+        if (accepted !== parsed) setText(paiseToRupees(accepted));
+        onChange(accepted);
       }}
     />
   );

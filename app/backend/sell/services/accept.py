@@ -237,7 +237,7 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     _check_totals(data, lines)  # step 3
     rulebook = _server_resolution(data, store, lines)  # steps 6 and 12 share it
     override = manager_for_override((data.get("override") or {}).get("user_id"), store)
-    _check_discount_policy(lines, rulebook, override)  # step 6
+    _check_discount_policy(lines, rulebook)  # step 6
     tender_plan = _plan_tenders(data, store, override)  # step 7
     _guard_bill_number(data, store)  # step 4
 
@@ -621,13 +621,13 @@ def _billed_on(data: dict[str, Any]) -> date:
     return timezone.localdate(data["billed_at"])
 
 
-def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, override: Any) -> None:
-    """Step 6 - a discount the rulebook did not produce needs a manager past the cap.
+def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook) -> None:
+    """Step 6 - the manual discount dials are absolute.
 
     Whatever the rulebook is answerable for is the rulebook's; the remainder is a
-    manual discount, and B2 caps that. Below the cap it is the cashier's to give;
-    above it the bill does not close without a manager's OK recorded on it, which
-    is the whole of H3.
+    manual discount. It is capped at the policy percentage, with no manager
+    override, and the policy separately decides whether it can stack on an offer
+    discount at all.
 
     The rulebook's share is the server's own resolution, never the till's
     `offer_evidence.saved_paise`: that number arrives from the till, and the till
@@ -642,8 +642,8 @@ def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, over
     store's queue is not stopped by head office editing master data, not so a
     discount can pass unseen.
     """
-    cap_percent = SellPolicy.current().manual_discount_cap_percent
-    over: list[_PreparedLine] = []
+    policy = SellPolicy.current()
+    cap_percent = policy.manual_discount_cap_percent
     for line in lines:
         if line.is_return:
             continue
@@ -653,20 +653,22 @@ def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, over
         # counter cannot manufacture headroom for a manual discount on top.
         manual = given - min(credit, given)
         allowance = int(Decimal(line.payload["mrp_paise"] * line.qty) * cap_percent / 100)
-        if drifted and manual <= allowance:
+        if manual > 0 and credit > 0 and not policy.manual_discount_on_offer_lines:
+            raise AcceptError(
+                "DISCOUNT_ON_OFFER_LINE",
+                f"Line {line.payload['line_no']} already has a head-office offer, so manual "
+                "discount is off for offer lines.",
+                422,
+            )
+        if manual > allowance:
+            raise AcceptError(
+                "DISCOUNT_OVER_CAP",
+                f"Line {line.payload['line_no']} discounts more than the head-office "
+                f"limit ({cap_percent}% of MRP).",
+                422,
+            )
+        if drifted:
             rulebook.drift.add(line.payload["line_no"])
-        if manual <= allowance:
-            continue
-        line.override_needed = True
-        over.append(line)
-    if over and override is None:
-        first = over[0].payload["line_no"]
-        raise AcceptError(
-            "OVERRIDE_REQUIRED",
-            f"Line {first} discounts more than a cashier may on their own "
-            f"({cap_percent}% of MRP). A manager of this store has to approve it.",
-            422,
-        )
 
 
 @dataclass
@@ -752,8 +754,6 @@ def _authorised_kind(lines: list[_PreparedLine], tenders: list[_TenderPlan]) -> 
     (`sell.serializers.OVERRIDE_KINDS`).
     """
     kinds = []
-    if any(line.override_needed for line in lines):
-        kinds.append("over_cap_discount")
     if any(plan.unverified for plan in tenders):
         kinds.append("credit_note")
     return "+".join(kinds)

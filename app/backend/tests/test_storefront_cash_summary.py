@@ -36,7 +36,7 @@ from django.utils import timezone
 from accounts.models import ScopeType, User
 from core.documents import DocStatus
 from finledger.models import CashLedgerEntry
-from sell.models import ContinuityFlag, CreditNote, Sale, SaleTender
+from sell.models import ContinuityFlag, CreditNote, Sale, SaleTender, SellPolicy
 
 URL = "/api/store/cash-summary"
 SALES_URL = "/api/sell/sales"
@@ -237,8 +237,11 @@ def test_yesterdays_bill_stays_on_yesterday(counter):
 
 def test_a_discount_moves_the_tenders_and_the_summary_with_them(counter):
     """The summary is tax- and discount-inclusive: it is what the customer paid."""
+    policy = SellPolicy.current()
+    policy.manual_discount_cap_percent = 100
+    policy.save(update_fields=["manual_discount_cap_percent"])
     disc = 20000
-    _bill(counter, 1, disc_paise=disc, override={"user_id": counter["manager"].id})
+    _bill(counter, 1, disc_paise=disc)
     assert _summary(counter["cashier"], date=BILLED_DAY)["modes"]["cash"] == MRP_PAISE - disc
 
 

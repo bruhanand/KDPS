@@ -27,6 +27,7 @@ from _sell import (
     build_salesman,
     build_store,
     client_for,
+    gst_on,
     stock_in,
 )
 from rest_framework.test import APIClient
@@ -35,7 +36,7 @@ from accounts.models import ScopeType, User
 from accounts.sections import CAP_MANAGE, CAP_VIEW
 from masters.models import Brand, Sku
 from offers.models import Offer
-from sell.models import ContinuityFlag, SaleLine
+from sell.models import ContinuityFlag, SaleLine, SellPolicy
 
 OFFERS_URL = "/api/offers/"
 DATASET_URL = "/api/sell/dataset"
@@ -336,7 +337,7 @@ def test_the_cap_credits_what_the_rulebook_actually_gave(counter):
     assert SaleLine.objects.get().override_by is None
 
 
-def test_the_cap_still_covers_a_discount_the_rulebook_did_not_give(counter):
+def test_manual_discount_is_refused_on_an_offer_line_when_the_dial_is_off(counter):
     """A rule is running, and the counter gave more than it is worth. The excess
     is a cashier's own, and B2 caps it exactly as if there were no rule at all."""
     _live_rule(counter["store"].code)
@@ -349,7 +350,37 @@ def test_the_cap_still_covers_a_discount_the_rulebook_did_not_give(counter):
     response = counter["client"].post(SALES_URL, payload, format="json")
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_ON_OFFER_LINE"
+
+
+def test_manual_discount_may_stack_on_an_offer_line_only_when_ho_allows_it(counter):
+    _live_rule(counter["store"].code)
+    policy = SellPolicy.current()
+    policy.manual_discount_on_offer_lines = True
+    policy.save(update_fields=["manual_discount_on_offer_lines"])
+    _shelf(counter["store"])
+    manual = 10_000
+    rulebook = 44_970
+    net = MRP_PAISE - rulebook - manual
+    gst = gst_on(net)
+    payload = bill_payload(
+        counter["store"], counter["salesman"], till_seq=1, disc_paise=rulebook + manual
+    )
+    payload["lines"][0] |= {
+        "net_paise": net,
+        "gst_paise": gst,
+        "offer_evidence": {"layer": "brand", "saved_paise": rulebook},
+    }
+    payload["tenders"] = [{"mode": "cash", "amount_paise": net}]
+    payload["totals"] |= {
+        "discount_paise": rulebook + manual,
+        "net_paise": net,
+        "gst_paise": gst,
+    }
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 201, response.json()
 
 
 def test_a_piece_the_amm_sheet_never_discounts_takes_no_rule(counter):
@@ -365,7 +396,7 @@ def test_a_piece_the_amm_sheet_never_discounts_takes_no_rule(counter):
     response = counter["client"].post(SALES_URL, payload, format="json")
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_a_clean_bill_raises_no_offer_flag(counter):
@@ -408,7 +439,7 @@ def test_the_rulebook_is_read_as_of_the_day_the_bill_was_printed(counter):
     """A counter bills offline under the rules it holds, and syncs days later.
 
     Resolving against *today's* rulebook would refuse a bill the store priced
-    honestly - `OVERRIDE_REQUIRED` on a printed receipt, with the whole queue
+    honestly - `DISCOUNT_OVER_CAP` on a printed receipt, with the whole queue
     stopped behind it. An ended rule is still consulted for a bill printed inside
     its dates, because it was running when that bill was printed.
     """
@@ -534,7 +565,7 @@ def test_a_bill_priced_before_a_piece_was_flagged_no_discount_still_lands(counte
     The counter billed honestly under a rule it held; head office then marked the
     piece never-discountable. `no_discount` is a live column with no history, so
     the server's re-price now says the customer was owed nothing and the whole
-    discount looks unauthorised. Refusing would be `OVERRIDE_REQUIRED` on a
+    discount looks manual. Refusing would be `DISCOUNT_OVER_CAP` on a
     printed receipt, with every bill behind it stuck in the queue.
     """
     offer = _live_rule(counter["store"].code)
@@ -564,7 +595,7 @@ def test_a_made_up_offer_id_cannot_lift_the_cap(counter):
     response = counter["client"].post(SALES_URL, payload, format="json")
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_an_offer_from_another_brand_cannot_lift_the_cap_either(counter):
@@ -583,7 +614,7 @@ def test_an_offer_from_another_brand_cannot_lift_the_cap_either(counter):
     response = counter["client"].post(SALES_URL, payload, format="json")
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_OVER_CAP"
 
 
 def test_a_rule_can_aim_at_one_size_in_one_colour(counter):
@@ -641,7 +672,7 @@ def test_a_till_cannot_zero_a_bill_by_naming_a_real_offer(counter):
     response = counter["client"].post(SALES_URL, payload, format="json")
 
     assert response.status_code == 422
-    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert response.json()["code"] == "DISCOUNT_ON_OFFER_LINE"
 
 
 def test_a_line_credited_to_its_cited_rule_is_always_put_in_front_of_a_human(counter):

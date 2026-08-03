@@ -170,6 +170,10 @@ export const SECTIONS: NavSectionDef[] = [
       // about selling. Offering the entry at `view` would walk an owner or an
       // accountant into a 403.
       { label: "Till & Sync", to: "/sell/till", minCapability: "operate" },
+      // The card lives at the Setup address because it is a head-office dial,
+      // but it is published under Sell: its API is `sell:manage`, and a user
+      // who holds that permission need not hold Setup at all.
+      { label: "Counter Settings", to: "/setup/settings", minCapability: "manage" },
     ],
   },
   {
@@ -377,7 +381,6 @@ export const SECTIONS: NavSectionDef[] = [
       // are visible. Same rung - reading who may do what is Setup's top rung.
       { label: "Access", to: "/setup/access", minCapability: "manage" },
       { label: "Audit Log", to: "/setup/audit", planned: true },
-      { label: "Settings", to: "/setup/settings", planned: true },
     ],
   },
 ];

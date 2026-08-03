@@ -503,6 +503,7 @@ function Counter({
     () =>
       priceCart(cartWithSoldBy, world, today, {
         capPercent: world.policy.manual_discount_cap_percent,
+        allowManualDiscountOnOfferLines: world.policy.manual_discount_on_offer_lines,
       }),
     [cartWithSoldBy, world, today],
   );

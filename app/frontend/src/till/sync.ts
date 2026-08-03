@@ -29,9 +29,12 @@ import { notesSpentBy } from "./tender";
 import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
 
 /** What the counter assumes before a server has told it otherwise: no keyed-in
- *  discount at all without a manager. The strict end of the dial, because a
- *  default that guessed generously would be a cap this file invented. */
-export const DEFAULT_POLICY: TillPolicy = { manual_discount_cap_percent: "0.00" };
+ *  discount at all. The strict end of the dial, because a default that guessed
+ *  generously would be a cap this file invented. */
+export const DEFAULT_POLICY: TillPolicy = {
+  manual_discount_cap_percent: "0.00",
+  manual_discount_on_offer_lines: false,
+};
 
 /** Slowest a failing queue will retry, and the plain interval it drains on
  *  anyway. A minute is the contract's number: fast enough that a shop with a
@@ -142,7 +145,18 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
         { key: META.store, value: payload.store },
-        { key: META.policy, value: payload.policy ?? DEFAULT_POLICY },
+        {
+          key: META.policy,
+          // The new stacking dial is absent during a rolling deploy. An absent
+          // policy must close manual entry rather than reuse a cap from a
+          // different server response, which could be wider than this chain's.
+          value: {
+            manual_discount_cap_percent:
+              payload.policy?.manual_discount_cap_percent ?? DEFAULT_POLICY.manual_discount_cap_percent,
+            manual_discount_on_offer_lines:
+              payload.policy?.manual_discount_on_offer_lines ?? false,
+          },
+        },
         { key: META.syncedAt, value: new Date().toISOString() },
       ]);
     },

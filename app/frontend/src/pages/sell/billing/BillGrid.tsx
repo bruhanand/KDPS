@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
-import { qtyFrom } from "../../../till/cart";
+import { clampManualDiscount, qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
 import { hasSlab, ratePercent } from "../../../till/tax";
 import { RupeeInput } from "./RupeeInput";
@@ -332,19 +332,41 @@ function RateCell({ line, locked, onEdit }: CellProps) {
  * offer.
  */
 function DiscountCell({ line, locked, onEdit }: CellProps) {
+  const lockedOnOffer = !line.manual_discount_allowed;
+  const allowedPaise = lockedOnOffer ? 0 : line.cap_paise;
+  // A held/restored bill or a freshly-triggered threshold offer can make an
+  // amount that was valid when typed invalid now. Keep that existing value
+  // editable until the cashier removes it; otherwise the close guard blocks the
+  // bill while the disabled field leaves no way to fix it.
+  const needsCorrection = line.disc_paise > allowedPaise;
   return (
     <>
-      <RupeeInput
-        testId={`bill-disc-${line.line_no}`}
-        label={`Discount, line ${line.line_no}`}
-        paise={line.disc_paise}
-        locked={locked || line.cap_paise === 0}
-        placeholder="0"
-        onChange={(paise) => onEdit(line.key, { disc_paise: paise ?? 0 })}
-      />
-      {line.over_cap && (
-        <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
-          over the cap
+      <span
+        title={
+          lockedOnOffer
+            ? "This line already has an offer; Head Office has turned manual stacking off."
+            : `Head Office allows up to ${line.cap_percent}% manual discount on this line.`
+        }
+      >
+        <RupeeInput
+          testId={`bill-disc-${line.line_no}`}
+          label={`Discount, line ${line.line_no}`}
+          paise={line.disc_paise}
+          locked={locked || (!needsCorrection && allowedPaise === 0)}
+          placeholder="0"
+          maxPaise={allowedPaise}
+          onChange={(paise) =>
+            onEdit(line.key, {
+              disc_paise: clampManualDiscount(paise ?? 0, allowedPaise),
+            })
+          }
+        />
+      </span>
+      {needsCorrection && (
+        <span className="warn-note" data-testid={`bill-disc-correction-${line.line_no}`}>
+          {lockedOnOffer
+            ? "Remove this manual discount: Head Office has turned offer stacking off."
+            : `Reduce this discount to ${formatINR(allowedPaise)}: Head Office's limit is ${line.cap_percent}%.`}
         </span>
       )}
       {/* Information, not a gate - and deliberately so. The rulebook (#183) does

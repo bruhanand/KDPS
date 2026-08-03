@@ -8,7 +8,7 @@ worth pinning here, and they are the three this suite is organised by:
     machine, so a person whose boundary is not stores, or who does not hold the
     rung the sale contract calls "a manager of this store", cannot set one.
   · **Nobody sets somebody else's.** An override names who stood at the counter;
-    an administrator who could set a manager's PIN could authorise a discount in
+    an administrator who could set a manager's PIN could accept an exception in
     that manager's name. So the endpoint asks for the caller's own password and
     writes only the caller's own row.
   · **It is hashed the way the till can read.** PBKDF2-SHA256, not the project's

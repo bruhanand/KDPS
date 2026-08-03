@@ -18,8 +18,8 @@ import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "
 import type { DraftPayload } from "./draft";
 import { newLegKey } from "./exchange";
 import type { ExchangeLeg } from "./exchange";
-import { covers, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
-import type { Ask, Authorisation } from "./pin";
+import { UNVERIFIED_NOTE } from "./pin";
+import type { Authorisation } from "./pin";
 import { tillToday } from "./pricing";
 import { freshTill, item } from "./testSupport";
 import { emptyPayment } from "./tender";
@@ -268,49 +268,6 @@ describe("rekeying a draft at restore (the crash-restore line-identity ruling, 2
 
     expect(fresh.cart.lines.map((line) => line.key)).not.toContain(nextLine);
     expect((fresh.cart.exchange?.lines ?? []).map((leg) => leg.key)).not.toContain(nextLeg);
-  });
-
-  it("an over-cap authorisation still covers its own line after the rekey", () => {
-    const line = { ...addPiece(item("8901000000011"), { stock: 3, alternatives: [] }), salesman: 3 };
-    const authorisation: Authorisation = {
-      user_id: 7,
-      name: "Store Manager",
-      at: "2026-08-01T09:00:00.000Z",
-      asks: [{ kind: OVER_CAP_DISCOUNT, ref: line.key, paise: 500, label: "Line 1" }],
-    };
-    const draft = draftOf({ lines: [line], authorisation });
-
-    const fresh = rekeyDraft(draft);
-    const ask: Ask = {
-      kind: OVER_CAP_DISCOUNT,
-      ref: fresh.cart.lines[0].key,
-      paise: 500,
-      label: "Line 1",
-    };
-
-    expect(covers(fresh.cart.authorisation, [ask])).toBe(true);
-  });
-
-  it("an over-cap authorisation does not cover another restored line after the rekey", () => {
-    const first = { ...addPiece(item("8901000000011"), { stock: 3, alternatives: [] }), salesman: 3 };
-    const second = { ...addPiece(item("8901000000028"), { stock: 3, alternatives: [] }), salesman: 3 };
-    const authorisation: Authorisation = {
-      user_id: 7,
-      name: "Store Manager",
-      at: "2026-08-01T09:00:00.000Z",
-      asks: [{ kind: OVER_CAP_DISCOUNT, ref: first.key, paise: 500, label: "Line 1" }],
-    };
-    const draft = draftOf({ lines: [first, second], authorisation });
-
-    const fresh = rekeyDraft(draft);
-    const askOnSecondLine: Ask = {
-      kind: OVER_CAP_DISCOUNT,
-      ref: fresh.cart.lines[1].key,
-      paise: 500,
-      label: "Line 2",
-    };
-
-    expect(covers(fresh.cart.authorisation, [askOnSecondLine])).toBe(false);
   });
 
   it("leaves a credit-note ref alone - it is a note number, never a line key", () => {

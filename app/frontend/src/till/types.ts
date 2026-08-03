@@ -138,13 +138,14 @@ export interface TillKnownCustomer {
   gstin: string;
 }
 
-/** The shop floor's money dials. One today; the shape is here so a second is a
- *  field rather than a section. */
+/** The shop floor's money dials. */
 export interface TillPolicy {
-  /** How much of a line's MRP a cashier may knock off on their own, as a
-   *  two-decimal string. Above it the bill needs a manager (B2), which the till
-   *  cannot yet obtain - so above it the till does not let the bill close. */
+  /** How much of a line's MRP a cashier may knock off, as a two-decimal string.
+   * Above it, the till rejects the bill outright; a manager PIN cannot lift it. */
   manual_discount_cap_percent: string;
+  /** Whether head office allows a cashier's manual discount to stack on a line
+   * already reduced by the rulebook. Defaults to false for an older server. */
+  manual_discount_on_offer_lines: boolean;
 }
 
 export interface TillStoreIdentity {
@@ -166,7 +167,8 @@ export interface DatasetPayload {
   salesmen: TillSalesman[];
   managers: TillManager[];
   seasons: TillSeason[];
-  policy: TillPolicy;
+  /** Optional while an older API instance is still in a rolling deploy. */
+  policy?: TillPolicy;
   /** Everybody the business has billed, deltaed by the same cursor as the items.
    *  No `deleted` sibling: a customer row is never removed in v1.
    *
