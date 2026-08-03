@@ -1001,3 +1001,69 @@ stubs in `navConfig.ts` — confirmed gap. 18 open GitHub issues catalogued in
 integrity on cancel #220, seed/RBAC issues #224/#236, POS scan/GSTIN bugs #257/#262, etc.) are
 candidates for the next fix pass. Full written audit doc + the sequential Booking→Inbound→
 Outbound→Sale fix pass (per user's stated priority) is the next session's main task.
+
+## Feature — EOSS Planning module built (3 Aug 2026) ✅
+Per docs/my-understanding/system-design/05-offers (offers.html + markdown-ai-research.html):
+EOSS is not a new discount type — it's a sell-through-triggered markdown *decision*
+layered on the existing rulebook. Built the decision layer that was missing (the
+`/offers/eoss` nav item was a `planned:true` stub):
+
+**Backend** (`offers` app):
+- `Offer.mode` field (regular/eoss) — reporting tag only, same engine.
+- New models: `SellThroughTarget` (per-brand or network-default week→%curve),
+  `EossLadderStep` (per-brand or default markdown ladder: gap-behind-target or
+  age-in-weeks trigger → discount%), `EossRecommendation` (one per season+brand+
+  style-colour: weeks in stock, sell-through%, target%, gap, broken-size-run flag,
+  margin-floor% from `Cohort` unit cost, recommended discount%, plain-language
+  reason, pending/approved/rejected).
+- `offers/eoss_engine.py::generate_recommendations(season_code)` — rule-based
+  (no ML, per the research doc's "small retailer V1" guidance), reads real
+  `StockOnHand`/`StockLedgerEntry`/`Cohort` data; never overwrites an
+  already-decided row.
+- API (`/api/offers/eoss/...`): `GET/POST recommendations` (list + regenerate),
+  `POST recommendations/<id>/decide` (approve → creates a real `Offer` tagged
+  `mode=eoss`, funder=kdps; reject → no offer), `GET/PUT config` (ladder +
+  target curve, per brand or network default). Gated at `offers_price: approve`
+  (owner's actual capability) for recommendations + config; `view` for reads.
+- Seeded defaults (data migration `0003_seed_eoss_defaults`): 3-step ladder
+  (10/25/40 pts behind → 15/30/50%), 8-week target curve (2..20wk → 10..95%).
+- Demo data: `manage.py seed_eoss_demo` seeds a small AW25 stock position (4
+  styles covering: margin-floor-capped markdown, clean markdown, on-track/no
+  markdown, broken-size-run-but-ahead-of-target) since the preview DB had zero
+  posted stock. Idempotent; uses a raw INSERT for backdated PT-inward rows only
+  (the ledger is append-only/`auto_now_add`, so the ORM cannot backdate it).
+- **Fixed 2 bugs found by testing_agent (iteration_28):** (1) owner (role
+  capability `approve`) got 403 on `PUT config` because it required `manage` —
+  relaxed to `approve`, same rung as deciding a recommendation. (2) `PUT config`
+  re-validated new rows against the DB *before* deleting the old ones for that
+  brand, so saving the same brand a second time always failed on the
+  brand+step_no unique constraint — reordered to delete-then-validate.
+**Frontend**: `pages/OffersEoss.tsx` (+ `.css`) — season picker, recalculate
+button, pending/approved/rejected tabs with counts, per-row sell-through-vs-
+target progress bar, broken-size badge, margin-floor note, inline discount
+override + approve/reject, and a ladder/target-curve editor (network default
+or per brand). Wired into `routes.tsx` and un-planned in `navConfig.ts`.
+**Verified:** testing_agent iteration_28 (13 pytest cases, backend 100%,
+frontend ~92% pending the permission fix) + a second manual pytest re-run
+(13/13 passing) and a screenshot after the fix, confirming owner can now
+Save the config with no 403.
+
+## Environment bring-up + login outage (3 Aug 2026)
+Pod was reprovisioned mid-session (Postgres/venv/.env wiped). Re-ran
+`scripts/dev-bootstrap.sh`, recreated `backend/.env` (DATABASE_URL) and
+`frontend/.env` (REACT_APP_BACKEND_URL). This was also the root cause of a
+user-reported "can't log in" — backend was crash-looping on a missing Django
+install; fixed by the same bring-up, verified by testing_agent (iteration_27,
+5/5 login scenarios incl. all 10 demo chips, session persistence, logout,
+bad-credential error path).
+
+## Fix — page layout not adaptive to wide viewports (3 Aug 2026) ✅
+(see previous entry above — unchanged, kept for history)
+
+## Audit — operations scope (in progress, carried over)
+Booking/Inbound/Outbound/Offers backend all substantially built (verified by
+reading code, not docs). EOSS Planning is now built (see above). Still
+outstanding: the full written audit report the user asked for, and the
+sequential Booking→Inbound→Outbound→Sale fix pass against the 18 open
+GitHub issues in `/app/github_issues_audit.md` (booking store-scope leak #234,
+money formatting #155/#198, RTV integrity #220, POS scan/GSTIN bugs, etc).

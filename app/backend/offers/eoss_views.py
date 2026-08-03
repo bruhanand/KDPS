@@ -19,7 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_VIEW
+from accounts.sections import CAP_APPROVE, CAP_VIEW
 from core.refusals import first_message, refusal_body
 from masters.models import Brand, Season, Store
 from offers.eoss_engine import generate_recommendations
@@ -31,7 +31,7 @@ from offers.eoss_serializers import (
 from offers.models import EossLadderStep, EossRecommendation, Offer, SellThroughTarget
 
 CanReadOrApprove = require_section("offers_price", CAP_VIEW, write_minimum=CAP_APPROVE)
-CanManageConfig = require_section("offers_price", CAP_VIEW, write_minimum=CAP_MANAGE)
+CanManageConfig = require_section("offers_price", CAP_VIEW, write_minimum=CAP_APPROVE)
 
 
 def _bad_request(message: str) -> Response:
@@ -187,6 +187,12 @@ class EossConfigView(APIView):
             if brand is None:
                 return Response(refusal_body("NOT_FOUND", f"No brand {brand_code}."), status=404)
 
+        # Clear this brand's existing rows *before* validating the new ones -
+        # otherwise every row here collides with the very rows it is about to
+        # replace, and PUT can never be called twice for the same brand.
+        EossLadderStep.objects.filter(brand=brand).delete()
+        SellThroughTarget.objects.filter(brand=brand).delete()
+
         ladder_rows = []
         for i, raw in enumerate(ladder_in, start=1):
             data = {**raw, "brand": brand_code, "step_no": raw.get("step_no", i)}
@@ -207,12 +213,17 @@ class EossConfigView(APIView):
             row.pop("brand", None)
             target_rows.append(row)
 
-        EossLadderStep.objects.filter(brand=brand).delete()
         EossLadderStep.objects.bulk_create(
             [EossLadderStep(brand=brand, **row) for row in ladder_rows]
         )
-        SellThroughTarget.objects.filter(brand=brand).delete()
         SellThroughTarget.objects.bulk_create(
             [SellThroughTarget(brand=brand, **row) for row in target_rows]
         )
-        return self.get(request)
+        ladder = EossLadderStep.objects.filter(brand=brand).select_related("brand")
+        targets = SellThroughTarget.objects.filter(brand=brand).select_related("brand")
+        return Response(
+            {
+                "ladder": EossLadderStepSerializer(ladder, many=True).data,
+                "targets": SellThroughTargetSerializer(targets, many=True).data,
+            }
+        )

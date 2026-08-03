@@ -144,10 +144,18 @@ class TestEossConfig:
         r = admin_session.put(f"{BASE_URL}/api/offers/eoss/config", json={"ladder": "nope"})
         assert r.status_code == 400
 
-    def test_owner_cannot_manage_config(self, owner_session):
-        # documents permission gap: owner has approve, not manage
+    def test_owner_can_manage_config(self, owner_session):
+        # permission gap fixed: owner has approve, which now meets EOSS config's
+        # write_minimum too. Scoped to a brand (not the shared network default)
+        # so this test never wipes the defaults other tests rely on.
+        payload = {
+            "ladder": [{"step_no": 1, "trigger_type": "gap", "trigger_value": "12", "discount_pct": "20"}],
+            "targets": [{"week_number": 4, "target_pct": "18"}],
+        }
         r = owner_session.put(
             f"{BASE_URL}/api/offers/eoss/config",
-            json={"ladder": [], "targets": []},
+            json={"brand": "jockey", **payload},
         )
-        assert r.status_code == 403
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert len(d["ladder"]) == 1 and len(d["targets"]) == 1
