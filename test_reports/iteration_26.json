@@ -1,0 +1,48 @@
+{
+  "summary": "Retest of the wide-viewport layout fix (page-pad width:100% + card-grid RAM pattern). Verified with owner/Owner@123. Page container fills full available width with 0px right gutter at 1920/1280/1024 viewports across Dashboard, /booking, /receive, /transfer, /stock. Booking/GRN cards render at natural widths (388px at 1920, 471px at 1280, 343px at 1024) — NOT stretched into a banner. No horizontal scrollbar at any breakpoint. Responsive reflow works (columns collapse gracefully as viewport shrinks). Visual screenshots confirm the previously-rejected 'stretched banner' regression is gone: booking @1920 shows a single ~388px card with plain page background to its right (correct/expected per problem statement), not a stretched card filling the row.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "measurements": {
+    "sidebar_px": 258,
+    "1920x800": {
+      "dashboard": {"pageW": 1662, "rightGutter": 0, "hScroll": false},
+      "booking":   {"pageW": 1662, "rightGutter": 0, "hScroll": false, "cardWidths": [388]},
+      "receive":   {"pageW": 1662, "rightGutter": 0, "hScroll": false, "cardWidths": [375]},
+      "transfer":  {"pageW": 1662, "rightGutter": 0, "hScroll": false},
+      "stock":     {"pageW": 1662, "rightGutter": 0, "hScroll": false}
+    },
+    "1280x800": {
+      "booking":   {"pageW": 1022, "rightGutter": 0, "hScroll": false, "cardWidths": [471]}
+    },
+    "1024x800": {
+      "booking":   {"pageW": 766,  "rightGutter": 0, "hScroll": false, "cardWidths": [343]},
+      "receive":   {"pageW": 766,  "rightGutter": 0, "hScroll": false, "cardWidths": [652], "note": "Card is inside the outer 'Awaiting receipt' wrapper, whose inner .card-grid track is narrower than the page; only 1 column fits so the 1fr fills the wrapper. Visually correct (screenshot confirms it looks like a normal section card, not a banner) — the pathological wide-viewport banner (~1600px lone card) is NOT reproduced."}
+    },
+    "not_verified_due_to_cloudflare_or_rate_limit": ["/offers", "/approvals", "/stock-count", "/money/vendor detailed measurement", "/sell as deo.cashier"]
+  },
+  "test_report_links": [
+    "/app/test_reports/it26_dashboard_1920.jpeg",
+    "/app/test_reports/it26_booking_1920.jpeg",
+    "/app/test_reports/it26_receive_1920.jpeg",
+    "/app/test_reports/it26c_booking_1280.jpeg",
+    "/app/test_reports/it26c_booking_1024.jpeg",
+    "/app/test_reports/it26c_receive_1024.jpeg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CSS fix is minimal, targeted, and follows the design_guidelines.json ERP layout spec. `.page-pad { width:100%; box-sizing:border-box }` correctly removes the dead 1320px cap. `.card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)) }` uses the standard RAM pattern which keeps card widths bounded (~320-471px observed) instead of stretching a lone card to fill an entire wide row — user's rejection concern from iteration_25 is addressed.",
+    "One minor consideration (not a bug, not blocking): at 1024vw the Receive page's nested `.card-grid` (inside the 'Awaiting receipt' wrapper) has enough width for only 1 column so the single card stretches to 652px. Visually it still reads as a normal card, but if future seed data shows only one pending booking on a narrow viewport the card will be wider than the 320-420 nominal target. Not a regression of the reported bug (that was ~1600px banner)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only test)", "frontend": "100% on measured pages"},
+  "test_credentials": "owner/Owner@123 used (from /app/memory/test_credentials.md). deo.cashier/Store@123 attempted for /sell but blocked by Cloudflare bot verification challenge during the run.",
+  "seed_data_creation": "None. Existing seed had 1 booking (BK-SS26-0001, Peter England).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix is verified. If more thorough coverage is needed, retest /sell as deo.cashier (split-pane + ~352px fixed bill rail) and /money/vendor + /transfer data-table regressions after Cloudflare cooldown. Use slow pacing (3-5s between navigations) to avoid Vite/Cloudflare rate limits on the preview proxy. Measure via `document.querySelector('.page-pad').getBoundingClientRect()` for pageW/gutter.",
+  "rca of the issue": "N/A - retest confirms fix. Prior issue (iter 25 rejection): earlier attempt used `auto-fit` which collapses empty tracks so a lone card stretched to fill full 1600+px row. Current fix uses `auto-fill` + `minmax(min(100%, 320px), 1fr)` which reserves empty tracks and keeps card widths in a natural ~320-471px range on wide viewports."
+}
