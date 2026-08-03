@@ -26,6 +26,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Resolved alerts, newest first, within a window (#226).
+         *
+         *     The other half of the same lifecycle the inbox shows, through the *same*
+         *     scope call - history that answered a wider question than the live feed would
+         *     let a store person read another store's problems a day late, which is the
+         *     same leak with a delay on it.
+         *
+         *     An ``APIView`` rather than a ``ListAPIView`` because a bad ``?since=`` is a
+         *     refusal with a code, and a generic list has nowhere to say so.
+         */
+        get: operations["alerts_history_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The caller's read cursor: GET where it stands, POST to move it to now.
+         *
+         *     The stamp is the *server's* clock, never a time sent up: a browser whose
+         *     clock runs fast would otherwise mark alerts read before they were raised,
+         *     and the badge would sit at zero through a real problem.
+         */
+        get: operations["alerts_seen_retrieve"];
+        put?: never;
+        /**
+         * @description The caller's read cursor: GET where it stands, POST to move it to now.
+         *
+         *     The stamp is the *server's* clock, never a time sent up: a browser whose
+         *     clock runs fast would otherwise mark alerts read before they were raised,
+         *     and the badge would sit at zero through a real problem.
+         */
+        post: operations["alerts_seen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approvals": {
         parameters: {
             query?: never;
@@ -36,6 +93,10 @@ export interface paths {
         /**
          * @description History across every document type, store-scoped (ADR-0003). Includes the
          *     caller's own requests — the maker must be able to watch their own decision.
+         *
+         *     The bell's Approvals History reads this with ``?decided=1&since=`` (#226) -
+         *     two narrowings on the same list rather than an endpoint of its own, because
+         *     "decisions, lately" is a question this view was already shaped to answer.
          */
         get: operations["approvals_list"];
         put?: never;
@@ -347,6 +408,41 @@ export interface paths {
         };
         get: operations["auth_me_retrieve"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me/till-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Set your own counter PIN (#182). Your own, and nobody else's.
+         *
+         *     Self-service on purpose. An override's whole value is that it names who was
+         *     standing at the counter, so an administrator who could set a manager's PIN
+         *     could authorise a discount in that manager's name - which is why the caller
+         *     proves who they are with their own password and the row written is their own.
+         *
+         *     Not a `PATCH` on the user admin endpoint either: that surface is the
+         *     two-administrator access-change path (`PendingAccessChangeMixin`), and a
+         *     person changing their own credential is not an access change waiting on
+         *     somebody else's approval - it is the same shape as changing a password.
+         *
+         *     Gated on the rung the PIN actually authorises - `sell: approve`, the second
+         *     eye on selling - so the access table decides who may hold one (#94's one
+         *     write gate). `may_hold_till_pin` then asks the half a section gate cannot:
+         *     whether this person's boundary is stores at all. A network administrator
+         *     whose matrix cell happens to reach the rung is not one of a counter's people.
+         */
+        put: operations["auth_me_till_pin_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -735,6 +831,227 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mail/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Stream one attachment's bytes from Google. Never stored - see
+         *     ``models.MailAttachment``.
+         */
+        get: operations["mail_attachments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Where Google sends the browser back.
+         *
+         *     Unauthenticated by necessity: this is a top-level browser redirect from
+         *     accounts.google.com and it carries no Authorization header. So it decides
+         *     nothing. It parks the authorization code against the flow that started it
+         *     and bounces the browser to the PWA holding a one-time handoff; the mailbox
+         *     is attached by the *next* request, which is authenticated. The reasoning is
+         *     in :mod:`state`, and it is the difference between this and a callback that
+         *     can be made to attach a mailbox to somebody else's login.
+         */
+        get: operations["mail_callback_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Finish a connect that Google has already approved.
+         *
+         *     Authenticated, and that is the entire point of the endpoint: the mailbox
+         *     attaches to the person whose credentials are on *this* request, and only if
+         *     they are also the person who started the flow.
+         */
+        post: operations["mail_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Hand back the Google consent URL.
+         *
+         *     Returned as JSON for the client to navigate to, rather than a 302: the PWA
+         *     calls this with a bearer token through axios, and a redirect would be
+         *     followed by the XHR instead of by the browser's address bar.
+         */
+        get: operations["mail_connect_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Forget the mailbox: revoke at Google, drop the tokens, drop the cache. */
+        post: operations["mail_disconnect_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The list, for both the popup and the screen.
+         *
+         *     ``?box=inbox|sent|unread`` picks the folder, ``?q=`` searches what is
+         *     cached, ``?limit=`` trims for the popup, ``?sync=0`` skips the pull for a
+         *     read that must not wait on Google.
+         */
+        get: operations["mail_messages_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One message, body and all. */
+        get: operations["mail_messages_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/messages/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Mark one message read, at Google *and* here - in that order. */
+        post: operations["mail_messages_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send a new mail, or reply inside a thread. */
+        post: operations["mail_send_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What the top bar draws. Cheap and always answers - it runs on every page. */
+        get: operations["mail_status_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The badge. Kept separate from the list so the top bar can poll it
+         *     without pulling sixty rows and their snippets on every page change.
+         */
+        get: operations["mail_unread_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/masters/brands": {
         parameters: {
             query?: never;
@@ -1010,6 +1327,42 @@ export interface paths {
         };
         get: operations["masters_summary_retrieve"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET` - what is running (and what is coming). `POST` - author a draft. */
+        get: operations["offers_retrieve"];
+        put?: never;
+        /** @description `GET` - what is running (and what is coming). `POST` - author a draft. */
+        post: operations["offers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET` one rule; `PUT` to change it - or, if it is live, to replace it. */
+        get: operations["offers_retrieve_2"];
+        /** @description `GET` one rule; `PUT` to change it - or, if it is live, to replace it. */
+        put: operations["offers_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2406,6 +2759,365 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sell/dataset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/sell/dataset` - everything the counter has to know offline.
+         *
+         *     Gated at `sell: operate`, not `view`: this is not a report about selling, it is
+         *     the working copy a till bills from, and it carries the store's manager
+         *     override PIN hashes. Somebody who may read yesterday's bills has no use for it.
+         *
+         *     See `sell.services.dataset` for what is in it and why the cursor laps
+         *     backwards.
+         *
+         *     `TILL_SCOPE` is the one refusal that carries a code, and the till needs it to:
+         *     it means "this login will never be a till, a human must fix the account", which
+         *     is not something to retry. The capability refusal above it answers with DRF's
+         *     own `{"detail": ...}` at 403 - the same as every sibling `require_section` gate,
+         *     and the same as `/api/stock/availability` recorded when it shipped. Unifying the
+         *     two body shapes is one change across every gate in the project, not this
+         *     endpoint's to make alone.
+         */
+        get: operations["sell_dataset_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/sell/flags` - what the counter's day left open (#188).
+         *
+         *     The list side of the exception queue the accept pipeline and the nightly
+         *     check write to. It is a *list*, not a report: every row is something somebody
+         *     is expected to look at and then say something about, which is what the
+         *     sibling PUT is for.
+         *
+         *     Gated on `money`, not `sell` - see `sell.permissions.CanWorkStoreFlags`.
+         */
+        get: operations["sell_flags_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/flags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description `PUT /api/sell/flags/{id}` - somebody looked at this one.
+         *
+         *     Two answers, and no way back to `open`. **Resolved** is "dealt with";
+         *     **ignored** is "looked at, needs nothing" - and the second takes a note,
+         *     because the first is usually evidenced by the thing itself having changed and
+         *     the second is evidenced by nothing unless a person says why.
+         *
+         *     It cannot touch the bill (A7). Clearing an exception is a statement about
+         *     somebody's attention, not a correction of a document - a bill that really is
+         *     wrong is corrected by the kernel's reversing transition and by nothing here.
+         */
+        put: operations["sell_flags_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/held-bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description `PUT /api/sell/held-bills` - the counter's parked carts, as a whole list.
+         *
+         *     Replace-all, and that is the design rather than an economy. The till is
+         *     authoritative (grill Q13): a hold lives in IndexedDB, is resumed at the
+         *     counter, and may be parked and picked up half a dozen times while the line to
+         *     head office is down. There is no per-hold delete to replay, so the honest
+         *     mirror is "here is everything I have now" - anything the store no longer holds
+         *     is gone by not being mentioned.
+         *
+         *     Gated at `sell: operate` and to one store, exactly as the dataset is: this is
+         *     the counter talking about its own counter. Somebody who may read yesterday's
+         *     bills has nothing to park.
+         *
+         *     The list is keyed by **store**, which is the same one-till-per-store invariant
+         *     the sale series rests on (`uq_sale_store_fy_seq`). Two counters at one shop
+         *     would each replace the other's mirror here; that is not a new assumption, and
+         *     it moves when the register handover (#189) gives a till an identity.
+         */
+        put: operations["sell_held_bills_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/irn-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/sell/irn-queue` - the B2B bills head office still owes an IRN.
+         *
+         *     Above the e-invoice threshold every GSTIN-bearing counter sale must carry an
+         *     IRN within thirty days or it is invalid and the customer loses their input
+         *     credit (grill Q8). The store cannot raise one and is never asked to: the
+         *     deadline rides as data into this list, oldest first, and the people who file
+         *     the returns work it.
+         *
+         *     Read-only about the *bill*. Nothing here can touch a posted sale (A7); the
+         *     sibling PUT writes the portal's answer onto the queue row beside it, which is
+         *     a fact about a filing rather than a fact about a sale.
+         */
+        get: operations["sell_irn_queue_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/irn-queue/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description `PUT /api/sell/irn-queue/{id}` - what the portal answered.
+         *
+         *     One way only. A row goes to `generated` with its reference or to `failed`,
+         *     and a row already generated is refused: an IRN is the invoice's identity at
+         *     the GSTN, and a second one silently replacing the first would leave two
+         *     documents in the world claiming to be this bill.
+         */
+        put: operations["sell_irn_queue_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The chain-wide discount dials, read whole and written whole (#271). */
+        get: operations["sell_policy_retrieve"];
+        /** @description The chain-wide discount dials, read whole and written whole (#271). */
+        put: operations["sell_policy_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/sell/register` - the till's boot and recovery state (#180).
+         *
+         *     The one call a counter makes before it trusts its own bill counter. Gated the
+         *     same as the dataset, and for the same reason: it describes one counter's
+         *     numbering, which is only ever of use to that counter.
+         *
+         *     Read-only. The deliberate handover that moves a series onto a new machine is
+         *     the sibling POST, and it belongs to a manager rather than to a till (#189).
+         *
+         *     See `sell.services.register` for what each field answers.
+         */
+        get: operations["sell_register_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/register/handover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /api/sell/register/handover` - this store bills from a new machine now.
+         *
+         *     The sibling of the GET, and everything it does differently follows from the
+         *     same sentence: boot reconciliation is a till talking to itself every morning,
+         *     while a handover is a person deciding that the machine holding this store's
+         *     bill counter is not coming back.
+         *
+         *     So it sits a rung higher (`sell: approve`), it will not run without a written
+         *     reason, and it leaves a row behind. What it answers with is the number the new
+         *     machine resumes at and the bills the old one never sent - each of which is a
+         *     printed receipt somebody has to key back in under its original number.
+         *
+         *     **It writes nothing to the counter.** The till numbers bills and the server
+         *     accepts them; a handover that also moved `VoucherSeries.next_seq` would be the
+         *     server forming an opinion about a number nobody has printed.
+         */
+        post: operations["sell_register_handover_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `POST` - the till syncing a bill. `GET` - customer search / reprint (E1, E2).
+         *
+         *     The POST is idempotent: the till replays from a durable queue, so the same
+         *     `idempotency_uuid` answers **200 with the same bill and no second write**,
+         *     while a first arrival answers 201. The till tells the two apart on the status
+         *     code and stops replaying either way.
+         */
+        get: operations["sell_sales_list"];
+        put?: never;
+        /**
+         * @description `POST` - the till syncing a bill. `GET` - customer search / reprint (E1, E2).
+         *
+         *     The POST is idempotent: the till replays from a durable queue, so the same
+         *     `idempotency_uuid` answers **200 with the same bill and no second write**,
+         *     while a first arrival answers 201. The till tells the two apart on the status
+         *     code and stops replaying either way.
+         */
+        post: operations["sell_sales_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sell/sales/{doc_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/sell/sales/{doc_number}` - one bill, read-only, for reprint.
+         *
+         *     Out of scope answers 404 rather than 403, the same as every other document
+         *     detail here: a 403 would confirm the bill exists.
+         */
+        get: operations["sell_sales_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stock/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/stock/availability?q=&brand=&size=` — where a piece is, in every
+         *     store, size by size (#175, D10 §3).
+         *
+         *     The one read in the system that deliberately steps outside `masters.scoping`.
+         *     A customer is standing at the counter asking for a shirt in L that this store
+         *     does not have; answering "we don't stock it" while a sister store has three
+         *     is the loss the system exists to stop. So the boundary is suspended here on
+         *     purpose, registered as ``masters.scope_exceptions.CROSS_STORE_AVAILABILITY``
+         *     with the written reason, and kept narrow by what the answer carries:
+         *     quantities, sizes and store codes. **No cost, value, MRP or margin field is
+         *     built here at all** — not gated per row as
+         *     ``outbound.CrossLocationStockSearchView`` does, but absent by construction, so
+         *     another store's money cannot leak out of this endpoint by a later edit that
+         *     forgot the gate. The exception's ``withholds`` list is asserted against the
+         *     live payload by this endpoint's test.
+         *
+         *     **One axis, not two.** Stock is normally read through
+         *     ``scope_by_store_and_brand``, and only the *store* half is suspended here.
+         *     A brand-scoped caller (a brand manager) is still narrowed to the brands they
+         *     are entitled to: the customer-at-the-counter argument is a store's argument,
+         *     and it says nothing at all about letting one brand's representative read
+         *     another brand's network position.
+         *
+         *     It is read-only and it places no hold on anything: the customer is quoted a
+         *     time, never promised a piece. Asking for the stock is a separate act — a
+         *     stock request, which walks its own approval route.
+         *
+         *     Nested design → size → the places holding it, because that is the question
+         *     being asked out loud: "who has this shirt in L?" The innermost entry is one
+         *     SKU at one store, so it names its colour and its barcode. Folding the colours
+         *     of a size together would read tidier and be useless: the customer wants the
+         *     navy one, and "Request this" has to be able to say which piece it means.
+         */
+        get: operations["stock_availability_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stockledger/entries": {
         parameters: {
             query?: never;
@@ -2508,6 +3220,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/store/cash-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/store/cash-summary` - one store's day, by tender.
+         *
+         *     Gated on `money: view` per the contract, which is a rung the store itself
+         *     holds ("Expenses only (create)" is `money: operate` on the ratified sheet), so
+         *     a counter can read what its own day came to. Head office reads it through the
+         *     same door, narrowed by the top-bar switcher exactly as the Dashboard is.
+         *
+         *     Read-only, and there is deliberately no writer: agreeing a day - counting the
+         *     drawer, locking the date - is store open/close (I3), and a screen that let
+         *     somebody confirm a day before that flow exists would be a confirmation
+         *     nothing downstream honours.
+         */
+        get: operations["store_cash_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/store/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/store/dashboard` - one store's Home.
+         *
+         *     Gated on `home: view`, the section every role holds, because the dashboard is
+         *     a window onto work the person can already reach: each card is a count of rows
+         *     some other gate has already decided they may see, and the two blocks that are
+         *     not - the money tiles and the manager row - carry their own answer (the tiles
+         *     are nought until the POS lands; the manager row is `sell >= approve`).
+         *
+         *     Refuses with `SCOPE_DENIED` and nothing else. A store with no transfers, no
+         *     approvals and no target is not an error - it is a quiet morning, and it
+         *     renders as noughts.
+         */
+        get: operations["store_dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vendors": {
         parameters: {
             query?: never;
@@ -2576,6 +3346,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `CASH` - Cash drawer
+         *     * `BANK` - Bank
+         *     * `CARD` - Card, awaiting settlement
+         *     * `UPI` - UPI, awaiting settlement
+         * @enum {string}
+         */
+        AccountEnum: "CASH" | "BANK" | "CARD" | "UPI";
         ActorPolicy: {
             readonly id: number;
             readonly action: string;
@@ -2652,6 +3430,8 @@ export interface components {
             readonly status: components["schemas"]["AlertReadStatusEnum"];
             /** Format: date-time */
             readonly created_at: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
         };
         /**
          * @description * `in_transit_aging` - Transfer stuck in transit
@@ -2719,6 +3499,15 @@ export interface components {
             readonly decided_at: string | null;
             /** @description Required on reject; free for approve; the policy note on 'not_required'. */
             readonly reason: string;
+            /** @description Zero-based position in the route. 0 on an unrouted approval, where it means nothing; on a routed one it is the step now waiting, and once approved it sits past the last step. */
+            readonly current_step: number;
+            /**
+             * @description The chain, one entry per step — empty where the family has none, so
+             *     the screen renders nothing extra for the single-step families (#172).
+             */
+            readonly steps: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * @description * `pending` - Waiting for approval
@@ -2816,7 +3605,7 @@ export interface components {
             doc_number: string;
             kind: components["schemas"]["CashLedgerEntryKindEnum"];
             readonly kind_label: string;
-            account?: string;
+            account?: components["schemas"]["AccountEnum"];
             /** Format: int64 */
             amount: number;
             readonly amount_rupees: string;
@@ -2833,6 +3622,12 @@ export interface components {
          * @enum {string}
          */
         CashLedgerEntryKindEnum: "receipt" | "payment" | "reversal";
+        /**
+         * @description * `posted` - Costed
+         *     * `deferred` - Waiting on the paperwork
+         * @enum {string}
+         */
+        CostingStatusEnum: "posted" | "deferred";
         CustomTokenObtainPair: {
             username: string;
             password: string;
@@ -2844,6 +3639,27 @@ export interface components {
          * @enum {integer}
          */
         DocstatusEnum: 0 | 1 | 2;
+        FlagRead: {
+            kind: components["schemas"]["FlagReadKindEnum"];
+            status?: components["schemas"]["Status2a5Enum"];
+            details?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `number_hole` - Bills missing before this one
+         *     * `cn_unverified` - Credit note taken without verification
+         *     * `return_orig_missing` - Returned against a bill we do not hold
+         *     * `offer_mismatch` - Offer applied differs from the rulebook
+         *     * `gst_mismatch` - Tax charged differs from the dated slab
+         *     * `aged_uncosted` - Sold before inward, still unpriced
+         *     * `gstin_invalid` - The buyer's GSTIN is not well formed
+         *     * `return_late` - Taken back after the return window closed
+         *     * `return_uncosted` - Given back before the books could price it
+         *     * `employee_returns` - One seller took back an unusual number
+         * @enum {string}
+         */
+        FlagReadKindEnum: "number_hole" | "cn_unverified" | "return_orig_missing" | "offer_mismatch" | "gst_mismatch" | "aged_uncosted" | "gstin_invalid" | "return_late" | "return_uncosted" | "employee_returns";
         /**
          * @description What a request's page shows about each transfer answering it — enough to
          *     link through, not the whole transfer.
@@ -3026,7 +3842,7 @@ export interface components {
             /** @default  */
             brand: string;
             readonly scope: string;
-            origin: components["schemas"]["OriginEnum"];
+            origin: components["schemas"]["LookupProposalOriginEnum"];
             readonly origin_label: string;
             /** @default proposed */
             status: components["schemas"]["LookupProposalStatusEnum"];
@@ -3044,6 +3860,14 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `review` - Review resolution
+         *     * `remember` - Remember this
+         *     * `mined` - Deterministic miner
+         *     * `llm` - LLM miner
+         * @enum {string}
+         */
+        LookupProposalOriginEnum: "review" | "remember" | "mined" | "llm";
         /**
          * @description * `proposed` - Proposed
          *     * `approved` - Approved
@@ -3116,14 +3940,6 @@ export interface components {
             readonly created_at: string;
             readonly lines: components["schemas"]["MarkDamagedLine"][];
         };
-        /**
-         * @description * `review` - Review resolution
-         *     * `remember` - Remember this
-         *     * `mined` - Deterministic miner
-         *     * `llm` - LLM miner
-         * @enum {string}
-         */
-        OriginEnum: "review" | "remember" | "mined" | "llm";
         /**
          * @description * `owned` - KDPS-owned
          *     * `brand_owned` - Brand-owned
@@ -3631,20 +4447,13 @@ export interface components {
             dimension: string;
             raw_value: string;
             context?: unknown;
-            status?: components["schemas"]["ReviewItemStatusEnum"];
+            status?: components["schemas"]["Status2a5Enum"];
             readonly status_label: string;
             resolved_value?: string;
             occurrences?: number;
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description * `open` - Open
-         *     * `resolved` - Resolved
-         *     * `ignored` - Ignored
-         * @enum {string}
-         */
-        ReviewItemStatusEnum: "open" | "resolved" | "ignored";
         Role: {
             readonly id: number;
             code: string;
@@ -3655,6 +4464,206 @@ export interface components {
             is_system?: boolean;
             is_active?: boolean;
         };
+        /** @description The replay-safe acknowledgement returned when the queue lands a bill. */
+        SaleAccepted: {
+            doc_number: string;
+            id: number;
+            flags: string[];
+        };
+        SaleLineRead: {
+            line_no: number;
+            direction?: components["schemas"]["SaleLineReadDirectionEnum"];
+            barcode: string;
+            season?: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            item?: string;
+            hsn?: string;
+            qty: number;
+            /** Format: int64 */
+            mrp_paise?: number;
+            /** Format: int64 */
+            disc_paise?: number;
+            /**
+             * Format: int64
+             * @description GST-inclusive line value; on a return leg, the refund.
+             */
+            net_paise?: number;
+            /** Format: decimal */
+            gst_rate?: string;
+            /** Format: int64 */
+            gst_paise?: number;
+            /** @default  */
+            readonly salesman_code: string;
+            /** @default  */
+            readonly salesman_name: string;
+            /** @description Which rule won, what it beat, and by how much (B3). Kept beside the FK rather than replaced by it: the rule can be ended and replaced, and what this bill was priced under has to stay readable afterwards (Rule 3). */
+            offer_evidence?: unknown;
+            /** @description A line the scan could not resolve. */
+            manual_desc?: string;
+            sold_before_inward?: boolean;
+            costing_status?: components["schemas"]["CostingStatusEnum"];
+            return_reason?: string;
+            condition?: components["schemas"]["SaleLineReadConditionEnum"] | components["schemas"]["BlankEnum"];
+            /** @default 0 */
+            readonly returned_qty: number;
+            /** @default 0 */
+            readonly returned_paise: number;
+        };
+        /**
+         * @description * `good` - Good - back on the shelf
+         *     * `damaged` - Damaged - into quarantine
+         * @enum {string}
+         */
+        SaleLineReadConditionEnum: "good" | "damaged";
+        /**
+         * @description * `sale` - Sold
+         *     * `return` - Returned (exchange leg)
+         * @enum {string}
+         */
+        SaleLineReadDirectionEnum: "sale" | "return";
+        /** @description The whole bill, read-only. There is no write counterpart, by design (A7). */
+        SaleRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            readonly store_code: string;
+            readonly store_name: string;
+            /** @default  */
+            readonly store_gstin: string;
+            fy: string;
+            /** @description The number the till assigned, before syncing. */
+            till_seq: number;
+            origin?: components["schemas"]["SaleReadOriginEnum"];
+            /**
+             * Format: date-time
+             * @description The till's clock at Save & Print.
+             */
+            billed_at: string;
+            customer_name?: string;
+            customer_mobile?: string;
+            /** @description Present = a B2B tax invoice. */
+            buyer_gstin?: string;
+            b2b_tax_kind?: components["schemas"]["SaleReadB2bTaxKindEnum"];
+            readonly irn: string;
+            readonly exchange_of: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: int64 */
+            gross_paise?: number;
+            /** Format: int64 */
+            discount_paise?: number;
+            /**
+             * Format: int64
+             * @description What the customer pays. May be negative - an exchange whose returns outweigh its sales issues a credit note for the difference.
+             */
+            net_paise?: number;
+            /** Format: int64 */
+            gst_paise?: number;
+            /** Format: int64 */
+            round_paise?: number;
+            /** @default  */
+            readonly billed_by: string;
+            /** @default  */
+            readonly authorised_by: string;
+            /** @description What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: credit_note when a manager accepted a note the till could not verify. */
+            override_kind?: string;
+            /**
+             * Format: date-time
+             * @description The till's clock when the manager's PIN was accepted, which is not the same moment as Save & Print.
+             */
+            override_at?: string | null;
+            readonly lines: components["schemas"]["SaleLineRead"][];
+            readonly tenders: components["schemas"]["SaleTenderRead"][];
+            readonly flags: components["schemas"]["FlagRead"][];
+            readonly credit_notes_issued: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * @description * `none` - Not a B2B bill
+         *     * `cgst_sgst` - CGST + SGST (same state)
+         *     * `igst` - IGST (different state)
+         * @enum {string}
+         */
+        SaleReadB2bTaxKindEnum: "none" | "cgst_sgst" | "igst";
+        /**
+         * @description * `online` - Online
+         *     * `offline` - Offline
+         *     * `paper` - Re-entered from a paper bill
+         * @enum {string}
+         */
+        SaleReadOriginEnum: "online" | "offline" | "paper";
+        /** @description One row of the customer-search / reprint list. */
+        SaleRow: {
+            readonly id: number;
+            doc_number?: string | null;
+            readonly store_code: string;
+            /**
+             * Format: date-time
+             * @description The till's clock at Save & Print.
+             */
+            billed_at: string;
+            customer_name?: string;
+            customer_mobile?: string;
+            /**
+             * Format: int64
+             * @description What the customer pays. May be negative - an exchange whose returns outweigh its sales issues a credit note for the difference.
+             */
+            net_paise?: number;
+            readonly lines_summary: string;
+        };
+        SaleTenderRead: {
+            mode: components["schemas"]["SaleTenderReadModeEnum"];
+            /** Format: int64 */
+            amount_paise: number;
+            /** @default  */
+            readonly credit_note_number: string;
+        };
+        /**
+         * @description * `cash` - Cash
+         *     * `card` - Card
+         *     * `upi` - UPI
+         *     * `credit_note` - Credit note
+         * @enum {string}
+         */
+        SaleTenderReadModeEnum: "cash" | "card" | "upi" | "credit_note";
+        /** @description One bill, as the till's queue replays it. */
+        SaleWrite: {
+            /** Format: uuid */
+            idempotency_uuid: string;
+            store: string;
+            fy: string;
+            till_seq: number;
+            /** @default offline */
+            origin: components["schemas"]["SaleWriteOriginEnum"];
+            /** Format: date-time */
+            billed_at: string;
+            customer?: components["schemas"]["_CustomerWrite"];
+            lines?: components["schemas"]["_LineWrite"][];
+            exchange?: components["schemas"]["_ExchangeWrite"] | null;
+            tenders?: components["schemas"]["_TenderWrite"][];
+            totals: components["schemas"]["_TotalsWrite"];
+            /** @default  */
+            b2b_tax_kind: components["schemas"]["SaleWriteB2bTaxKindEnum"] | components["schemas"]["BlankEnum"];
+            override?: components["schemas"]["_OverrideWrite"] | null;
+        };
+        /**
+         * @description * `none` - none
+         *     * `cgst_sgst` - cgst_sgst
+         *     * `igst` - igst
+         * @enum {string}
+         */
+        SaleWriteB2bTaxKindEnum: "none" | "cgst_sgst" | "igst";
+        /**
+         * @description * `online` - online
+         *     * `offline` - offline
+         *     * `paper` - paper
+         * @enum {string}
+         */
+        SaleWriteOriginEnum: "online" | "offline" | "paper";
         /** @description One scanned (barcode × count) pair from the scan screen. */
         ScanLine: {
             barcode: string;
@@ -3690,6 +4699,19 @@ export interface components {
          * @enum {string}
          */
         SourceB43Enum: "brand_file" | "invoice";
+        /**
+         * @description * `manual` - Raised by hand
+         *     * `cross_store_search` - From cross-store search
+         * @enum {string}
+         */
+        SourceCc8Enum: "manual" | "cross_store_search";
+        /**
+         * @description * `open` - Open
+         *     * `resolved` - Resolved
+         *     * `ignored` - Ignored
+         * @enum {string}
+         */
+        Status2a5Enum: "open" | "resolved" | "ignored";
         /**
          * @description * `needs_review` - Needs review
          *     * `ready` - Ready
@@ -3826,6 +4848,8 @@ export interface components {
          *     * `damage_out` - Damaged out of sellable
          *     * `quarantine_in` - Quarantine in
          *     * `quarantine_out` - Quarantine out
+         *     * `sale_out` - Sale out
+         *     * `sale_return_in` - Sale return in
          *     * `rtv_out` - RTV out
          *     * `seasonal_ret` - Seasonal return
          *     * `adjustment` - Adjustment
@@ -3834,7 +4858,7 @@ export interface components {
          *     * `vflip_in` - V-flip in
          * @enum {string}
          */
-        StockLedgerEntryKindEnum: "pt_inward" | "pt_reversal" | "transfer_out" | "transfer_in" | "transit_in" | "transit_out" | "damage_out" | "quarantine_in" | "quarantine_out" | "rtv_out" | "seasonal_ret" | "adjustment" | "write_off" | "vflip_out" | "vflip_in";
+        StockLedgerEntryKindEnum: "pt_inward" | "pt_reversal" | "transfer_out" | "transfer_in" | "transit_in" | "transit_out" | "damage_out" | "quarantine_in" | "quarantine_out" | "sale_out" | "sale_return_in" | "rtv_out" | "seasonal_ret" | "adjustment" | "write_off" | "vflip_out" | "vflip_in";
         StockRequestLineRead: {
             readonly id: number;
             sku_code: string;
@@ -3889,6 +4913,18 @@ export interface components {
             readonly fulfilling_store_code: string;
             readonly fulfilling_store_name: string;
             notes?: string;
+            /**
+             * @description How the ask was raised — by hand, or from the cross-store search (#175).
+             *
+             *     * `manual` - Raised by hand
+             *     * `cross_store_search` - From cross-store search
+             */
+            source?: components["schemas"]["SourceCc8Enum"];
+            /**
+             * Format: date-time
+             * @description The time the counter quoted the waiting customer. A quote, never a promise: no hold is placed on the piece (#175).
+             */
+            expected_arrival_at?: string | null;
             readonly status: string;
             readonly status_display: string;
             /**
@@ -3919,14 +4955,33 @@ export interface components {
             readonly fulfilling_transfers: components["schemas"]["FulfillingTransferSummary"][];
         };
         /**
-         * @description Raises the ask and puts it straight in the fulfilling store's inbox —
-         *     born waiting, same as a transfer (#137) and every other maker-checker
-         *     family: a maker cannot forget to ask.
+         * @description Raises the ask and puts it straight in the asking store's inbox — born
+         *     waiting, same as a transfer (#137) and every other maker-checker family: a
+         *     maker cannot forget to ask.
+         *
+         *     What it deliberately does **not** validate is whether the fulfilling store
+         *     can actually supply this (#175, D10 §3 locked): the named store is a
+         *     suggestion the humans made, and a system that refused the ask because the
+         *     projection says nought would be refusing on a number the shop floor is
+         *     routinely ahead of. Possibility is the approvers' call — they have the phone
+         *     call and the shelf; the route in front of this document is where it is made.
          */
         StockRequestWrite: {
             requesting_store: number;
             fulfilling_store: number;
             notes?: string;
+            /**
+             * @description How the ask was raised — by hand, or from the cross-store search (#175).
+             *
+             *     * `manual` - Raised by hand
+             *     * `cross_store_search` - From cross-store search
+             */
+            source?: components["schemas"]["SourceCc8Enum"];
+            /**
+             * Format: date-time
+             * @description The time the counter quoted the waiting customer. A quote, never a promise: no hold is placed on the piece (#175).
+             */
+            expected_arrival_at?: string | null;
             lines: components["schemas"]["StockRequestLineWrite"][];
         };
         Store: {
@@ -4118,6 +5173,12 @@ export interface components {
          */
         TransportModeEnum: "public_bus" | "courier" | "own_vehicle" | "hand_carried";
         /**
+         * @description * `confirmed` - Confirmed
+         *     * `manual` - Manual
+         * @enum {string}
+         */
+        UpiStateEnum: "confirmed" | "manual";
+        /**
          * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
          *     books, never from the payload (#103) — same rule as a transfer line.
          */
@@ -4285,6 +5346,107 @@ export interface components {
             reason?: string;
             lines: components["schemas"]["WriteOffLine"][];
         };
+        _CustomerWrite: {
+            /** @default  */
+            name: string;
+            /** @default  */
+            mobile: string;
+            /** @default  */
+            gstin: string;
+        };
+        _ExchangeWrite: {
+            original: components["schemas"]["_OriginalRef"];
+            lines: components["schemas"]["_LineWrite"][];
+        };
+        /** @description One line, whether it is being sold or given back inside an exchange. */
+        _LineWrite: {
+            line_no: number;
+            /** @default sale */
+            direction: components["schemas"]["_LineWriteDirectionEnum"];
+            /** @default  */
+            barcode: string;
+            /** @default  */
+            season: string;
+            qty: number;
+            /** @default 0 */
+            mrp_paise: number;
+            /** @default 0 */
+            disc_paise: number;
+            net_paise?: number;
+            refund_paise?: number;
+            /**
+             * Format: decimal
+             * @default 0.00
+             */
+            gst_rate: string;
+            /** @default 0 */
+            gst_paise: number;
+            salesman?: number | null;
+            offer_id?: number | null;
+            offer_evidence?: unknown;
+            /** @default  */
+            manual_desc: string;
+            /** @default  */
+            condition: components["schemas"]["_LineWriteConditionEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            reason: string;
+            /** @description The line number on the original bill this return leg gives back. */
+            original_line?: number | null;
+            override_by?: number | null;
+        };
+        /**
+         * @description * `good` - good
+         *     * `damaged` - damaged
+         * @enum {string}
+         */
+        _LineWriteConditionEnum: "good" | "damaged";
+        /**
+         * @description * `sale` - sale
+         *     * `return` - return
+         * @enum {string}
+         */
+        _LineWriteDirectionEnum: "sale" | "return";
+        _OriginalRef: {
+            /** @default  */
+            store: string;
+            fy: string;
+            till_seq: number;
+        };
+        _OverrideWrite: {
+            user_id: number;
+            /** @default  */
+            kind: components["schemas"]["_OverrideWriteKindEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: date-time */
+            at?: string | null;
+        };
+        /**
+         * @description * `late_return` - late_return
+         * @enum {string}
+         */
+        _OverrideWriteKindEnum: "late_return";
+        _TenderWrite: {
+            mode: components["schemas"]["_TenderWriteModeEnum"];
+            amount_paise: number;
+            /** @default  */
+            upi_state: components["schemas"]["UpiStateEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            upi_reference: string;
+        };
+        /**
+         * @description * `cash` - cash
+         *     * `card` - card
+         *     * `upi` - upi
+         * @enum {string}
+         */
+        _TenderWriteModeEnum: "cash" | "card" | "upi";
+        _TotalsWrite: {
+            gross_paise: number;
+            discount_paise: number;
+            net_paise: number;
+            gst_paise: number;
+            /** @default 0 */
+            round_paise: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -4310,6 +5472,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AlertRead"][];
                 };
+            };
+        };
+    };
+    alerts_history_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    alerts_seen_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    alerts_seen_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4939,6 +6155,24 @@ export interface operations {
             };
         };
     };
+    auth_me_till_pin_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auth_refresh_create: {
         parameters: {
             query?: never;
@@ -5396,6 +6630,210 @@ export interface operations {
         };
     };
     inbound_queue_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_attachments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_callback_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_connect_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_disconnect_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_messages_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_messages_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_messages_read_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_send_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mail_unread_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -5986,6 +7424,82 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -7585,6 +9099,288 @@ export interface operations {
             };
         };
     };
+    sell_dataset_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_flags_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_flags_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_held_bills_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_irn_queue_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_irn_queue_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_policy_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_policy_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_register_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_register_handover_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sell_sales_list: {
+        parameters: {
+            query?: {
+                /** @description Bill number or document number contains */
+                doc?: string;
+                /** @description Customer mobile contains */
+                mobile?: string;
+                /** @description Customer name contains */
+                name?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleRow"][];
+                };
+            };
+        };
+    };
+    sell_sales_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["SaleWrite"];
+                "multipart/form-data": components["schemas"]["SaleWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleAccepted"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleAccepted"];
+                };
+            };
+        };
+    };
+    sell_sales_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc_number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleRead"];
+                };
+            };
+        };
+    };
+    stock_availability_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     stockledger_entries_list: {
         parameters: {
             query?: {
@@ -7664,6 +9460,42 @@ export interface operations {
         };
     };
     stockledger_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    store_cash_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    store_dashboard_retrieve: {
         parameters: {
             query?: never;
             header?: never;

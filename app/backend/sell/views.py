@@ -23,6 +23,7 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -41,7 +42,6 @@ from sell.permissions import (
     CanReadOrManagePolicy,
     CanReadSales,
     CanRunTill,
-    CanTakeReturns,
     CanWorkIrnQueue,
     CanWorkStoreFlags,
 )
@@ -52,7 +52,7 @@ from sell.serializers import (
     IrnQueueRowSerializer,
     IrnQueueWriteSerializer,
     RegisterHandoverWriteSerializer,
-    ReturnWriteSerializer,
+    SaleAcceptedSerializer,
     SaleReadSerializer,
     SaleRowSerializer,
     SaleWriteSerializer,
@@ -62,7 +62,6 @@ from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
 from sell.services.refunds import with_returned
 from sell.services.register import record_handover, register_state
-from sell.services.returns import ReturnError, accept_return
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -111,7 +110,7 @@ def _sales(user: Any) -> QuerySet[Sale]:
             "store", "created_by", "irn_queue_item", "exchange_of"
         ).prefetch_related(
             # Annotated rather than left to the serializer: what is still
-            # returnable is what the Return & Exchange screen is *for*, and two
+            # returnable is what the counter's return mode is *for*, and two
             # queries a line on a bill of twenty is a screen that pauses while
             # somebody waits at the counter (#184).
             Prefetch(
@@ -156,6 +155,10 @@ class SaleListCreateView(APIView):
 
     permission_classes = [IsAuthenticated, CanReadOrBill]
 
+    @extend_schema(
+        request=SaleWriteSerializer,
+        responses={200: SaleAcceptedSerializer, 201: SaleAcceptedSerializer},
+    )
     def post(self, request: Request) -> Response:
         form = SaleWriteSerializer(data=request.data)
         if not form.is_valid():
@@ -174,6 +177,14 @@ class SaleListCreateView(APIView):
             status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("mobile", str, description="Customer mobile contains"),
+            OpenApiParameter("name", str, description="Customer name contains"),
+            OpenApiParameter("doc", str, description="Bill number or document number contains"),
+        ],
+        responses=SaleRowSerializer(many=True),
+    )
     def get(self, request: Request) -> Response:
         mobile = (request.query_params.get("mobile") or "").strip()
         name = (request.query_params.get("name") or "").strip()
@@ -199,50 +210,6 @@ class SaleListCreateView(APIView):
                 match |= Q(till_seq=int(doc))
             rows = rows.filter(match)
         return Response(SaleRowSerializer(rows[:SEARCH_LIMIT], many=True).data)
-
-
-class ReturnCreateView(APIView):
-    """`POST /api/sell/returns` - a piece back, a credit note out (#184, grill Q7).
-
-    The one writer of a `Return`, and the only endpoint in this module that is
-    neither a till talking to itself nor a read. Three things about it are the
-    design rather than an omission:
-
-    * **There is no GET here.** A return is read back through the bill it came off
-      (`GET /api/sell/sales/{doc_number}` carries what is still returnable per
-      line), because that is what the person looking has in their hand.
-    * **There is no offline path.** Returns are rare and risky, so the screen
-      disables the flow while the counter is offline and the in-bill exchange
-      carries the ordinary case. Nothing queues, so nothing replays - though the
-      write is idempotent all the same, because a dropped connection on a money
-      document must not be answered with a second credit note.
-    * **It cannot pay cash.** Not because it refuses to, but because a `Return`
-      has no tenders: see `sell.services.returns`.
-    """
-
-    permission_classes = [IsAuthenticated, CanTakeReturns]
-
-    def post(self, request: Request) -> Response:
-        form = ReturnWriteSerializer(data=request.data)
-        if not form.is_valid():
-            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
-        try:
-            result = accept_return(dict(form.validated_data), request.user)
-        except ReturnError as exc:
-            return Response(refusal_body(exc.code, exc.message), status=exc.status)
-        note = result.credit_note
-        body = {
-            "doc_number": result.ret.doc_number,
-            "id": result.ret.id,
-            "credit_note": note.doc_number if note else "",
-            "value_paise": int(note.value_paise) if note else 0,
-            "expires_on": note.expires_on if note else None,
-            "flags": result.flags,
-        }
-        return Response(
-            body,
-            status=status.HTTP_201_CREATED if result.created else status.HTTP_200_OK,
-        )
 
 
 class DatasetView(APIView):
@@ -536,6 +503,7 @@ class SaleDetailView(APIView):
 
     permission_classes = [IsAuthenticated, CanReadSales]
 
+    @extend_schema(responses=SaleReadSerializer)
     def get(self, request: Request, doc_number: str) -> Response:
         sale = _sales(request.user).filter(doc_number=doc_number).first()
         if sale is None:

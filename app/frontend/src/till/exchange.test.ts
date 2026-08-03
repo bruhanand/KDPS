@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   describeOriginal,
   isPastReturnWindow,
+  legsFrom,
   legFor,
+  markReturnedPiece,
   returnableQty,
+  takeEverythingBack,
   whyExchangeCannotClose,
 } from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
@@ -82,6 +85,62 @@ describe("a leg on the bill", () => {
     const offTheTag = line({ brand: "", item: "", design: "", size: "", manual_desc: "Blue kurta" });
     expect(describeOriginal(offTheTag)).toBe("Blue kurta");
     expect(describeOriginal({ ...offTheTag, manual_desc: "" })).toBe("8901000000011");
+  });
+});
+
+describe("marking pieces back on the counter", () => {
+  const found = {
+    original: { fy: "26-27", till_seq: 40, doc_number: "26-27/DEO/SAL/40" },
+    billed_at: "2026-08-01T10:00:00.000Z",
+    customer_name: "Sunita Devi",
+    customer_mobile: "9835212345",
+    local: false,
+    lines: [line({ qty: 3, returned_qty: 1, returned_paise: 49967 })],
+  };
+
+  it("a scan marks one piece and stops at bought minus already returned", () => {
+    const first = markReturnedPiece(found, {}, "8901000000011");
+    const second = markReturnedPiece(found, first.picked, "8901000000011");
+    const capped = markReturnedPiece(found, second.picked, "8901000000011");
+
+    expect(first.picked[1].qty).toBe(1);
+    expect(second.picked[1].qty).toBe(2);
+    expect(capped.picked[1].qty).toBe(2);
+    expect(capped.error).toMatch(/already marked/i);
+  });
+
+  it("take everything back selects every remaining piece without losing reason and condition", () => {
+    const another = line({
+      line_no: 2,
+      barcode: "8901000000028",
+      qty: 2,
+      returned_qty: 0,
+      returned_paise: 0,
+    });
+    const picked = takeEverythingBack(
+      { ...found, lines: [...found.lines, another] },
+      { 1: { qty: 1, reason: "defect", condition: "damaged" } },
+    );
+
+    expect(picked).toMatchObject({
+      1: { qty: 2, reason: "defect", condition: "damaged" },
+      2: { qty: 2, reason: "", condition: "good" },
+    });
+  });
+
+  it("turns the marked quantities into the Sale's return legs", () => {
+    const legs = legsFrom(found, {
+      1: { qty: 2, reason: "defect", condition: "damaged" },
+    });
+
+    expect(legs).toHaveLength(1);
+    expect(legs[0]).toMatchObject({
+      original_line: 1,
+      qty: 2,
+      reason: "defect",
+      condition: "damaged",
+      refund_paise: 149900 - 49967,
+    });
   });
 });
 

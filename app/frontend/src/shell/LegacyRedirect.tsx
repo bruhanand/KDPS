@@ -17,5 +17,6 @@ import { resolveLegacyPath } from "./navConfig";
 export function LegacyRedirect() {
   const { pathname, search, hash } = useLocation();
   const target = resolveLegacyPath(pathname);
-  return target ? <Navigate to={target + search + hash} replace /> : <NotFound />;
+  const query = target?.includes("?") && search ? `&${search.slice(1)}` : search;
+  return target ? <Navigate to={target + query + hash} replace /> : <NotFound />;
 }

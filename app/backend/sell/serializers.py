@@ -21,8 +21,6 @@ from sell.models import (
     ContinuityFlag,
     HeldBill,
     IrnQueueItem,
-    Return,
-    ReturnLine,
     Sale,
     SaleLine,
     SaleTender,
@@ -287,61 +285,6 @@ class HeldBillsWriteSerializer(serializers.Serializer):
         return rows
 
 
-class _ReturnLineWriteSerializer(serializers.Serializer):
-    """One line of the original bill, coming back (#184).
-
-    Nothing about money is on the wire, and that is the point: what the customer
-    gets back is what they actually paid (D2), which only the server can say. A
-    payload that carried a refund figure would be a counter naming its own price
-    for a piece it is giving money away on.
-    """
-
-    original_line = serializers.IntegerField(min_value=1)
-    qty = serializers.IntegerField(min_value=1)
-    reason = serializers.CharField(max_length=40, allow_blank=True, required=False, default="")
-    #: Where the piece goes: back on the shelf, or into quarantine until somebody
-    #: looks at it (D3). **Required**, with no default, because the two defaults
-    #: available are both wrong: `good` puts a damaged garment back on the shelf
-    #: for the next customer whenever the field is dropped, and `damaged`
-    #: quarantines saleable stock. The screen always asks, so a body that does not
-    #: say is a caller with a bug, and the honest answer to it is 400.
-    condition = serializers.ChoiceField(choices=SaleLine.Condition.values)
-
-
-class _ReturnOverrideWriteSerializer(serializers.Serializer):
-    """The manager behind the return. `user_id` only - who they are is the
-    server's question (`manager_for_override`), and a `kind` would be inventing a
-    vocabulary for a document that has exactly one thing to authorise."""
-
-    user_id = serializers.IntegerField()
-
-
-class ReturnWriteSerializer(serializers.Serializer):
-    """One plain return, as the Return & Exchange screen raises it."""
-
-    idempotency_uuid = serializers.UUIDField()
-    store = serializers.CharField(max_length=16)
-    original = _OriginalRefSerializer()
-    lines = serializers.ListField(child=_ReturnLineWriteSerializer(), allow_empty=False)
-    override = _ReturnOverrideWriteSerializer(required=False, allow_null=True)
-    #: The manager's *second* answer, for a bill older than the window in
-    #: `SellPolicy`. Separate from `override` on purpose: taking a return is one
-    #: decision and taking a late one is another, and a single tick that covered
-    #: both would make the window a thing nobody ever actually chose to set aside.
-    window_override = serializers.BooleanField(required=False, default=False)
-
-    def validate_lines(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        # Two rows against one sold line would each be checked against the same
-        # untouched returnable quantity and both pass. The quantities belong
-        # together on one row, which is also how the screen builds them.
-        seen = [row["original_line"] for row in rows]
-        if len(seen) != len(set(seen)):
-            raise serializers.ValidationError(
-                "A line of the bill may only appear once; add the quantities together."
-            )
-        return rows
-
-
 class RegisterHandoverWriteSerializer(serializers.Serializer):
     """The one thing a handover asks for: why (#189).
 
@@ -366,11 +309,19 @@ class RegisterHandoverWriteSerializer(serializers.Serializer):
 # --- read shapes -------------------------------------------------
 
 
+class SaleAcceptedSerializer(serializers.Serializer):
+    """The replay-safe acknowledgement returned when the queue lands a bill."""
+
+    doc_number = serializers.CharField()
+    id = serializers.IntegerField()
+    flags = serializers.ListField(child=serializers.CharField())
+
+
 class SaleLineReadSerializer(serializers.ModelSerializer[SaleLine]):
     salesman_code = serializers.CharField(source="salesman.code", read_only=True, default="")
     salesman_name = serializers.CharField(source="salesman.name", read_only=True, default="")
-    #: How much of this line has already been given back, by either route - an
-    #: exchange leg inside a later bill, or a plain return (#184). Annotated by
+    #: How much of this line has already been given back, either as a return leg
+    #: on a later bill or on a historical standalone return. Annotated by
     #: `refunds.with_returned` on the queryset, so it is one query for the bill
     #: rather than four per line; `0` where nothing annotated it, which is honest
     #: for a caller that did not ask.
@@ -547,75 +498,6 @@ class SaleRowSerializer(serializers.ModelSerializer[Sale]):
             shown = f"{shown} +{len(brands) - 2}"
         piece_word = "piece" if pieces == 1 else "pieces"
         return f"{pieces} {piece_word} · {shown}" if shown else f"{pieces} {piece_word}"
-
-
-class ReturnLineReadSerializer(serializers.ModelSerializer[ReturnLine]):
-    class Meta:
-        model = ReturnLine
-        fields = [
-            "line_no",
-            "barcode",
-            "season",
-            "design",
-            "color",
-            "size",
-            "brand",
-            "item",
-            "hsn",
-            "qty",
-            "refund_paise",
-            "gst_rate",
-            "gst_paise",
-            "reason",
-            "condition",
-        ]
-
-
-class ReturnReadSerializer(serializers.ModelSerializer[Return]):
-    """One plain return, read back (#184).
-
-    `credit_note` is the whole point of the answer: it is what the customer walks
-    out with, and the counter reads its number off the screen onto the printed
-    slip. `value_paise` is the note's face value, which is also the sum of the
-    refunds - said once here rather than left for the screen to add up.
-    """
-
-    store_code = serializers.CharField(source="store.code", read_only=True)
-    original_doc_number = serializers.CharField(
-        source="original_sale.doc_number", read_only=True, default=""
-    )
-    taken_by = serializers.CharField(source="created_by.username", read_only=True, default="")
-    approved_by = serializers.CharField(source="override_by.username", read_only=True, default="")
-    lines = ReturnLineReadSerializer(many=True, read_only=True)
-    credit_note = serializers.SerializerMethodField()
-    value_paise = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Return
-        fields = [
-            "id",
-            "doc_number",
-            "docstatus",
-            "store_code",
-            "fy",
-            "original_doc_number",
-            "returned_at",
-            "customer_name",
-            "customer_mobile",
-            "window_override",
-            "taken_by",
-            "approved_by",
-            "credit_note",
-            "value_paise",
-            "lines",
-        ]
-
-    def get_credit_note(self, obj: Return) -> str:
-        note = obj.credit_notes_issued.first()
-        return note.doc_number or "" if note else ""
-
-    def get_value_paise(self, obj: Return) -> int:
-        return sum(int(line.refund_paise or 0) for line in obj.lines.all())
 
 
 class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):

@@ -13,14 +13,13 @@ import type { TillManager } from "../../till/types";
 import "../Booking.css";
 
 // ---------------------------------------------------------------------------
-// The manager's tap, wherever it is asked for (#182, extended by #184)
+// The manager's tap, wherever the counter asks for it (#182, #273)
 // ---------------------------------------------------------------------------
 //
-// One modal, two screens. It was Billing's until the plain return needed exactly
-// the same thing - a named manager of this store, established by a PIN typed on
-// the device - and a second copy of it would have been a second place for the
-// lock-out rule, the ambiguous-PIN rule and the "no manager has a PIN yet"
-// sentence to drift.
+// One modal for every counter exception: a named manager of this store,
+// established by a PIN typed on the device. Keeping the prompt here leaves one
+// lock-out rule, one ambiguous-PIN rule, and one "no manager has a PIN yet"
+// sentence.
 //
 // The lock-out count is deliberately **not** held in here. A count that lived in
 // the modal would be cleared by closing it, and closing it is one click - so
@@ -38,8 +37,8 @@ export const PAUSE_MS = 30_000;
  * A hook rather than state inside the modal, and the reason is the whole of the
  * limit: a count that lived in the modal would be cleared by closing it, and
  * closing it is one click - so three tries per half minute would become three
- * tries per click, which is no limit at all. Both screens that ask for a PIN get
- * the same pause from the same three lines.
+ * tries per click, which is no limit at all. Every counter prompt gets the same
+ * pause from the same three lines.
  */
 export function useWrongPins(): { wrong: number; wasWrong: () => void; clear: () => void } {
   const [wrong, setWrong] = useState(0);

@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { AxiosRequestConfig } from "axios";
+import type { AxiosRequestConfig, AxiosResponse } from "axios";
 
 import type { components, paths } from "./api-schema";
 
@@ -127,14 +127,39 @@ export type ApiSchemas = components["schemas"];
 type ApiPath = keyof paths;
 type PathWithoutPrefix<P extends ApiPath> = P extends `/api${infer Rest}` ? Rest : P;
 type ApiRelativePath = PathWithoutPrefix<ApiPath>;
+type FullApiPath<P extends ApiRelativePath> = `/api${P}` & ApiPath;
+type ApiOperation<P extends ApiRelativePath, Method extends PropertyKey> =
+  paths[FullApiPath<P>] extends infer Path
+    ? Method extends keyof Path
+      ? Path[Method]
+      : never
+    : never;
+type JsonBody<Response> = Response extends {
+  content: { "application/json": infer Body };
+}
+  ? Body
+  : never;
+type SuccessBody<Operation> = Operation extends { responses: infer Responses }
+  ? Responses extends { 200: infer Ok }
+    ? JsonBody<Ok>
+    : Responses extends { 201: infer Created }
+      ? JsonBody<Created>
+      : never
+  : never;
 
 function toApiPath(path: ApiRelativePath): ApiPath {
   return `/api${path}` as ApiPath;
 }
 
 export const typedApi = {
-  get<TPath extends ApiRelativePath>(path: TPath, config?: AxiosRequestConfig) {
-    return api.get(toApiPath(path).replace("/api", ""), config);
+  get<TPath extends ApiRelativePath>(
+    path: TPath,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<SuccessBody<ApiOperation<TPath, "get">>>> {
+    return api.get<SuccessBody<ApiOperation<TPath, "get">>>(
+      toApiPath(path).replace("/api", ""),
+      config,
+    );
   },
   post<TPath extends ApiRelativePath>(path: TPath, data?: unknown, config?: AxiosRequestConfig) {
     return api.post(toApiPath(path).replace("/api", ""), data, config);

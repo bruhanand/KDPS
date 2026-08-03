@@ -273,6 +273,52 @@ export interface DrainResult {
 // the two would then race to delete the row and to write the halt.
 const inFlight = new Map<string, Promise<DrainResult>>();
 
+interface QueueReadGate {
+  readers: number;
+  idle: Promise<void>;
+  releaseIdle: () => void;
+}
+
+/** Reads that must see the server and this queue at one logical instant. A
+ * return lookup is the important one: if a queued exchange drains between its
+ * server detail response and the local overlay, the same piece briefly appears
+ * returnable twice. */
+const stableReads = new Map<string, QueueReadGate>();
+
+function holdQueueStable(db: TillDb): () => void {
+  let gate = stableReads.get(db.name);
+  if (!gate) {
+    let releaseIdle = () => undefined as void;
+    const idle = new Promise<void>((resolve) => {
+      releaseIdle = resolve;
+    });
+    gate = { readers: 0, idle, releaseIdle };
+    stableReads.set(db.name, gate);
+  }
+  gate.readers += 1;
+  return () => {
+    if (!gate) return;
+    gate.readers -= 1;
+    if (gate.readers > 0) return;
+    stableReads.delete(db.name);
+    gate.releaseIdle();
+  };
+}
+
+/** Run a read after the current drain and hold later drains until it has used
+ * both the server answer and the local queue. The hold is per till database,
+ * just like the drain single-flight. */
+export async function withStableQueue<T>(db: TillDb, read: () => Promise<T>): Promise<T> {
+  const running = inFlight.get(db.name);
+  if (running) await running;
+  const release = holdQueueStable(db);
+  try {
+    return await read();
+  } finally {
+    release();
+  }
+}
+
 /**
  * Offer queued bills to the server, oldest first, until one will not go.
  *
@@ -284,7 +330,9 @@ const inFlight = new Map<string, Promise<DrainResult>>();
 export function drainQueue(db: TillDb, transport: TillTransport): Promise<DrainResult> {
   const running = inFlight.get(db.name);
   if (running) return running;
-  const attempt = drainOnce(db, transport).finally(() => inFlight.delete(db.name));
+  const stable = stableReads.get(db.name)?.idle;
+  const attempt = (stable ? stable.then(() => drainOnce(db, transport)) : drainOnce(db, transport))
+    .finally(() => inFlight.delete(db.name));
   inFlight.set(db.name, attempt);
   return attempt;
 }

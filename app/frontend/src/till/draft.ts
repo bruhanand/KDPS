@@ -94,13 +94,12 @@ export async function clearDraft(db: TillDb): Promise<void> {
 // --- and the 2 Aug 2026 atomic-restore and draft-age rulings) ---------------
 //
 // The read is issued at mount and IndexedDB answers whenever it answers, so by
-// the time it lands the screen may already have moved on - a piece scanned
-// before the read came back, or the exchange hand-off `Billing.tsx` takes on
-// mount landing first or second, in either order. Whichever is on screen by
+// the time it lands the screen may already have moved on - a piece scanned or
+// marked for return before the read came back. Whichever is on screen by
 // then is realer than a saved draft, so a draft never overwrites it.
 //
 // The round-2 defect was asking that question twice - once for the cart, once
-// for the customer strip - so an exchange landing on the cart could leave the
+// for the customer strip - so a return landing on the cart could leave the
 // customer strip's own (separate) "is it empty" check free to pull in a name,
 // mobile and GSTIN from a different, crashed bill. One predicate now, asked
 // once over the whole snapshot: cart lines, exchange legs and customer fields

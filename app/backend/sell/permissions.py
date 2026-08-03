@@ -37,13 +37,6 @@ CanReadOrManagePolicy = require_section("sell", CAP_VIEW, write_minimum=CAP_MANA
 #: yesterday's bills has no use for it and should not hold it.
 CanRunTill = require_section("sell", CAP_OPERATE)
 
-#: Taking a piece back on its own (#184). `operate` - the same rung as billing,
-#: because the person doing it is the person at the counter. The second pair of
-#: eyes is *not* expressible on this ladder and is not attempted here: the
-#: pipeline asks for a named manager of this store on every single return, which
-#: is a question about one human and one shop rather than about a rung.
-CanTakeReturns = require_section("sell", CAP_OPERATE)
-
 #: The IRN queue (#187), and the one gate in this module that is not `sell`.
 #:
 #: Raising an IRN against a B2B bill is head office's statutory duty, not the

@@ -24,6 +24,17 @@ from _sell import (
 from sell.models import Sale
 
 
+def test_sales_read_shapes_are_published_in_the_openapi_contract():
+    from drf_spectacular.generators import SchemaGenerator
+
+    schema = SchemaGenerator().get_schema(request=None, public=True)
+
+    listing = schema["paths"]["/api/sell/sales"]["get"]["responses"]["200"]
+    detail = schema["paths"]["/api/sell/sales/{doc_number}"]["get"]["responses"]["200"]
+    assert listing["content"]["application/json"]["schema"]["items"]["$ref"].endswith("/SaleRow")
+    assert detail["content"]["application/json"]["schema"]["$ref"].endswith("/SaleRead")
+
+
 @pytest.fixture
 def counter(db):
     store = build_store()

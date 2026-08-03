@@ -34,10 +34,9 @@ from core.documents import DocStatus, Document, MintedNumber, VoucherSeries
 from core.money import MoneyField
 from masters.models import Gstin
 
-#: Doc types this app mints. `SAL` is till-assigned (see the kernel's
-#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` are ordinary server-allocated
-#: counters - a plain return needs the network by design (grill Q7), so there is
-#: nothing offline about its number.
+#: Doc types this app has minted. `SAL` is till-assigned (see the kernel's
+#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` were server-allocated. The
+#: latter two stay because their historical models and series remain readable.
 SALE_DOC_TYPE = "SAL"
 CREDIT_NOTE_DOC_TYPE = "CRN"
 RETURN_DOC_TYPE = "SRT"
@@ -604,9 +603,9 @@ class SaleLine(TimeStampedModel):
     def value_paise(self) -> int:
         """What this line is worth on the bill - the price paid, or the refund.
 
-        The same word a plain return's line answers to, so the posting engine can
-        take either without asking which table it came from (#184). `direction`
-        already carries the sign, so this is a magnitude on both.
+        Historical standalone-return lines use the same word, so old posting
+        records stay comparable across both tables. `direction` already carries
+        the sign, so this is a magnitude on both.
         """
         return int(self.net_paise or 0)
 
@@ -715,28 +714,11 @@ class CreditNoteRedemption(TimeStampedModel):
 
 
 class Return(Document):
-    """A piece brought back with nothing bought in its place (#184, grill Q7).
+    """A historical standalone return created before the counter unified (#273).
 
-    The sibling of the exchange, and everything that differs between the two
-    follows from one sentence: an exchange is a *bill*, and this is not. A bill
-    has a customer paying for something, so it can carry a return leg inside it
-    and net the two. A plain return has no sale to hide behind - the counter is
-    only giving value back - which makes it the best-documented theft channel at
-    any POS, and so:
-
-    * **No cash leg exists on this document by construction.** The customer takes
-      a credit note for what they actually paid, and the money stays inside the
-      system until it is spent on a real bill.
-    * **Every one of them takes a manager's tap.** `override_by` is not nullable
-      in practice - the pipeline refuses a return without a manager of this store
-      behind it - and the column is what a daily check reads.
-    * **The number comes from the server.** Returns are rare and risky, so the
-      till disables the whole flow while it is offline (the in-bill exchange still
-      works). There is nothing to number offline and no queue to replay.
-
-    `original_sale` is PROTECT rather than SET_NULL: what the customer is owed is
-    what they paid on that bill, so a return whose original had gone would be a
-    refund with nothing behind it.
+    New return activity is recorded as return legs on a `Sale`; these rows stay
+    because past documents, ledgers, credit notes, and returned-quantity ceilings
+    still point at them. `original_sale` remains PROTECT for the same reason.
     """
 
     store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="returns")
@@ -793,7 +775,7 @@ class Return(Document):
 
 
 class ReturnLine(TimeStampedModel):
-    """One piece off one bill, given back.
+    """One historical piece off a bill, given back on a standalone return.
 
     Everything money-shaped here is copied off the line it gives back rather than
     worked out again (D2, Rule 3). What the customer gets is what they paid -
@@ -909,7 +891,7 @@ class ContinuityFlag(TimeStampedModel):
         # on this bill is not the dated slab's" in one bucket, and head office
         # answers those two with entirely different work.
         GSTIN_INVALID = "gstin_invalid", "The buyer's GSTIN is not well formed"
-        # #184. Two things a plain return can be that nothing else here means.
+        # #184. Two historical standalone-return flags retained with their rows.
         #
         # A **late** return is one taken past the window in `SellPolicy`. The
         # `window_override` column on the document says a manager answered for

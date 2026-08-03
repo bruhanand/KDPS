@@ -1,10 +1,8 @@
 // A piece coming back inside the bill in front of you (#184, D2).
 //
-// The counter's half of the exchange. The other flow on the Return & Exchange
-// screen - a plain return, with nothing bought in its place - is a server call
-// and has no arithmetic here at all; this one is a *bill*, so every figure on it
-// has to be worked out offline and then survive the server checking it to the
-// paisa (`accept._check_return_refund`).
+// Every return is now a leg on the Sale being built at the counter. Every figure
+// therefore has to be worked out offline and then survive the server checking it
+// to the paisa (`accept._check_return_refund`).
 //
 // Two rules carry the whole file, and both are the server's rather than this
 // screen's:
@@ -23,14 +21,6 @@
 // exchange has nothing to do with what is being given back, and re-deriving it
 // would leave the reversal a few paise away from the posting it unwinds.
 //
-// The parking pair at the bottom is the one piece of plumbing. Each Sell route
-// mounts its own `TillProvider`, so handing picked lines from one screen to the
-// other cannot go through React state - and a customer's exchange is a fact the
-// counter is holding, not a component's business. It goes in `meta`, survives a
-// reload, and is taken exactly once.
-
-import { META, readMeta, writeMeta } from "./db";
-import type { TillDb } from "./db";
 import { LATE_RETURN } from "./pin";
 import type { Ask, Authorisation } from "./pin";
 import { splitInclusive } from "./pricing";
@@ -92,9 +82,51 @@ export interface ExchangeLeg {
 export interface Exchange {
   original: ExchangeOriginal;
   lines: ExchangeLeg[];
+  /** Original bill time, kept on the local cart so a restored in-progress
+   * exchange still knows whether Save & Print needs the late-window manager. */
+  billed_at?: string;
+  /** The against-bill card, snapshotted with the cart so a refresh can restore
+   * return picking without another network request. Omitted on older drafts. */
+  original_bill?: {
+    lines: OriginalLine[];
+    billed_at: string;
+    customer_name: string;
+    customer_mobile: string;
+    net_paise: number;
+    local: boolean;
+  };
   /** The manager's late-window approval, when this exchange needed one. Optional
    *  so an exchange parked by an older till still restores safely. */
   authorisation?: Authorisation | null;
+}
+
+/** What the cashier has marked against one original line. Kept separate from
+ * the money leg so changing a reason or condition never reimplements refund
+ * arithmetic in the screen. */
+export interface PickedReturn {
+  qty: number;
+  reason: string;
+  condition: "good" | "damaged";
+}
+
+export type PickedReturns = Record<number, PickedReturn>;
+
+/** Picker decisions carried by an exchange restored from the autosaved cart. */
+export function pickedFromExchange(exchange: Exchange | null): PickedReturns {
+  return Object.fromEntries(
+    (exchange?.lines ?? []).map((line) => [
+      line.original_line,
+      { qty: line.qty, reason: line.reason, condition: line.condition },
+    ]),
+  );
+}
+
+/** The part of a found bill the return picker needs. `FoundBill` satisfies this
+ * shape, but keeping the picker independent avoids making exchange arithmetic
+ * depend on the transport that found the bill. */
+export interface ReturnableBill {
+  original: ExchangeOriginal;
+  lines: OriginalLine[];
 }
 
 let legKeys = 0;
@@ -176,6 +208,66 @@ export function legFor(line: OriginalLine, qty: number, key = newLegKey()): Exch
   };
 }
 
+/** The marked quantities as return legs on the Sale being built now. */
+export function legsFrom(found: ReturnableBill | null, picked: PickedReturns): ExchangeLeg[] {
+  if (!found) return [];
+  return found.lines
+    .filter((line) => (picked[line.line_no]?.qty ?? 0) > 0)
+    .map((line) => {
+      const choice = picked[line.line_no];
+      return {
+        ...legFor(line, choice.qty, `x${line.line_no}`),
+        reason: choice.reason,
+        condition: choice.condition,
+      };
+    });
+}
+
+/** Mark one scanned original piece, capped at what the customer can still
+ * return after all earlier returns and exchanges. */
+export function markReturnedPiece(
+  found: ReturnableBill,
+  picked: PickedReturns,
+  scanned: string,
+): { picked: PickedReturns; error: string } {
+  const barcode = scanned.trim();
+  const line = found.lines.find(
+    (candidate) =>
+      candidate.barcode === barcode &&
+      (picked[candidate.line_no]?.qty ?? 0) < returnableQty(candidate),
+  );
+  if (!line) {
+    const belonged = found.lines.some((candidate) => candidate.barcode === barcode);
+    return {
+      picked,
+      error: belonged
+        ? "Every returnable piece with that barcode is already marked."
+        : "That barcode is not on the bill loaded here.",
+    };
+  }
+  const current = picked[line.line_no] ?? { qty: 0, reason: "", condition: "good" as const };
+  return {
+    picked: { ...picked, [line.line_no]: { ...current, qty: current.qty + 1 } },
+    error: "",
+  };
+}
+
+/** Mark every piece that remains returnable, preserving decisions already made
+ * on a line. */
+export function takeEverythingBack(
+  found: ReturnableBill,
+  picked: PickedReturns,
+): PickedReturns {
+  return Object.fromEntries(
+    found.lines.flatMap((line) => {
+      const qty = returnableQty(line);
+      if (!qty) return [];
+      const current = picked[line.line_no] ?? { qty: 0, reason: "", condition: "good" as const };
+      return [[line.line_no, { ...current, qty }]];
+    }),
+  );
+}
+
 /** How a returned piece reads: the books' words, or the cashier's off the tag. */
 export function describeOriginal(line: OriginalLine): string {
   const words = [line.brand, line.item, line.design, line.size].filter(Boolean).join(" · ");
@@ -233,32 +325,4 @@ export function whyExchangeCannotClose(exchange: Exchange | null): string {
     return `${unpriced.description} was billed at nothing, so there is nothing to give back for it.`;
   }
   return "";
-}
-
-// --- parking one between two screens ---------------------------------------
-
-/**
- * Put a picked exchange down for the Billing screen to pick up.
- *
- * A hand-off through the database rather than through React, because there is no
- * shared React to hand it through: `TillProvider` mounts per Sell route, so
- * walking from Return & Exchange to Billing is a fresh provider and a fresh
- * component tree. It also means the customer's exchange survives a reload with
- * them standing there, which a router-state hand-off would not.
- */
-export async function parkExchange(db: TillDb, exchange: Exchange): Promise<void> {
-  await writeMeta(db, META.exchange, exchange);
-}
-
-/**
- * Take the parked exchange, exactly once.
- *
- * Cleared as it is read, and that is the whole of it: a hand-off left lying
- * around would put the same customer's returned shirt on the *next* customer's
- * bill, which is a refund nobody asked for and a piece back on the shelf twice.
- */
-export async function takeParkedExchange(db: TillDb): Promise<Exchange | null> {
-  const parked = await readMeta<Exchange | null>(db, META.exchange, null);
-  if (parked) await writeMeta(db, META.exchange, null);
-  return parked;
 }

@@ -31,7 +31,7 @@ import type { NavRow } from "./navConfig";
 
 /** Does any screen in the manifest own `path` (itself or as its parent)? */
 function claimed(path: string): boolean {
-  return itemOwning(path) !== null;
+  return itemOwning(path.split("?")[0]) !== null;
 }
 
 /** The authenticated-user payload for a role holding `caps`, in the server's
@@ -146,7 +146,7 @@ describe("the highlighted menu line", () => {
     const cases: [url: string, owner: string][] = [
       ["/receive/pt", "/receive/pt"],
       ["/receive", "/receive"],
-      ["/sell/returns", "/sell/returns"],
+      ["/sell/returns", "/sell"],
       ["/booking/new", "/booking/new"],
       ["/transfer/in-transit", "/transfer/in-transit"],
       ["/stock-count/writeoffs", "/stock-count/writeoffs"],

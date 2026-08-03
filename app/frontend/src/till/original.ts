@@ -7,23 +7,19 @@
 // back in with the wrong size. So the counter's own queue is asked first, and
 // only then head office.
 //
-// The two answers are not the same kind of thing, and the screen has to know
-// which it has:
-//
-//   · a **queued** bill has not reached head office, so a *plain return* against
-//     it is impossible - there is no document to give back against, and the
-//     server would answer `ORIGINAL_NOT_FOUND`. An exchange is fine: that is a
-//     new bill carrying a return leg, and the accept pipeline resolves the
-//     original itself when the two arrive in order.
-//   · a **synced** bill is a document, and either flow works.
+// The two answers differ in where they came from, but both can back the same new
+// Sale: the accept pipeline resolves an unsynced original once the queue drains
+// in order, while a synced bill can be checked immediately.
 //
 // Everything a returned line is worth is read off the bill rather than off the
 // price list: what comes back is what was paid (D2), which is a fact about that
 // bill and about no other.
 
+import type { ApiSchemas } from "../lib/api";
 import type { TillDb } from "./db";
-import type { ExchangeOriginal, OriginalLine } from "./exchange";
-import type { QueuedBill, TillItem } from "./types";
+import type { Exchange, ExchangeOriginal, OriginalLine } from "./exchange";
+import { searchCustomers } from "./lookup";
+import type { QueuedBill, TillItem, TillKnownCustomer } from "./types";
 
 /** A bill found, and where it was found. */
 export interface FoundBill {
@@ -32,8 +28,10 @@ export interface FoundBill {
   billed_at: string;
   customer_name: string;
   customer_mobile: string;
-  /** True when this bill is still in the counter's own queue - head office has
-   *  never seen it, so it can be exchanged against but not plainly returned. */
+  /** The Sale's own authoritative net, including any exchange it originally
+   * carried. Never reconstructed from the filtered returnable lines. */
+  net_paise: number;
+  /** True when this bill is still in the counter's own queue. */
   local: boolean;
 }
 
@@ -67,11 +65,95 @@ export async function findQueuedBill(
   if (!bill) return null;
   const given = alreadyGivenBack(queue, fy, seq);
   const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** A queued bill by the exact document number encoded in its receipt barcode.
+ * Kept separate from the sequence lookup because configured voucher-series
+ * suffixes need not end in digits. */
+export async function findQueuedBillByDoc(
+  db: TillDb,
+  docNumber: string,
+): Promise<FoundBill | null> {
+  const wanted = docNumber.trim().toLocaleLowerCase();
+  if (!wanted) return null;
+  const queue = await db.queue.orderBy("id").toArray();
+  const bill = queue.find((row) => row.doc_number.toLocaleLowerCase() === wanted);
+  if (!bill) return null;
+  const given = alreadyGivenBack(queue, bill.fy, bill.till_seq);
+  const items = await db.items.toArray();
+  return fromQueued(bill, given, items);
+}
+
+/** Unsynced bills whose snapshotted customer matches the third find-bill door.
+ * This is deliberately local even while online: the bill rung up five minutes
+ * ago may not exist at head office yet. */
+export async function searchQueuedBillsByCustomer(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+): Promise<FoundBill[]> {
+  const query = key === "mobile" ? digitsOf(term) : term.trim().toLocaleLowerCase();
+  if (!query) return [];
+  const queue = await db.queue.orderBy("id").reverse().toArray();
+  const items = await db.items.toArray();
+  return queue
+    .filter((bill) => {
+      const value =
+        key === "mobile"
+          ? digitsOf(bill.customer?.mobile ?? "")
+          : (bill.customer?.name ?? "").toLocaleLowerCase();
+      return value.includes(query);
+    })
+    .map((bill) => fromQueued(bill, alreadyGivenBack(queue, bill.fy, bill.till_seq), items));
+}
+
+/** Matching people from the all-KDPS customer master. Mobile uses its index;
+ * name is the rarer deliberate scan, capped before it can become a result dump. */
+export async function searchKnownCustomers(
+  db: TillDb,
+  key: "mobile" | "name",
+  term: string,
+  limit = 8,
+): Promise<TillKnownCustomer[]> {
+  if (key === "mobile") return searchCustomers(db, term, limit);
+  const wanted = term.trim().toLocaleLowerCase();
+  if (wanted.length < 2) return [];
+  try {
+    return await db.customers
+      .filter((row) => row.name.toLocaleLowerCase().includes(wanted))
+      .limit(limit)
+      .toArray();
+  } catch {
+    return [];
+  }
+}
+
+/** A picked master row identifies a person by mobile. Names are deliberately
+ * not reused for the history request: two customers can share one, and the
+ * server's bounded fuzzy-name search cannot promise which one's bills fit. */
+export function billSearchForCustomer(customer: TillKnownCustomer): {
+  key: "mobile";
+  term: string;
+} {
+  return { key: "mobile", term: customer.mobile };
+}
+
+function digitsOf(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function fromQueued(
+  bill: QueuedBill,
+  given: Map<number, { qty: number; paise: number }>,
+  items: TillItem[],
+): FoundBill {
   return {
     original: { fy: bill.fy, till_seq: bill.till_seq, doc_number: bill.doc_number },
     billed_at: bill.billed_at,
     customer_name: bill.customer?.name ?? "",
     customer_mobile: bill.customer?.mobile ?? "",
+    net_paise: bill.totals.net_paise,
     local: true,
     lines: bill.lines
       .filter((line) => line.direction !== "return")
@@ -133,30 +215,79 @@ function describedBy(piece: TillItem | undefined) {
   };
 }
 
-/** The read shape of `GET /api/sell/sales/{doc_number}`, narrowed to what a
- *  return needs. Hand-written for the reason `types.ts` gives: this is the
- *  till's copy of a contract, and it has to keep compiling when the generated
- *  schema is not to hand. */
-export interface SaleDetail {
-  doc_number: string;
-  fy: string;
-  till_seq: number;
-  billed_at: string;
-  customer_name: string;
-  customer_mobile: string;
-  lines: OriginalLine[];
+/** The read shape of `GET /api/sell/sales/{doc_number}`, generated from the
+ * server serializer through the OpenAPI seam (ADR-0001). */
+export type SaleDetail = ApiSchemas["SaleRead"];
+
+function requiredPaise(value: number | undefined, field: string): number {
+  if (value === undefined) throw new Error(`Head office omitted ${field} from the bill.`);
+  return value;
 }
 
 /** A bill head office holds, in the same shape as a queued one. */
 export function fromServer(detail: SaleDetail): FoundBill {
   return {
-    original: { fy: detail.fy, till_seq: detail.till_seq, doc_number: detail.doc_number },
+    original: {
+      fy: detail.fy,
+      till_seq: detail.till_seq,
+      doc_number: detail.doc_number ?? "",
+    },
     billed_at: detail.billed_at,
-    customer_name: detail.customer_name,
-    customer_mobile: detail.customer_mobile,
+    customer_name: detail.customer_name ?? "",
+    customer_mobile: detail.customer_mobile ?? "",
+    net_paise: requiredPaise(detail.net_paise, "net_paise"),
     local: false,
     // A bill's own exchange legs are lines too, and they are not returnable -
     // they are pieces that already came back.
-    lines: detail.lines.filter((line) => line.direction !== "return"),
+    lines: detail.lines
+      .filter((line) => line.direction !== "return")
+      .map((line) => ({
+        line_no: line.line_no,
+        barcode: line.barcode,
+        season: line.season ?? "",
+        design: line.design ?? "",
+        color: line.color ?? "",
+        size: line.size ?? "",
+        brand: line.brand ?? "",
+        item: line.item ?? "",
+        hsn: line.hsn ?? "",
+        qty: line.qty,
+        net_paise: requiredPaise(line.net_paise, `line ${line.line_no} net_paise`),
+        gst_rate: line.gst_rate ?? "0.00",
+        gst_paise: requiredPaise(line.gst_paise, `line ${line.line_no} gst_paise`),
+        manual_desc: line.manual_desc ?? "",
+        direction: line.direction ?? "sale",
+        returned_qty: line.returned_qty,
+        returned_paise: line.returned_paise,
+      })),
   };
+}
+
+/** Include return legs that this till has committed but head office has not yet
+ * accepted. Without them a server bill can offer the same piece twice. */
+export async function withQueuedReturns(db: TillDb, found: FoundBill): Promise<FoundBill> {
+  const queue = await db.queue.orderBy("id").toArray();
+  const pending = alreadyGivenBack(queue, found.original.fy, found.original.till_seq);
+  if (!pending.size) return found;
+  return {
+    ...found,
+    lines: found.lines.map((line) => {
+      const back = pending.get(line.line_no);
+      return back
+        ? {
+            ...line,
+            returned_qty: Math.min(line.qty, line.returned_qty + back.qty),
+            returned_paise: Math.min(line.net_paise, line.returned_paise + back.paise),
+          }
+        : line;
+    }),
+  };
+}
+
+/** The against-bill card persisted inside a direct-cart exchange, if this draft
+ * was written by a build new enough to carry it. */
+export function foundFromExchange(exchange: Exchange | null): FoundBill | null {
+  const bill = exchange?.original_bill;
+  if (!exchange || !bill) return null;
+  return { original: exchange.original, ...bill };
 }

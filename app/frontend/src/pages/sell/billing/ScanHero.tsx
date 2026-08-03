@@ -4,9 +4,18 @@ import type { CounterMode } from "./BillBar";
 
 /** The scanner says one short, glanceable thing. A failed scan wins over the
  * normal mode prompt until the cashier explicitly clears it. */
-export function scanHeroState(mode: CounterMode, hasError: boolean): string {
+export type ReturnScanStage = "bill" | "return" | "exchange";
+
+export function scanHeroState(
+  mode: CounterMode,
+  hasError: boolean,
+  returnStage: ReturnScanStage = "bill",
+): string {
   if (hasError) return "NOT FOUND";
-  return mode === "return" ? "AWAITING BILL" : "LISTENING";
+  if (mode !== "return") return "LISTENING";
+  if (returnStage === "return") return "MARKING RETURN";
+  if (returnStage === "exchange") return "EXCHANGE OUT";
+  return "AWAITING BILL";
 }
 
 export function ScanHero({
@@ -17,6 +26,8 @@ export function ScanHero({
   placeholder,
   hasError,
   errorBarcode,
+  errorMessage,
+  returnStage = "bill",
   demoCodes,
   onChange,
   onSubmit,
@@ -32,6 +43,8 @@ export function ScanHero({
   placeholder: string;
   hasError: boolean;
   errorBarcode: string;
+  errorMessage?: string;
+  returnStage?: ReturnScanStage;
   demoCodes: string[];
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
@@ -40,7 +53,7 @@ export function ScanHero({
   onBillOffTag: () => void;
   onDemoScan: (code: string) => void;
 }) {
-  const state = scanHeroState(mode, hasError);
+  const state = scanHeroState(mode, hasError, returnStage);
 
   return (
     <section className={hasError ? "scan-hero is-error" : "scan-hero"} aria-label="Scanner">
@@ -82,15 +95,25 @@ export function ScanHero({
             <AlertTriangle size={14} />
           </span>
           <span>
-            <strong>We could not find that tag</strong>
+            <strong>
+              {mode === "return" && returnStage !== "exchange"
+                ? "That scan cannot be used here"
+                : "We could not find that tag"}
+            </strong>
             <small>
-              {errorBarcode ? <><span className="mono">{errorBarcode}</span> is not on this counter. </> : null}
-              Check the tag or look it up; if it arrived before its paperwork, bill it off the tag.
+              {errorMessage ?? (
+                <>
+                  {errorBarcode ? <><span className="mono">{errorBarcode}</span> is not on this counter. </> : null}
+                  Check the tag or look it up; if it arrived before its paperwork, bill it off the tag.
+                </>
+              )}
             </small>
           </span>
-          <button type="button" className="btn" onClick={onBillOffTag} disabled={disabled}>
-            Bill off tag
-          </button>
+          {(mode === "sale" || returnStage === "exchange") && (
+            <button type="button" className="btn" onClick={onBillOffTag} disabled={disabled}>
+              Bill off tag
+            </button>
+          )}
           <button type="button" className="btn" onClick={onDismissError}>
             Dismiss · Esc
           </button>

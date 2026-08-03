@@ -11,6 +11,7 @@ import {
 
 import { useAuth } from "../../auth/AuthContext";
 import { PageHeader } from "../../components/PageHeader";
+import { apiErrorMessage, typedApi } from "../../lib/api";
 import { Money } from "../../lib/format";
 import { useTill } from "../../till/TillProvider";
 import { useCounterRoom } from "../../till/useCounterRoom";
@@ -27,21 +28,44 @@ import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
 import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "../../till/draft";
 import type { DraftPayload } from "../../till/draft";
-import { takeParkedExchange } from "../../till/exchange";
-import type { Exchange } from "../../till/exchange";
+import {
+  isPastReturnWindow,
+  lateReturnAsk,
+  legsFrom,
+  markReturnedPiece,
+  pickedFromExchange,
+  takeEverythingBack,
+} from "../../till/exchange";
+import type { Exchange, OriginalLine, PickedReturn, PickedReturns } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
 import { tillToday } from "../../till/pricing";
 import { storeStateCodeOf, taxKindFor } from "../../till/gstin";
 import type { B2bTaxKind } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
+import {
+  billSearchForCustomer,
+  billSeqFrom,
+  findQueuedBill,
+  findQueuedBillByDoc,
+  foundFromExchange,
+  fromServer,
+  searchKnownCustomers,
+  searchQueuedBillsByCustomer,
+  withQueuedReturns,
+} from "../../till/original";
+import type { FoundBill } from "../../till/original";
+import { LatestRequest } from "../../till/latest";
+import { withStableQueue } from "../../till/sync";
 import { mockPaymentAdapter } from "../../till/payment";
 import type { PaymentAdapter, UpiCharged } from "../../till/payment";
 import { browserPrintAdapter } from "../../till/print";
 import { playTone, toneForScan } from "../../till/sounds";
 import { receiptHtml } from "../../till/receipt";
 import type { Payment } from "../../till/tender";
+import { covers } from "../../till/pin";
+import type { Ask, Authorisation } from "../../till/pin";
 import type { TillSnapshot } from "../../till/engine";
-import type { QueuedBill, TillCustomer, TillItem } from "../../till/types";
+import type { QueuedBill, TillCustomer, TillItem, TillKnownCustomer } from "../../till/types";
 import { emptyUndo, popUndo, pushUndo } from "../../till/undo";
 import type { UndoStack } from "../../till/undo";
 import { useScanBox } from "../../till/useScanBox";
@@ -63,6 +87,12 @@ import { PaymentPanel } from "./billing/PaymentPanel";
 import { RailFoot } from "./billing/RailFoot";
 import { TaxFigure } from "./billing/TaxFigure";
 import { UpiCharge } from "./billing/UpiCharge";
+import {
+  AgainstBill,
+  ReturnCustomerSearch,
+} from "./billing/ReturnCounter";
+import type { ReturnBillMatch, ReturnSearchKey } from "./billing/ReturnCounter";
+import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
 // ---------------------------------------------------------------------------
@@ -86,9 +116,10 @@ import "./Billing.css";
 // printer that is off is a banner and a Reprint button - never a lost sale, and
 // never a bill number spent on nothing (G2).
 //
-// **Nothing here shows cost or margin** (H2), and nothing here asks the server
-// anything: every price, every tax rate and every stock figure comes from the
-// counter's own copy, so the screen behaves identically with the line up or down.
+// **Nothing here shows cost or margin** (H2), and ordinary scanning, pricing and
+// committing ask the server nothing: every price, tax rate and stock figure
+// comes from the counter's own copy. Finding an older return bill is the narrow
+// exception; it asks the local queue first and head-office history only online.
 //
 // The payment panel has three incoming tender modes.
 //
@@ -102,12 +133,11 @@ import "./Billing.css";
 // overnight is sold at tomorrow's prices and offers, not at the ones it happened
 // to be parked under.
 //
-// **A piece coming back rides on the bill** (#184, grill Q7). The Return &
-// Exchange screen picks which lines of an old bill are being given back and parks
-// them; this screen picks them up and nets them against whatever is being bought
-// instead. The refund is what the customer *paid*, never today's price, and a
-// bill whose returns outweigh its outgoing pieces is refused before close, and
-// cash never comes out of the drawer.
+// **A piece coming back rides on the bill** (#273). Return mode finds the old
+// bill and marks its incoming lines right here, then nets them against whatever
+// is being bought instead. The refund is what the customer *paid*, never today's
+// price; a bill whose returns outweigh its outgoing pieces is refused before
+// close, and cash never comes out of the drawer.
 //
 // **A scan that finds nothing never sends the customer away** (#186, grill Q5).
 // The tag is in their hand, so the counter offers to bill it off the tag: a line
@@ -185,7 +215,28 @@ function Counter({
   /** The bill-level actor is a default, not a replacement for a deliberate
    * per-line choice. It is materialised only for the held/saved bill. */
   const [billSalesman, setBillSalesman] = useState<number | null | undefined>(undefined);
-  const [mode, setMode] = useState<CounterMode>("sale");
+  const [mode, setMode] = useState<CounterMode>(() =>
+    params.get("mode") === "return" ? "return" : "sale",
+  );
+  const [returnFound, setReturnFound] = useState<FoundBill | null>(null);
+  const [returnPicked, setReturnPicked] = useState<PickedReturns>({});
+  const [returnOutgoing, setReturnOutgoing] = useState(false);
+  const [returnLooking, setReturnLooking] = useState(false);
+  const [returnError, setReturnError] = useState("");
+  const [returnSearchOpen, setReturnSearchOpen] = useState(false);
+  const [returnSearchKey, setReturnSearchKey] = useState<ReturnSearchKey>("mobile");
+  const [returnSearchTerm, setReturnSearchTerm] = useState("");
+  const [returnCustomers, setReturnCustomers] = useState<TillKnownCustomer[]>([]);
+  const [returnMatches, setReturnMatches] = useState<ReturnBillMatch[] | null>(null);
+  const [returnAsking, setReturnAsking] = useState<Ask[] | null>(null);
+  const returnRequests = useRef(new LatestRequest());
+  const returnPins = useWrongPins();
+  useEffect(() => {
+    document.documentElement.dataset.counterMode = mode;
+    return () => {
+      delete document.documentElement.dataset.counterMode;
+    };
+  }, [mode]);
   // Bumped by every commit so the in-memory copy re-reads the shelf the sale
   // just moved. The sync time covers the other direction.
   const [commits, setCommits] = useState(0);
@@ -212,8 +263,8 @@ function Counter({
   const runSeq = useRef(0);
   /** Whatever is really on screen the instant the draft read could land -
    *  kept in sync at the only places that can populate it before that
-   *  happens: a scan (`takePiece`/`takeUnknown`), the exchange hand-off
-   *  above, and the customer strip. A `useEffect` mirroring `cart`/`customer`
+   *  happens: a scan (`takePiece`/`takeUnknown`), return picking, and the
+   *  customer strip. A `useEffect` mirroring `cart`/`customer`
    *  into a ref would run on React's own effect schedule, which is not
    *  guaranteed to have flushed before a sibling promise's `.then` lands -
    *  the same "no guaranteed order" the mount-race comment below already
@@ -245,44 +296,6 @@ function Counter({
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
-
-  /**
-   * Pick up an exchange the Return & Exchange screen parked (#184).
-   *
-   * Taken exactly once, from the counter's own database rather than from router
-   * state: each Sell route mounts its own `TillProvider`, so there is no shared
-   * React between the two screens - and a customer standing at the counter
-   * mid-exchange should survive a reload with their pieces still on the bill.
-   *
-   * It lands on whatever is already on screen rather than replacing it, because
-   * that is the flow: the cashier picks the pieces coming back, then scans what
-   * the customer is taking instead - or the other way round.
-   */
-  useEffect(() => {
-    if (!engine) return;
-    let taken = true;
-    void takeParkedExchange(engine.db).then((parked) => {
-      if (taken && parked) {
-        onScreenRef.current = {
-          ...onScreenRef.current,
-          cart: {
-            ...onScreenRef.current.cart,
-            exchange: parked,
-            authorisation: parked.authorisation ?? null,
-          },
-        };
-        setCart((current) => ({
-          ...current,
-          exchange: parked,
-          authorisation: parked.authorisation ?? null,
-        }));
-        setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
-      }
-    });
-    return () => {
-      taken = false;
-    };
-  }, [engine]);
 
   /**
    * Re-entering a printed bill from the machine this counter replaced (#189).
@@ -348,16 +361,26 @@ function Counter({
       runSeq.current += 1;
       onScreenRef.current = { cart: payload.cart, customer: payload.customer };
       setCart(payload.cart);
+      const restoredReturn = foundFromExchange(payload.cart.exchange);
+      setReturnFound(restoredReturn);
+      setReturnPicked(pickedFromExchange(payload.cart.exchange));
+      setReturnOutgoing(Boolean(payload.cart.exchange && payload.cart.lines.length));
+      if (payload.cart.exchange) setMode("return");
       setCustomer(payload.customer);
       setUndoStack(emptyUndo());
       setPendingDraft(null);
-      if (!claimsPaper) return true;
-      setPaperAt(payload.paperAt ?? localNow());
-      if (params.get("paper") !== String(payload.paper)) {
-        const next = new URLSearchParams(params);
-        next.set("paper", String(payload.paper));
-        setParams(next, { replace: true });
+      const next = new URLSearchParams(params);
+      let replaceParams = false;
+      if (payload.cart.exchange && params.get("mode") !== "return") {
+        next.set("mode", "return");
+        replaceParams = true;
       }
+      if (claimsPaper) {
+        setPaperAt(payload.paperAt ?? localNow());
+        next.set("paper", String(payload.paper));
+        replaceParams ||= params.get("paper") !== String(payload.paper);
+      }
+      if (replaceParams) setParams(next, { replace: true });
       return true;
     },
     [params, setParams],
@@ -371,7 +394,7 @@ function Counter({
    * applied. `restoredDraft` is the one decision over the whole snapshot - cart
    * lines, exchange legs and customer fields together (the 2 Aug 2026 ruling):
    * whichever the screen already has by the time the read lands (a piece
-   * scanned before it came back, or the exchange hand-off above, in no
+   * scanned or marked for return before it came back, in no
    * guaranteed order against this one) wins over the saved draft *whole*, so a
    * restore can never mix a real exchange with a crashed bill's customer.
    * `skipRestore` is the fourth guard: a New bill, a commit or a hold started
@@ -507,11 +530,27 @@ function Counter({
       }),
     [cartWithSoldBy, world, today],
   );
+  const lateAsks = useMemo(() => {
+    const exchange = bill.exchange;
+    if (
+      !exchange?.billed_at ||
+      !isPastReturnWindow(exchange.billed_at, world.policy.return_window_days)
+    ) {
+      return [];
+    }
+    return [lateReturnAsk(exchange)];
+  }, [bill.exchange, world.policy.return_window_days]);
   // The counter's own refusals come first (#189): "this till does not know which
   // number it is on" is not something a cashier can fix by editing the cart, and
   // showing them a line-level complaint instead would send them looking at the
   // wrong thing.
-  const blocked = till?.blocked || whyItCannotClose(bill);
+  const returnBlocked =
+    mode !== "return" || bill.exchange
+      ? ""
+      : !returnFound
+        ? "Find the original bill before taking anything back."
+        : "Mark at least one piece coming back.";
+  const blocked = till?.blocked || returnBlocked || whyItCannotClose(bill);
 
   // Nothing may be typed into a bill while it is being committed: the cart is
   // read once inside `save`, and a line arriving after that read would be a
@@ -525,13 +564,13 @@ function Counter({
 
   const suggestions = useMemo(
     () =>
-      typed.trim().length >= 2
+      (mode === "sale" || (returnFound && returnOutgoing)) && typed.trim().length >= 2
         ? searchPieces(world.items, typed).map((piece) => ({
             piece,
             stock: world.stock.find((s) => s.barcode === piece.barcode)?.qty ?? 0,
           }))
         : [],
-    [typed, world.items, world.stock],
+    [mode, returnFound, returnOutgoing, typed, world.items, world.stock],
   );
   const demoCodes = useMemo(
     () => [...new Set(world.items.map((item) => item.barcode))].slice(0, 4),
@@ -631,6 +670,272 @@ function Counter({
     },
     [cart, clearScan, pushCartUndo, scan, soldBy, startingANewBill],
   );
+
+  function changeMode(nextMode: CounterMode) {
+    returnRequests.current.invalidate();
+    setMode(nextMode);
+    setReturnLooking(false);
+    setReturnError("");
+    clearScan();
+    const next = new URLSearchParams(params);
+    if (nextMode === "return") next.set("mode", "return");
+    else next.delete("mode");
+    setParams(next, { replace: true });
+    window.requestAnimationFrame(scan.focus);
+  }
+
+  function setExchangeFromPicked(found: FoundBill, picked: PickedReturns) {
+    const lines = legsFrom(found, picked);
+    setReturnPicked(picked);
+    setCart((current) => {
+      const exchange: Exchange | null = lines.length
+        ? {
+            original: found.original,
+            lines,
+            billed_at: found.billed_at,
+            original_bill: {
+              lines: found.lines,
+              billed_at: found.billed_at,
+              customer_name: found.customer_name,
+              customer_mobile: found.customer_mobile,
+              net_paise: found.net_paise,
+              local: found.local,
+            },
+          }
+        : null;
+      const next = { ...current, exchange };
+      onScreenRef.current = { ...onScreenRef.current, cart: next };
+      return next;
+    });
+  }
+
+  function loadReturnBill(found: FoundBill) {
+    setReturnLooking(false);
+    setReturnFound(found);
+    setReturnPicked({});
+    setReturnOutgoing(false);
+    setReturnError("");
+    setReturnCustomers([]);
+    setReturnMatches(null);
+    setReturnSearchOpen(false);
+    clearScan();
+    setCart((current) => {
+      const next = { ...current, exchange: null, authorisation: null };
+      onScreenRef.current = { ...onScreenRef.current, cart: next };
+      return next;
+    });
+    window.requestAnimationFrame(scan.focus);
+  }
+
+  function changeReturnBill() {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
+    setReturnFound(null);
+    setReturnPicked({});
+    setReturnOutgoing(false);
+    setReturnError("");
+    setReturnCustomers([]);
+    setReturnMatches(null);
+    setCart((current) => {
+      const next = { ...current, exchange: null, authorisation: null };
+      onScreenRef.current = { ...onScreenRef.current, cart: next };
+      return next;
+    });
+    clearScan();
+    window.requestAnimationFrame(scan.focus);
+  }
+
+  async function findReturnBill(query: string) {
+    const isCurrent = returnRequests.current.start();
+    const reference = query.trim();
+    const seq = billSeqFrom(reference);
+    if (!engine || !reference) {
+      setReturnLooking(false);
+      setReturnError("Type or scan the bill number from the customer's copy.");
+      return;
+    }
+    setReturnLooking(true);
+    setReturnError("");
+    try {
+      const fy = till?.register?.fy || (await engine.db.queue.orderBy("id").last())?.fy || "";
+      if (!isCurrent()) return;
+      const exactLocal = await findQueuedBillByDoc(engine.db, reference);
+      if (!isCurrent()) return;
+      const local =
+        exactLocal ?? (fy && seq !== null ? await findQueuedBill(engine.db, fy, seq) : null);
+      if (!isCurrent()) return;
+      if (local) {
+        loadReturnBill(local);
+        return;
+      }
+      if (!till?.online) {
+        setReturnError(
+          `Bill ${reference} is not on this till, and head-office history needs the line.`,
+        );
+        return;
+      }
+      const { data: rows } = await typedApi.get("/sell/sales", {
+        params: { doc: reference },
+      });
+      if (!isCurrent()) return;
+      const matches = rows.flatMap((row) => row.doc_number ? [row.doc_number] : []);
+      if (!matches.length) {
+        setReturnError(`No bill ${reference} at this store.`);
+        return;
+      }
+      if (matches.length > 1) {
+        setReturnError("More than one bill matches. Type or scan the full bill number.");
+        return;
+      }
+      const found = await withStableQueue(engine.db, async () => {
+        if (!isCurrent()) return null;
+        const { data } = await typedApi.get(
+          `/sell/sales/${encodeURIComponent(matches[0])}` as "/sell/sales/{doc_number}",
+        );
+        if (!isCurrent()) return null;
+        return withQueuedReturns(engine.db, fromServer(data));
+      });
+      if (isCurrent() && found) loadReturnBill(found);
+    } catch (error) {
+      if (isCurrent()) setReturnError(apiErrorMessage(error));
+    } finally {
+      if (isCurrent()) setReturnLooking(false);
+    }
+  }
+
+  function markReturnScan(code: string) {
+    if (!returnFound) return;
+    const marked = markReturnedPiece(returnFound, returnPicked, code);
+    if (marked.error) {
+      setReturnError(marked.error);
+      playTone(toneForScan({ resolved: false, ambiguous: false }), muted);
+      return;
+    }
+    setExchangeFromPicked(returnFound, marked.picked);
+    setReturnError("");
+    clearScan();
+    playTone(toneForScan({ resolved: true, ambiguous: false }), muted);
+  }
+
+  function pickReturnLine(line: OriginalLine, patch: Partial<PickedReturn>) {
+    const existing = returnPicked[line.line_no] ?? {
+      qty: 0,
+      reason: "",
+      condition: "good" as const,
+    };
+    const nextChoice = { ...existing, ...patch };
+    const next = { ...returnPicked };
+    if (nextChoice.qty > 0) next[line.line_no] = nextChoice;
+    else delete next[line.line_no];
+    setExchangeFromPicked(returnFound!, next);
+    scan.focus();
+  }
+
+  async function searchReturnCustomer(
+    term = returnSearchTerm,
+    key = returnSearchKey,
+  ) {
+    const isCurrent = returnRequests.current.start();
+    if (!engine || !term.trim()) {
+      setReturnLooking(false);
+      return;
+    }
+    setReturnLooking(true);
+    setReturnError("");
+    try {
+      const [local, knownCustomers] = await Promise.all([
+        searchQueuedBillsByCustomer(engine.db, key, term),
+        searchKnownCustomers(engine.db, key, term),
+      ]);
+      if (!isCurrent()) return;
+      setReturnCustomers(knownCustomers);
+      const byNumber = new Map<string, ReturnBillMatch>();
+      for (const found of local) {
+        byNumber.set(found.original.doc_number, {
+          doc_number: found.original.doc_number,
+          billed_at: found.billed_at,
+          customer_name: found.customer_name,
+          customer_mobile: found.customer_mobile,
+          net_paise: found.net_paise,
+          local: found,
+        });
+      }
+      setReturnMatches([...byNumber.values()]);
+      if (!till?.online) return;
+      try {
+        const { data } = await typedApi.get("/sell/sales", {
+          params: { [key]: term.trim() },
+        });
+        if (!isCurrent()) return;
+        for (const row of data) {
+          if (!row.doc_number || byNumber.has(row.doc_number)) continue;
+          byNumber.set(row.doc_number, {
+            doc_number: row.doc_number,
+            billed_at: row.billed_at,
+            customer_name: row.customer_name ?? "",
+            customer_mobile: row.customer_mobile ?? "",
+            net_paise: row.net_paise ?? 0,
+            local: null,
+          });
+        }
+        setReturnMatches([...byNumber.values()]);
+      } catch (error) {
+        if (!isCurrent()) return;
+        setReturnError(
+          byNumber.size || knownCustomers.length
+            ? "Head-office bill history could not be reached; results on this till are still shown."
+            : apiErrorMessage(error),
+        );
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        setReturnError(apiErrorMessage(error));
+        setReturnCustomers([]);
+        setReturnMatches(null);
+      }
+    } finally {
+      if (isCurrent()) setReturnLooking(false);
+    }
+  }
+
+  async function openReturnMatch(match: ReturnBillMatch) {
+    const isCurrent = returnRequests.current.start();
+    if (!engine) return;
+    if (match.local) {
+      loadReturnBill(match.local);
+      return;
+    }
+    setReturnLooking(true);
+    setReturnError("");
+    try {
+      const found = await withStableQueue(engine.db, async () => {
+        if (!isCurrent()) return null;
+        const { data } = await typedApi.get(
+          `/sell/sales/${encodeURIComponent(match.doc_number)}` as "/sell/sales/{doc_number}",
+        );
+        if (!isCurrent()) return null;
+        return withQueuedReturns(engine.db, fromServer(data));
+      });
+      if (isCurrent() && found) loadReturnBill(found);
+    } catch (error) {
+      if (isCurrent()) setReturnError(apiErrorMessage(error));
+    } finally {
+      if (isCurrent()) setReturnLooking(false);
+    }
+  }
+
+  function applyCounterScan(code: string) {
+    if (mode === "sale") {
+      applyScan(code);
+      return;
+    }
+    if (!returnFound) {
+      void findReturnBill(code);
+      return;
+    }
+    if (returnOutgoing) applyScan(code);
+    else markReturnScan(code);
+  }
 
   const applyScan = useCallback(
     (code: string) => {
@@ -775,7 +1080,7 @@ function Counter({
   }, []);
 
   /** The customer strip, typed into directly - the third source (with a scan
-   *  and the exchange hand-off) that can race the mount-time draft read. */
+   *  and return picking) that can race the mount-time draft read. */
   function editCustomer(next: TillCustomer) {
     runSeq.current += 1;
     onScreenRef.current = { ...onScreenRef.current, customer: next };
@@ -829,6 +1134,7 @@ function Counter({
    * error handling.
    */
   function freshCounter() {
+    returnRequests.current.invalidate();
     skipRestore.current = true;
     runSeq.current += 1;
     onScreenRef.current = { cart: emptyCart(), customer: NO_CUSTOMER };
@@ -840,6 +1146,14 @@ function Counter({
     // A charge card left open over a bill that no longer exists would be
     // charging a figure nobody is being asked for.
     setCharging(false);
+    setReturnFound(null);
+    setReturnPicked({});
+    setReturnOutgoing(false);
+    setReturnLooking(false);
+    setReturnError("");
+    setReturnCustomers([]);
+    setReturnMatches(null);
+    setReturnSearchOpen(false);
     clearScan();
   }
 
@@ -992,14 +1306,27 @@ function Counter({
    * second copy of a bill that is being keyed in from the first is how one sale
    * ends up looking like two on a shop floor.
    */
-  async function save() {
+  async function save(authorisation: Authorisation | null = cart.authorisation) {
     if (!engine || blocked || saving) return;
     let refocusScan = true;
     setSaving(true);
     setPrintProblem("");
     try {
+      const billToSave =
+        authorisation === cart.authorisation
+          ? bill
+          : priceCart(
+              { ...cartWithSoldBy, authorisation },
+              world,
+              today,
+              {
+                capPercent: world.policy.manual_discount_cap_percent,
+                allowManualDiscountOnOfferLines:
+                  world.policy.manual_discount_on_offer_lines,
+              },
+            );
       const billedAt = paper === null ? new Date().toISOString() : new Date(paperAt).toISOString();
-      const draft = toDraft(bill, { billedAt, customer, storeStateCode: storeState });
+      const draft = toDraft(billToSave, { billedAt, customer, storeStateCode: storeState });
       const queued =
         paper === null
           ? await engine.commit(draft)
@@ -1008,7 +1335,7 @@ function Counter({
       const receipt = receiptHtml(queued, world.store ?? FALLBACK_STORE, {
         storeName,
         cashReceivedPaise: cart.payment.cash_received_paise,
-        describe: describeFrom(bill.lines),
+        describe: describeFrom(billToSave.lines),
       });
       setLastBill({
         bill: queued,
@@ -1035,6 +1362,15 @@ function Counter({
       setSaving(false);
       if (refocusScan) scan.focus();
     }
+  }
+
+  function trySave() {
+    if (blocked || saving) return;
+    if (lateAsks.length && !covers(cart.authorisation, lateAsks)) {
+      setReturnAsking(lateAsks);
+      return;
+    }
+    void save();
   }
 
   // Which one banner the frame's alert strip shows (#243) - see `pickBillAlert`.
@@ -1067,18 +1403,41 @@ function Counter({
   }, [clearScan, scan]);
 
   const dismissCounterError = useCallback(() => {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
     setNote("");
     setPrintProblem("");
+    setReturnError("");
     closeScanFloat();
   }, [closeScanFloat]);
 
+  const closeReturnSearch = useCallback(() => {
+    returnRequests.current.invalidate();
+    setReturnLooking(false);
+    setReturnSearchOpen(false);
+    scan.focus();
+  }, [scan]);
+
+  function openLookup() {
+    if (mode === "return") {
+      returnRequests.current.invalidate();
+      setReturnLooking(false);
+      setReturnSearchOpen(true);
+      setReturnError("");
+      return;
+    }
+    navigate("/sell/customers");
+  }
+
   useCounterKeys({
-    disabled: Boolean(charging || showHolds || counterBlocked || saving || holding),
+    disabled: Boolean(
+      charging || showHolds || counterBlocked || saving || holding || returnAsking,
+    ),
     finishOpen,
     onHold: () => void holdBill(),
-    onLookup: () => navigate("/sell/customers"),
+    onLookup: openLookup,
     onNewBill: newBill,
-    onSave: () => void save(),
+    onSave: trySave,
     onBackToScan: dismissCounterError,
     onNextBill: nextBill,
   });
@@ -1094,6 +1453,12 @@ function Counter({
     unknown || suggestions.length > 0 ? "scan" : null,
     closeScanFloat,
     SCAN_FLOAT_WIDTH,
+    "below",
+  );
+  const returnSearchFloat = usePositionedPopover<HTMLInputElement>(
+    mode === "return" && returnSearchOpen ? "return-customer" : null,
+    closeReturnSearch,
+    680,
     "below",
   );
 
@@ -1113,30 +1478,42 @@ function Counter({
           showingHolds={showHolds}
           disabled={counterBlocked || locked}
           canHold={cart.lines.length > 0}
-          onModeChange={setMode}
+          onModeChange={changeMode}
           onSoldByChange={pickBillSalesman}
           onApplySoldBy={applyBillSalesman}
           onShowHolds={() => setShowHolds((open) => !open)}
           onHold={() => void holdBill()}
-          onLookup={() => navigate("/sell/customers")}
+          onLookup={openLookup}
           onNewBill={newBill}
         />
         <ScanHero
             mode={mode}
-            boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
+            boxRef={mergeRefs(scan.ref, scanFloat.triggerRef, returnSearchFloat.triggerRef)}
             value={typed}
-            disabled={locked || counterBlocked || finishOpen}
-            placeholder={mode === "sale" ? "Scan a tag, or type a design number" : "Scan a bill number"}
-            hasError={Boolean(unknown)}
-            errorBarcode={unknown}
-            demoCodes={demoCodes}
+            disabled={locked || counterBlocked || finishOpen || returnLooking}
+            placeholder={
+              mode === "sale" || returnOutgoing
+                ? "Scan a tag, or type a design number"
+                : returnFound
+                  ? "Scan a piece coming back"
+                  : "Scan or type the full bill number"
+            }
+            returnStage={!returnFound ? "bill" : returnOutgoing ? "exchange" : "return"}
+            hasError={
+              mode === "return" && !returnOutgoing
+                ? Boolean(returnError)
+                : Boolean(unknown)
+            }
+            errorBarcode={mode === "return" && !returnOutgoing ? typed.trim() : unknown}
+            errorMessage={mode === "return" && !returnOutgoing ? returnError : undefined}
+            demoCodes={mode === "sale" || returnOutgoing ? demoCodes : []}
             onChange={setTyped}
-            onSubmit={applyScan}
-            onLookup={() => navigate("/sell/customers")}
-            onDismissError={closeScanFloat}
+            onSubmit={applyCounterScan}
+            onLookup={openLookup}
+            onDismissError={dismissCounterError}
             onBillOffTag={() => unknown && takeUnknown(unknown)}
             onDemoScan={(code) => {
-              applyScan(code);
+              applyCounterScan(code);
               scan.focus();
             }}
           />
@@ -1299,14 +1676,40 @@ function Counter({
                   onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
                 />
               )}
-              {bill.exchange && (
+              {mode === "return" && returnFound ? (
+                <AgainstBill
+                  found={returnFound}
+                  picked={returnPicked}
+                  outgoing={returnOutgoing}
+                  late={isPastReturnWindow(
+                    returnFound.billed_at,
+                    world.policy.return_window_days,
+                  )}
+                  windowDays={world.policy.return_window_days}
+                  locked={locked}
+                  onPick={pickReturnLine}
+                  onTakeEverything={() =>
+                    setExchangeFromPicked(
+                      returnFound,
+                      takeEverythingBack(returnFound, returnPicked),
+                    )
+                  }
+                  onOutgoing={(outgoing) => {
+                    setReturnOutgoing(outgoing);
+                    setReturnError("");
+                    clearScan();
+                    window.requestAnimationFrame(scan.focus);
+                  }}
+                  onChangeBill={changeReturnBill}
+                />
+              ) : bill.exchange ? (
                 <ExchangeBack
                   exchange={bill.exchange}
                   refundPaise={bill.refund_paise}
                   locked={locked}
                   onRemove={removeLeg}
                 />
-              )}
+              ) : null}
               <Lines
                 lines={bill.lines}
                 salesmen={world.salesmen}
@@ -1351,7 +1754,7 @@ function Counter({
                 paper={paper}
                 lastBillNumber={lastBill?.bill.doc_number ?? null}
                 onReprint={() => lastBill && void print(lastBill.receipt)}
-                onSave={() => void save()}
+                onSave={trySave}
               />
             </aside>
           </>
@@ -1409,6 +1812,67 @@ function Counter({
           </div>,
           document.body,
         )}
+
+      {!counterBlocked &&
+        returnSearchFloat.at &&
+        createPortal(
+          <div
+            ref={returnSearchFloat.popoverRef}
+            className="bill-float return-customer-float"
+            style={{ ...returnSearchFloat.at }}
+          >
+            <ReturnCustomerSearch
+              searchKey={returnSearchKey}
+              term={returnSearchTerm}
+              online={Boolean(till?.online)}
+              looking={returnLooking}
+              error={returnError}
+              customers={returnCustomers}
+              matches={returnMatches}
+              onSearchKey={(key) => {
+                returnRequests.current.invalidate();
+                setReturnLooking(false);
+                setReturnSearchKey(key);
+                setReturnCustomers([]);
+                setReturnMatches(null);
+              }}
+              onTerm={(term) => {
+                returnRequests.current.invalidate();
+                setReturnLooking(false);
+                setReturnSearchTerm(term);
+              }}
+              onSearch={() => void searchReturnCustomer()}
+              onPickCustomer={(known) => {
+                const selected = billSearchForCustomer(known);
+                setReturnSearchKey(selected.key);
+                setReturnSearchTerm(selected.term);
+                void searchReturnCustomer(selected.term, selected.key);
+              }}
+              onPick={(match) => void openReturnMatch(match)}
+            />
+          </div>,
+          document.body,
+        )}
+
+      {returnAsking && (
+        <ManagerPin
+          managers={world.managers}
+          asks={returnAsking}
+          wrong={returnPins.wrong}
+          onWrong={returnPins.wasWrong}
+          onClose={() => setReturnAsking(null)}
+          onAuthorised={(authorisation) => {
+            returnPins.clear();
+            setReturnAsking(null);
+            setCart((current) => {
+              const next = { ...current, authorisation };
+              onScreenRef.current = { ...onScreenRef.current, cart: next };
+              return next;
+            });
+            void save(authorisation);
+          }}
+        />
+      )}
 
       {/* The QR charge card (#248). Gated on the figure as well as on the
           cashier's tap: a card charging nought is not a charge, and the UPI row
