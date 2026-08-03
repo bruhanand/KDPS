@@ -41,7 +41,7 @@
 <div class="wrap">
 
 <header class="hero">
-  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · Progress Update · 30 June 2026</div>
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · Progress Update · 3 August 2026</div>
   <h1>The KDPS System — What's Built So Far</h1>
   <p class="sub">A plain snapshot of where the system stands today. It already runs in any web browser — nothing to install. Below is what your team can use now, and what comes next.</p>
 </header>
@@ -49,30 +49,49 @@
 <section>
 <h2>Ready to use today<span class="pill pill-live">Live · early access</span></h2>
 
-<h3>Getting in</h3>
+<h3>Getting in &amp; Security</h3>
 <ul class="live">
-  <li><b>Secure login with roles.</b> Each person signs in and sees only what their job needs — owner, store, warehouse, finance or master-data.</li>
-  <li><b>Home dashboard.</b> A personalised landing screen for each role, with tiles you can show, hide and re-order. <span class="lead" style="display:inline">(Final layout still being decided with you — see the last section.)</span></li>
+  <li><b>Secure login with fine-grained roles.</b> 9 role-based views — owner, store staff, warehouse, finance, admin, etc. Store staff see only their assigned store location. Includes break-glass superuser access.</li>
+  <li><b>13-section sidebar navigation.</b> Single URL per screen, profile tile, off-canvas drawer on mobile devices, and Dark Mode support (Light / Dark / System).</li>
+  <li><b>Global search bar.</b> Top-bar search bar supporting barcode wedge-scanning across items, documents, and customers.</li>
 </ul>
 
 <h3>Your backbone records (master data)</h3>
 <ul class="live">
-  <li><b>Stores &amp; warehouses, Brands, Seasons, GST registrations, Users &amp; Roles</b> — view, add and edit, all in one place.</li>
+  <li><b>Stores &amp; warehouses, Brands, Seasons, GST registrations (Bihar &amp; Jharkhand), Users &amp; Roles</b> — view, add and edit, all in one place.</li>
+  <li><b>Customer master.</b> Integrated customer registry with instant counter typeahead and till history.</li>
 </ul>
 
-<h3>Day-to-day documents</h3>
+<h3>Day-to-day documents &amp; Goods Inward</h3>
 <ul class="live">
-  <li><b>Vendor bookings.</b> Record what each brand has booked for a season.</li>
-  <li><b>Goods inward (GRN).</b> Receive shipments into a store or warehouse.</li>
-  <li><b>PT converter.</b> Turns a brand's PT / invoice file into clean, ready stock data automatically. Anything it cannot read with certainty goes to a review list instead of being guessed.</li>
+  <li><b>Vendor bookings.</b> Record seasonal bookings for each brand.</li>
+  <li><b>Goods inward (GRN).</b> Receive shipments into stores or warehouses with automatic distinction for branded vs non-branded and tagged vs non-tagged items.</li>
+  <li><b>Self-improving PT converter.</b> Converts brand PT / invoice files into clean stock data. Automatically remembers human corrections, line-item edits, and bulk fill corrections. Uncertain lines go to a review list.</li>
+</ul>
+
+<h3>Transfers, Returns &amp; Stock Control</h3>
+<ul class="live">
+  <li><b>Scan-based transfers.</b> Scan out at dispatch, scan in at receipt, with real-time in-transit stock tracking between stores and warehouses. Prints transfer PT documents automatically.</li>
+  <li><b>Discrepancy &amp; damaged stock handling.</b> Automatic flagging for short, extra, or damaged receipts. Store reports damage, warehouse confirms into quarantine stock.</li>
+  <li><b>Approvals inbox &amp; Maker-Checker controls.</b> Senior approval required for transfers, variance tolerances, and stock write-offs. No self-approvals.</li>
+  <li><b>Physical stock count.</b> Blind stock counting workflow where counters enter physical counts without seeing book stock, producing automated variance reports.</li>
+</ul>
+
+<h3>Selling at the Counter (POS &amp; Billing)</h3>
+<ul class="live">
+  <li><b>Scanner-first POS counter room.</b> Dedicated fast billing interface built directly into the system with barcode scanning and audio feedback.</li>
+  <li><b>Integrated returns &amp; exchanges.</b> Process returns and exchanges directly at the billing counter with money-in-only rules (credit notes retired).</li>
+  <li><b>Crash-proof counter cart safety.</b> Automatic draft saving survives browser crashes, instant undo stack, and rescan quantity increments.</li>
+  <li><b>Flexible payment rail.</b> Cash, cards, customer prefill, and instant UPI charge card via mock payment adapter.</li>
+  <li><b>Counter controls &amp; Receipts.</b> Manager discount dials with limit policies, GST breakup popovers, and bill printing with barcode generation.</li>
 </ul>
 
 <h3>Stock &amp; money (the books)</h3>
 <ul class="live">
-  <li><b>Stock ledger &amp; Stock on hand.</b> Every movement, and the live quantity — always kept correctly by item: style, size <em>and</em> colour.</li>
-  <li><b>Vendor ledger.</b> What is owed to each brand, with ageing.</li>
-  <li><b>Cash ledger.</b> Cash movements.</li>
-  <li><b>Self-balancing books.</b> Stock value and brand dues stay in balance at all times, with SOR and outright brands handled correctly and GST built in. This is the base for accurate profit reporting later.</li>
+  <li><b>Stock ledger &amp; Stock on hand.</b> Every movement and live quantity tracked by item: style, size <em>and</em> colour.</li>
+  <li><b>Vendor ledger &amp; Cash ledger.</b> Vendor dues with ageing, plus complete cash tracking.</li>
+  <li><b>In-app Workspace inbox.</b> Notifications and team messages accessible directly inside the system header.</li>
+  <li><b>Self-balancing books.</b> Stock value and brand dues stay in balance at all times, with SOR and outright brands handled correctly and GST built in.</li>
 </ul>
 </section>
 
@@ -80,27 +99,26 @@
 <h2>Coming next<span class="pill pill-next">Building, one at a time</span></h2>
 <p class="lead">Built in order so each part is checked and correct before the next begins.</p>
 <ul class="next">
-  <li><b>Selling at the counter (POS)</b> — billing, returns, exchanges and day-close.</li>
-  <li><b>Store count &amp; transfers</b> — stock counts and moving stock between locations.</li>
-  <li><b>Sales &amp; payments documents</b> — sales records, POS import, customer returns and vendor payments.</li>
-  <li><b>Controls</b> — exception inbox, reconciliations, approvals and a full audit trail.</li>
-  <li><b>Business intelligence</b> — dashboards, profit by brand / store / season, dead-stock and ageing, demand forecast, report maker.</li>
-  <li><b>Connections</b> — Tally export for the statutory books, and POS data sources.</li>
-  <li><b>Morning brief (AI)</b> — a suggest-only daily summary. AI never moves stock or money on its own; a person always approves.</li>
+  <li><b>Vendor payments &amp; Bank reconciliation</b> — maker-checker payment approvals, bank statement recon, and collections.</li>
+  <li><b>Tally export &amp; Statutory connections</b> — export sales, purchases, and GST ledgers directly to Tally.</li>
+  <li><b>Business intelligence &amp; Analytics</b> — brand / store / season P&amp;L, dead-stock and ageing alerts, demand forecasting, custom report builder.</li>
+  <li><b>Promotions &amp; EOSS</b> — scheme management (slabs, BOGO, gifts), EOSS bulk billing, and markdown planning.</li>
+  <li><b>HRMS &amp; Payroll</b> — face check-in attendance, employee records, sales commission and incentive calculation.</li>
+  <li><b>Morning brief (AI)</b> — suggest-only daily executive summary (AI suggests, human approves).</li>
 </ul>
 </section>
 
 <section class="ask">
 <h2 style="padding-left:0;border-left:0;margin-top:8px">What we need from KDPS</h2>
 <ul>
-  <li><b>Home dashboard:</b> tell us what each role should see first, so we finalise the landing screen.</li>
-  <li><b>Master lists:</b> confirm the final stores, brands and GST registrations for go-live.</li>
-  <li><b>Access</b> for Tally and the POS system when we reach the connections stage.</li>
+  <li><b>POS counter deployment:</b> Sign-off on store staff counter training and scanner workflow for go-live.</li>
+  <li><b>Master lists:</b> Confirm final store list, active brands, and GST registrations for production setup.</li>
+  <li><b>Tally access:</b> Provide access or sample export formats when Tally statutory connection phase begins.</li>
 </ul>
 </section>
 
 <footer>
-  KDPS Operating System · early-access build · prepared for KDPS Lifestyle Pvt. Ltd. · 30 June 2026.
+  KDPS Operating System · early-access build · prepared for KDPS Lifestyle Pvt. Ltd. · 3 August 2026.
 </footer>
 
 </div>
