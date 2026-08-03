@@ -34,10 +34,9 @@ from core.documents import DocStatus, Document, MintedNumber, VoucherSeries
 from core.money import MoneyField
 from masters.models import Gstin
 
-#: Doc types this app mints. `SAL` is till-assigned (see the kernel's
-#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` are ordinary server-allocated
-#: counters - a plain return needs the network by design (grill Q7), so there is
-#: nothing offline about its number.
+#: Doc types this app has minted. `SAL` is till-assigned (see the kernel's
+#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` were server-allocated. The
+#: latter two stay because their historical models and series remain readable.
 SALE_DOC_TYPE = "SAL"
 CREDIT_NOTE_DOC_TYPE = "CRN"
 RETURN_DOC_TYPE = "SRT"
@@ -244,7 +243,7 @@ class CreditNote(Document):
         blank=True,
         on_delete=models.PROTECT,
         related_name="credit_notes_issued",
-        help_text="The plain return that issued it. Exactly one of the two sources "
+        help_text="The historical standalone return that issued it. Exactly one of the two sources "
         "is ever set - a note is handed over either at the end of a bill or at the "
         "end of a return, and never both.",
     )
@@ -604,9 +603,9 @@ class SaleLine(TimeStampedModel):
     def value_paise(self) -> int:
         """What this line is worth on the bill - the price paid, or the refund.
 
-        The same word a plain return's line answers to, so the posting engine can
-        take either without asking which table it came from (#184). `direction`
-        already carries the sign, so this is a magnitude on both.
+        Historical standalone-return lines use the same word, so old posting
+        records stay comparable across both tables. `direction` already carries
+        the sign, so this is a magnitude on both.
         """
         return int(self.net_paise or 0)
 
@@ -892,7 +891,7 @@ class ContinuityFlag(TimeStampedModel):
         # on this bill is not the dated slab's" in one bucket, and head office
         # answers those two with entirely different work.
         GSTIN_INVALID = "gstin_invalid", "The buyer's GSTIN is not well formed"
-        # #184. Two things a plain return can be that nothing else here means.
+        # #184. Two historical standalone-return flags retained with their rows.
         #
         # A **late** return is one taken past the window in `SellPolicy`. The
         # `window_override` column on the document says a manager answered for

@@ -1002,7 +1002,7 @@ function Counter({
   }, []);
 
   /** The customer strip, typed into directly - the third source (with a scan
-   *  and the exchange hand-off) that can race the mount-time draft read. */
+   *  and return picking) that can race the mount-time draft read. */
   function editCustomer(next: TillCustomer) {
     runSeq.current += 1;
     onScreenRef.current = { ...onScreenRef.current, customer: next };
