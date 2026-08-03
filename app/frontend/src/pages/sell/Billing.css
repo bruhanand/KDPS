@@ -5,8 +5,8 @@
    The frame (design.md, G-2): three fixed bands - `.bill-top` (identity: the
    scan box and the bill's lifecycle actions, plus the one alert line), then
    `.bill-work` (the only band that scrolls - the line grid left, the payment
-   and customer rail fixed right), then `.bill-foot` (totals, Reprint, Save &
-   Print). `.bill-page` sizes itself to `.content`'s own box exactly, so
+   and customer rail fixed right). The rail itself spans both bands and owns the
+   fixed Reprint / Save & Print commit point. `.bill-page` sizes itself to `.content`'s own box exactly, so
    `.content` never scrolls on this route (the shell contract, AppShell.css
    L1-5) - below 1280px that guarantee is deliberately given up and the page
    scrolls honestly again (G-2). */
@@ -20,9 +20,12 @@
      rooms here. */
   height: calc(100dvh - var(--topbar-h));
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  padding-bottom: 40px;
+  position: relative;
+  width: 100%;
+  max-width: none;
+  padding: 0 368px 16px 16px;
 }
 
 /* The counter's own bill bar replaces the generic page chrome. */
@@ -205,7 +208,7 @@
    instead of growing to fit the grid's content; again on `.bill-lines`, so
    *it* can shrink inside this row and hand the leftover space to its own
    `overflow-y: auto` rather than pushing `.bill-work` taller than the frame. */
-.bill-work { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; min-height: 0; }
+.bill-work { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
 .bill-lines { min-width: 0; min-height: 0; overflow-y: auto; }
 .bill-empty {
   display: block; padding: 40px 0; text-align: center; font-size: 14px;
@@ -355,35 +358,49 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    padding - which is #243's frame, not this ticket's cards. So the exception
    stays until that is ruled on, and it stays as `auto`, which means a counter
    whose bands do leave room never sees a scrollbar at all. */
-.bill-pay { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
+.bill-pay {
+  position: absolute; z-index: 3; top: 0; right: 0; bottom: 0; width: 352px;
+  display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.bill-rail-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
 .bill-panel { padding: 14px 16px; }
 .bill-panel .field { margin-top: 10px; }
 .bill-panel .muted-cell { display: block; margin-top: 10px; font-size: 12px; }
-/* 26px rather than the 30px it shipped at (#246): the hero has to be the first
-   thing read, not the tallest thing on the rail, and four pixels here is four
-   pixels the rail does not have to scroll for. */
-.bill-due { font-size: 26px; font-weight: 700; color: var(--ink); margin: 2px 0 0; }
+.bill-payment-heading { padding: 0 3px; }
+.bill-payment-heading .eyebrow { margin: 0; }
+.bill-due { font: 600 34px/1.1 var(--mono); letter-spacing: -.03em; color: var(--ink); margin: 4px 0 0; }
+.bill-rail-tile { overflow: hidden; border: 1px solid var(--hairline); border-radius: 14px; background: var(--inner); box-shadow: var(--shadow-rest); }
+.bill-payment-tile { margin-top: 10px; }
+.bill-payment-owed .bill-due { color: var(--amber); }
+.bill-owed-note { margin: 0; padding: 13px 14px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 
 /* The payment panel (#182): four modes, the notes among them, and the manager's
    tap. One column of label-then-amount rows, so a cashier's eye runs down the
    amounts rather than hunting for them. */
-.bill-tenders { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
-.bill-tender { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 10px; }
+.bill-tender { display: grid; grid-template-columns: minmax(0, 1fr) auto 104px; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--hairline); }
+.bill-cash-block .bill-tender { border-top: 0; }
 /* Cash, its chips and the cash-received box read as one block (#246): they are
    three parts of one question - how much of this bill is cash, what did the
    customer hand over, what goes back - and grouping them is what let the panel
    drop the separate "Cash received" field and "Change" row that were sitting at
    the bottom, well away from the row they belong to. */
-.bill-cash-block { display: flex; flex-direction: column; gap: 6px; }
+.bill-cash-block { display: flex; flex-direction: column; }
 /* Cash received is a note to self about the drawer, not a tender: it is indented
    under Cash and set quieter, so an eye running down the amounts reads three
    tenders, not four. */
-.bill-tender.is-quiet { padding-left: 12px; }
+.bill-tender.is-quiet { padding-left: 24px; }
 .bill-tender.is-quiet > label { font-size: 12px; font-weight: 500; color: var(--caption); }
 .bill-tender > label {
   display: flex; align-items: baseline; gap: 6px;
   font-size: 13px; font-weight: 600; color: var(--ink);
 }
+.bill-tender-icon { display: inline-flex; color: var(--muted); }
+.bill-tender-action { display: inline-flex; justify-content: flex-end; }
+.bill-tender-rest { height: 26px; padding: 0 9px; color: var(--muted); font-size: 11px; font-weight: 600; }
 /* "the rest" beside the cash label, where the panel's other hints sit under a
    block. It has to stay on the label's own line, so the panel-wide rule that
    drops `.muted-cell` onto its own line is undone here. */
@@ -396,10 +413,10 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    cash-received row above, so the whole cash block hangs off the Cash label.
    They wrap rather than shrink: "₹4,848" is a figure a cashier reads at a
    glance and a chip that clipped it would be worse than no chip. */
-.bill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 12px; }
+.bill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
 .bill-chip {
-  display: inline-flex; align-items: baseline; gap: 5px;
-  padding: 3px 9px; font-size: 12px; font-weight: 600;
+  display: inline-flex; flex: 1; align-items: baseline; justify-content: center; gap: 5px;
+  padding: 5px 7px; font-size: 12px; font-weight: 600;
 }
 .bill-chip-tag {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -419,13 +436,15 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    be a lie the next person reading the DOM has to unpick. */
 .bill-balance-line {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  margin: 12px 0 0; padding: 8px 11px; border-radius: 9px;
+  margin: 0; padding: 11px 12px; border-radius: 0;
   font-size: 14px; font-weight: 700;
 }
-.bill-balance-line.is-short,
 .bill-balance-line.is-over,
 .bill-balance-line.is-stranded {
   color: var(--red); background: var(--red-bg); border: 1px solid var(--red-bd);
+}
+.bill-balance-line.is-short {
+  color: var(--amber); background: var(--amber-bg); border-top: 1px solid var(--amber-bd);
 }
 /* The one red state whose words are a sentence rather than a label, so it is the
    one that needs room to wrap in a 340px rail. */
@@ -434,7 +453,7 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
   color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
 }
 .bill-balance-line.is-settled {
-  color: var(--caption); background: var(--band-edge-bg); border: 1px solid var(--band-edge-bd);
+  color: var(--green); background: var(--green-bg); border-top: 1px solid var(--green-bd);
   font-weight: 600;
 }
 
@@ -444,19 +463,27 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    holds both cards at 1366×768 without a scrollbar of its own. A mobile number
    and a first name both read fine in half of a 340px rail; a GSTIN does not,
    which is the other reason it is the one that folds away. */
-.bill-customer-card .eyebrow { margin-top: 0; }
-.bill-customer-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-.bill-panel .bill-customer-fields .field { margin-top: 0; }
-.bill-customer-fields .input { padding: 9px 11px; font-size: 14px; }
+.bill-customer-heading { display: flex; align-items: baseline; gap: 8px; padding: 0 3px; }
+.bill-customer-heading .eyebrow { margin: 0; }
+.bill-customer-heading > span { color: var(--caption); font-size: 11px; }
+.bill-customer-tile { margin-top: 9px; padding: 0 12px 10px; }
+.bill-customer-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 0 -12px; }
+.bill-customer-fields .field { position: relative; margin: 0; }
+.bill-customer-fields .field + .field { border-left: 1px solid var(--hairline); }
+.bill-customer-fields .field > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.bill-customer-fields .input { height: 42px; border: 0; border-radius: 0; background: transparent; padding: 9px 12px; font-size: 13.5px; }
 /* The disclosure itself - quiet, because on most bills the answer is no. */
 .bill-business-toggle {
-  margin-top: 10px; padding: 6px 11px; font-size: 12.5px; font-weight: 600;
-  color: var(--muted);
+  width: calc(100% + 24px); height: 38px; margin: 10px -12px -10px; padding: 6px 12px;
+  border: 0; border-top: 1px solid var(--hairline); border-radius: 0; text-align: left;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
 }
 /* The card's last word, and the one thing on it that is not a control: no
    bottom margin, because a paragraph's default one is a card's worth of
    padding again. */
-.bill-panel .bill-customer-note { margin: 8px 0 0; font-size: 12px; }
+.bill-customer-tile .bill-customer-note { margin: 8px 0 0; font-size: 12px; }
+.bill-known-customer { display: flex; align-items: center; gap: 7px; margin: 9px 0 0; color: var(--green); font-size: 12px; }
+.bill-known-customer > span { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
 /* The phone book, under the mobile field (#249, Q11: nothing pushes the
    layout). Portaled to `document.body` and placed by `usePositionedPopover`,
@@ -483,9 +510,9 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 /* The UPI row and how it is being proved (#248, grill Q5). Same hanging indent
    as the cash block above, so the panel still reads as three tenders with their
    own detail under them rather than as six rows. */
-.bill-upi-block { display: flex; flex-direction: column; gap: 6px; }
+.bill-upi-block { display: flex; flex-direction: column; }
 .bill-upi-proof {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 12px 9px 42px;
 }
 .bill-upi-open {
   display: inline-flex; align-items: center; gap: 6px;
@@ -538,7 +565,8 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 .bill-upi-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
 .bill-upi .muted-cell { display: block; margin-top: 14px; font-size: 11.5px; }
 
-.bill-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.bill-notes-tile { overflow: hidden; border: 1px solid var(--hairline); border-radius: 12px; background: var(--inner); box-shadow: var(--shadow-rest); }
+.bill-notes { margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
 .bill-note { display: flex; flex-direction: column; gap: 4px; }
 .bill-note-row { display: grid; grid-template-columns: 1fr 100px 24px; align-items: center; gap: 8px; }
 .bill-note-row .bill-cell { padding: 6px 8px; }
@@ -557,6 +585,16 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
    count. */
 .bill-asks { margin: 4px 0 16px; padding-left: 18px; font-size: 13.5px; color: var(--ink); }
 .bill-asks li { margin-top: 4px; }
+
+.bill-rail-foot { flex: 0 0 auto; padding: 11px 16px 14px; border-top: 1px solid var(--hairline); background: var(--surface); }
+.bill-rail-blocked { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 9px; color: var(--amber); font-size: 12px; line-height: 1.35; }
+.bill-rail-blocked svg { flex: 0 0 auto; margin-top: 1px; }
+.bill-rail-actions { display: flex; gap: 9px; }
+.bill-rail-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 48px; }
+.bill-rail-reprint { flex: 0 1 auto; min-width: 88px; color: var(--muted); }
+.bill-rail-reprint .mono { overflow: hidden; max-width: 82px; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.bill-rail-save { flex: 1 1 auto; font-size: 15px; font-weight: 700; }
+.bill-rail-key { font-size: 10.5px; opacity: .55; }
 
 .bill-foot {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
@@ -613,7 +651,7 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
    stops being its own scroller (so the twelve-column grid gets its
    horizontal safety net back too - see the sticky-header comment above). */
 @media (max-width: 1279px) {
-  .bill-page { height: auto; display: block; overflow: visible; }
+  .bill-page { height: auto; display: block; overflow: visible; padding-right: 0; }
   .bill-top, .bill-work, .bill-foot { display: block; }
   .bill-work { min-height: auto; }
   .bill-lines { min-height: auto; overflow-y: visible; }
@@ -621,7 +659,8 @@ table.data.bill-tax-rows td { padding: 6px 4px; }
      specificity regardless of which comes later in the cascade. */
   .table-wrap.bill-grid-wrap { overflow: auto; }
   table.data.bill-grid thead th { position: static; }
-  .bill-pay { margin-top: 16px; }
+  .bill-pay { position: static; width: auto; margin: 16px 0 0; }
+  .bill-rail-body { overflow: visible; }
   /* Element-qualified for the same reason the desktop rule above is, and it
      has to be, or it loses to that rule on specificity regardless of order. */
   .scan-hero { padding-top: 10px; }

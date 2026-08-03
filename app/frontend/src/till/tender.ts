@@ -214,6 +214,22 @@ export function prefillFor(split: TenderSplit): number {
   return Math.max(0, split.net_paise - split.explicit_paise);
 }
 
+/** The explicit-tender patch behind the UPI and Card “rest” controls. */
+export function restTenderPatch(
+  split: TenderSplit,
+  mode: "upi" | "card",
+): Pick<Payment, "upi_paise"> | Pick<Payment, "card_paise"> {
+  // `rest` finishes an already-started row; replacing its entered figure with
+  // just the remainder would silently discard the first half of a split.
+  const paise = (mode === "upi" ? split.upi_paise : split.card_paise) + prefillFor(split);
+  return mode === "upi" ? { upi_paise: paise } : { card_paise: paise };
+}
+
+/** A confirmed UPI charge is fixed: the rest must go to another tender. */
+export function canFillTenderRest(split: TenderSplit, mode: "upi" | "card"): boolean {
+  return prefillFor(split) > 0 && (mode !== "upi" || split.upi_confirmed === null);
+}
+
 /**
  * What an empty credit-note box takes - the balance, capped at what the note
  * has left.
