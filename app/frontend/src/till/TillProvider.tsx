@@ -37,8 +37,8 @@ export function useTill(): TillContextValue {
  *
  * The counter's own store, from what the server granted - never the top-bar unit
  * switcher. The dataset endpoint refuses a multi-store login with `TILL_SCOPE`
- * for the same reason: a till holds one shop's prices, one shop's credit notes
- * and one shop's manager PIN hashes, so letting a person pick which shop they are
+ * for the same reason: a till holds one shop's prices and manager PIN hashes, so
+ * letting a person pick which shop they are
  * billing for in a dropdown would hand any regional login a store's credentials.
  */
 export function tillStoreCode(user: { stores?: { code: string }[] } | null): string {

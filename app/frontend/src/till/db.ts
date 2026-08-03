@@ -6,8 +6,8 @@
 // already printed. Everything downstream of that follows:
 //
 //   · **One database per store.** The name carries the store code, so a device
-//     that is signed into DEO can never bill against GAY's counter, its stock or
-//     its credit notes - and a store login change opens a different database
+//     that is signed into DEO can never bill against GAY's counter or its stock -
+//     and a store login change opens a different database
 //     rather than mixing two shops' rows in one.
 //   · **The queue is a table, not a variable.** It has to survive a reload, a
 //     crash and a flat battery, because what is in it is money that has already

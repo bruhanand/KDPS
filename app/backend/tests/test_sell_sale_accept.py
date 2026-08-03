@@ -22,6 +22,7 @@ untied.
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from _sell import (
@@ -40,6 +41,7 @@ from _sell import (
     stock_in,
     upi_tender,
 )
+from django.utils import timezone
 
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLEntry, trial_balance
@@ -774,6 +776,57 @@ def test_an_exchange_where_returns_outweigh_sales_is_refused(counter):
     assert response.status_code == 422
     assert response.json()["code"] == "EXCHANGE_SHORT"
     assert not Sale.objects.filter(till_seq=2).exists()
+
+
+def test_a_late_exchange_needs_a_store_manager_and_records_their_evidence(counter):
+    policy = SellPolicy.current()
+    policy.return_window_days = 7
+    policy.save(update_fields=["return_window_days"])
+    original_payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    original_payload["billed_at"] = (timezone.now() - timedelta(days=8)).isoformat()
+    original_response = _post(counter, original_payload)
+    assert original_response.status_code == 201
+    original = Sale.objects.get(pk=original_response.json()["id"])
+    payload = _exchange_payload(counter, original, till_seq=2)
+
+    refused = _post(counter, payload)
+
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "OVERRIDE_REQUIRED"
+    assert not Sale.objects.filter(till_seq=2).exists()
+
+    approved_at = timezone.now().isoformat()
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "late_return",
+        "at": approved_at,
+    }
+    accepted = _post(counter, payload)
+
+    assert accepted.status_code == 201
+    exchange = Sale.objects.get(pk=accepted.json()["id"])
+    assert exchange.override_by == counter["manager"]
+    assert exchange.override_kind == "late_return"
+    assert exchange.override_at is not None
+    assert exchange.lines.get(direction=SaleLine.Direction.RETURN).override_by == counter["manager"]
+
+
+def test_an_in_window_exchange_discards_unsolicited_manager_evidence(counter):
+    original = _original_bill(counter)
+    payload = _exchange_payload(counter, original, till_seq=2)
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "late_return",
+        "at": timezone.now().isoformat(),
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    exchange = Sale.objects.get(pk=response.json()["id"])
+    assert exchange.override_by is None
+    assert exchange.override_kind == ""
+    assert exchange.override_at is None
 
 
 def test_a_damaged_piece_given_back_goes_to_quarantine_not_the_shelf(counter):

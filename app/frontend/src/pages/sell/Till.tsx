@@ -553,7 +553,7 @@ function CounterPin() {
       <p className="muted-cell">
         {hasPin
           ? "You have one. Setting a new one replaces it everywhere on the next sync."
-          : "Set one and a cashier here can call you over to approve a discount past their limit, or a credit note this counter cannot check - with the line down."}
+          : "Set one and a cashier here can call you over to approve an exchange past the return window - with the line down."}
       </p>
 
       <div className="field">
@@ -670,9 +670,9 @@ function NoCounter() {
     <div className="page-pad">
       <PageHeader lead="The offline counter, its local copy and its bill queue." />
       <p className="warn-note" data-testid="till-no-counter">
-        This login is not a counter. A till signs in as one store: the local price list, the
-        credit notes and the manager authorisations all belong to a single shop, so a login
-        that can see several has no till to show.
+        This login is not a counter. A till signs in as one store: the local price list and
+        manager authorisations belong to a single shop, so a login that can see several has no
+        till to show.
       </p>
     </div>
   );

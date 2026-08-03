@@ -31,10 +31,11 @@
 // revenue and no tax against a garment that left the shop.
 
 import { normaliseGstin, taxKindFor } from "./gstin";
-import { refundTotals, whyExchangeCannotClose } from "./exchange";
+import { lateReturnAsk, refundTotals, whyExchangeCannotClose } from "./exchange";
 import type { Exchange } from "./exchange";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
+import { covers } from "./pin";
 import type { Authorisation } from "./pin";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
 import { emptyPayment, splitOf, toTenders, whyPaymentCannotClose } from "./tender";
@@ -617,10 +618,8 @@ export interface BillIdentity {
  * for a ₹1,499 sale would refuse to balance and would be ₹501 out if it did.
  *
  * The manager's authorisation rides along as the contract's `override`, naming
- * who and when. Only an authorisation that actually covers what the bill needs
- * is sent: one obtained for a credit note, on a bill that has since grown an
- * over-cap discount, is a manager's name on something they never saw - and
- * `whyItCannotClose` has already stopped that bill from getting here.
+ * who and when. Only an authorisation that matches this exchange's original bill
+ * and value is sent; a stale tap is not evidence for a different return.
  */
 export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
   const lines: BillLine[] = bill.lines.map((line) => ({
@@ -699,10 +698,6 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     b2b_tax_kind: taxKindFor(gstin, storeState ?? ""),
     lines,
     ...(exchange ? { exchange } : {}),
-    // A bill that owes the customer money takes nothing: `splitOf` was asked
-    // about nought, so there is nothing here to filter out, and the server
-    // checks the same identity from the other side (`_check_totals` expects the
-    // tenders to come to `max(net, 0)`).
     tenders: toTenders(bill.split),
     totals: {
       gross_paise: bill.gross_paise,
@@ -711,5 +706,14 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       gst_paise: bill.gst_paise,
       round_paise: bill.round_paise,
     },
+    ...(bill.exchange && bill.authorisation && covers(bill.authorisation, [lateReturnAsk(bill.exchange)])
+      ? {
+          override: {
+            user_id: bill.authorisation.user_id,
+            kind: "late_return" as const,
+            at: bill.authorisation.at,
+          },
+        }
+      : {}),
   };
 }

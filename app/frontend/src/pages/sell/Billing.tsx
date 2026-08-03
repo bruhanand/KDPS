@@ -265,9 +265,17 @@ function Counter({
       if (taken && parked) {
         onScreenRef.current = {
           ...onScreenRef.current,
-          cart: { ...onScreenRef.current.cart, exchange: parked },
+          cart: {
+            ...onScreenRef.current.cart,
+            exchange: parked,
+            authorisation: parked.authorisation ?? null,
+          },
         };
-        setCart((current) => ({ ...current, exchange: parked }));
+        setCart((current) => ({
+          ...current,
+          exchange: parked,
+          authorisation: parked.authorisation ?? null,
+        }));
         setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
       }
     });
@@ -1818,9 +1826,9 @@ function NoCounter() {
     <div className="page-pad">
       <PageHeader lead="The counter." />
       <p className="warn-note" data-testid="bill-no-counter">
-        This login is not a counter. A till signs in as one store: the local price list, the
-        credit notes and the manager authorisations all belong to a single shop, so a login
-        that can see several has no counter to bill from.
+        This login is not a counter. A till signs in as one store: the local price list and
+        manager authorisations belong to a single shop, so a login that can see several has no
+        counter to bill from.
       </p>
     </div>
   );

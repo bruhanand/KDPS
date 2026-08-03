@@ -7,12 +7,18 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { Money, formatDateTime } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
-import { describeOriginal, legFor, parkExchange, refundFor, returnableQty } from "../../till/exchange";
+import {
+  describeOriginal,
+  lateReturnAsk,
+  legFor,
+  parkExchange,
+  refundFor,
+  returnableQty,
+} from "../../till/exchange";
 import type { Exchange, ExchangeLeg, OriginalLine } from "../../till/exchange";
 import { billSeqFrom, findQueuedBill, fromServer } from "../../till/original";
 import type { FoundBill, SaleDetail } from "../../till/original";
-import { LATE_RETURN } from "../../till/pin";
-import type { Ask } from "../../till/pin";
+import type { Ask, Authorisation } from "../../till/pin";
 import { useTillWorld } from "../../till/useTillWorld";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./ReturnsExchange.css";
@@ -171,11 +177,11 @@ function Counter() {
   }
 
   /** Hand the picked pieces to the Billing screen and go there. */
-  async function exchange() {
+  async function exchange(authorisation: Authorisation | null = null) {
     if (!engine || !found || !legs.length || working) return;
     setWorking(true);
     try {
-      const parked: Exchange = { original: found.original, lines: legs };
+      const parked: Exchange = { original: found.original, lines: legs, authorisation };
       await parkExchange(engine.db, parked);
       navigate("/sell");
     } catch (error) {
@@ -185,15 +191,8 @@ function Counter() {
   }
 
   const asks: Ask[] =
-    legs.length && lateOk
-      ? [
-          {
-            kind: LATE_RETURN,
-            ref: found?.original.doc_number ?? "",
-            paise: total,
-            label: found?.original.doc_number ?? "This return",
-          },
-        ]
+    legs.length && lateOk && found
+      ? [lateReturnAsk({ original: found.original, lines: legs })]
       : [];
 
   return (
@@ -305,10 +304,10 @@ function Counter() {
           wrong={pins.wrong}
           onWrong={pins.wasWrong}
           onClose={() => setAsking(null)}
-          onAuthorised={() => {
+          onAuthorised={(authorisation) => {
             pins.clear();
             setAsking(null);
-            void exchange();
+            void exchange(authorisation);
           }}
         />
       )}

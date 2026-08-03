@@ -17,6 +17,7 @@ import {
 import type { Cart } from "./cart";
 import { legFor } from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
+import type { Authorisation } from "./pin";
 import type { Payment } from "./tender";
 import { item, season } from "./testSupport";
 import type { TillGstSlab, TillOffer } from "./types";
@@ -761,8 +762,8 @@ describe("a piece coming back on the same bill", () => {
   });
 
   it("refuses to close when the returns outweigh the sales", () => {
-    // ₹1,200 back against a ₹499 shirt: the customer is owed ₹701, and it leaves
-    // as a credit note (grill Q7) rather than out of the drawer.
+    // ₹1,200 back against a ₹499 shirt: the customer is owed ₹701, so the
+    // equal-or-up gate refuses the bill before anything leaves the drawer.
     const bill = priced({ ...cartOf(scanned(49900)), exchange: exchangeOf(sold()) });
 
     expect(bill.net_paise).toBe(49900 - 120000);
@@ -802,6 +803,34 @@ describe("a piece coming back on the same bill", () => {
     const draft = toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" });
     expect(draft.exchange).toMatchObject({
       lines: [{ refund_paise: 120000, gst_rate: "5.00", gst_paise: 5714, condition: "good" }],
+    });
+  });
+
+  it("carries a matching late-window manager approval onto the bill", () => {
+    const exchange = exchangeOf(sold());
+    const authorisation: Authorisation = {
+      user_id: 7,
+      name: "Store manager",
+      asks: [
+        {
+          kind: "late_return",
+          ref: exchange.original.doc_number,
+          paise: 120000,
+          label: exchange.original.doc_number,
+        },
+      ],
+      at: "2026-07-30T12:30:00Z",
+    };
+    const bill = priced({
+      ...cartOf(scanned(149900)),
+      exchange,
+      authorisation,
+    });
+
+    expect(toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" }).override).toEqual({
+      user_id: 7,
+      kind: "late_return",
+      at: "2026-07-30T12:30:00Z",
     });
   });
 

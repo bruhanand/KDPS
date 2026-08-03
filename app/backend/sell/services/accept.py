@@ -231,10 +231,21 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     store = _resolve_store(data["store"], actor)  # step 1
     original_bill = _resolve_original_bill(data, store)  # step 8
     lines = _prepare_lines(data, store, original_bill)  # steps 5, 8
+    late_return = _mark_late_returns(lines, original_bill)
     _check_line_arithmetic(lines)  # step 3
     _check_totals(data, lines)  # step 3
     rulebook = _server_resolution(data, store, lines)  # steps 6 and 12 share it
     override = manager_for_override((data.get("override") or {}).get("user_id"), store)
+    if late_return and override is None:
+        raise AcceptError(
+            "OVERRIDE_REQUIRED",
+            "That bill is past the store's return window. A manager has to approve taking it back.",
+            422,
+        )
+    # An unsolicited manager id is not evidence. The server derives whether an
+    # exception exists; ordinary sales and in-window exchanges carry no override.
+    if not late_return:
+        override = None
     _check_discount_policy(lines, rulebook)  # step 6
     _guard_bill_number(data, store)  # step 4
 
@@ -347,6 +358,24 @@ def _prepare_lines(
         prepared.append(line)
     _check_return_quantities(prepared)
     return prepared
+
+
+def _mark_late_returns(lines: list[_PreparedLine], original_bill: Sale | None) -> bool:
+    """Mark a known exchange whose original bill is outside the policy window.
+
+    Lateness is derived from the submitted original and today's policy, never
+    from a till checkbox. Paper-era returns have no trustworthy sale date and
+    keep their existing missing-original flag path.
+    """
+    if original_bill is None or not any(line.is_return for line in lines):
+        return False
+    days_old = (timezone.localdate() - timezone.localdate(original_bill.billed_at)).days
+    late = days_old > SellPolicy.current().return_window_days
+    if late:
+        for line in lines:
+            if line.is_return:
+                line.override_needed = True
+    return late
 
 
 def _prepare_sale_line(
@@ -715,8 +744,8 @@ def _write_sale(
     totals = data["totals"]
     buyer_gstin = gstin_normalise(customer.get("gstin") or "")
     # What the till said about the manager's tap. Only the *time* is taken from
-    # it - a clock this server does not have - and only when the pipeline
-    # recognised the person it named.
+    # it - a clock this server does not have - and only when the pipeline both
+    # recognised the person and independently found a late return.
     authorisation = (data.get("override") or {}) if override else {}
     sale = Sale.objects.create(
         idempotency_uuid=data["idempotency_uuid"],
