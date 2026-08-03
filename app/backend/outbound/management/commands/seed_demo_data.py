@@ -43,7 +43,8 @@ from approvals.services import approval_for, decide
 from core.documents import VoucherSeries
 from finledger.posting import post_cash_movement, post_vendor_payment, rupees_to_paise
 from inbound.models import Grn, GrnLine
-from masters.models import Brand, Gstin, Season, Store
+from masters.models import Brand, Customer, Gstin, Season, Store
+from offers.models import Offer
 from outbound.counting import (
     apply_variance,
     open_session,
@@ -689,6 +690,8 @@ class Command(BaseCommand):
         self._seed_stock_requests()
         self._seed_writeoffs()
         self._seed_money()
+        self._seed_offers()
+        self._seed_customers()
         call_command("check_alerts")
 
         self.stdout.write(self.style.SUCCESS("\nDemo data seeded across all modules."))
@@ -1441,3 +1444,113 @@ class Command(BaseCommand):
                 direction, rupees_to_paise(rupees), desc, acct, account=account, mode=mode
             )
         self.stdout.write(f"  Cash/bank movements: {len(movements)} posted")
+
+    # ------------------------------------------------------------------
+    # 12. offers & customers
+    # ------------------------------------------------------------------
+    def _seed_offers(self) -> None:
+        ops1 = self.users["ops1"]
+        owner = self.users["owner"]
+        pe = self.brands.get("Peter England")
+        lp = self.brands.get("Louis Philippe")
+        bb = self.brands.get("Blackberrys")
+        store_codes = [s.code for s in Store.objects.all()]
+
+        if pe:
+            Offer.objects.get_or_create(
+                name="Peter England SS26 - Flat 20% Off",
+                defaults={
+                    "brand": pe,
+                    "funder": Offer.Funder.BRAND,
+                    "layer": Offer.Layer.BRAND,
+                    "trigger_type": Offer.Trigger.NONE,
+                    "trigger_config": {},
+                    "reward_type": Offer.Reward.PCT_OFF,
+                    "reward_config": {"percent": 20},
+                    "item_scope": {"brands": ["Peter England"]},
+                    "store_scope": {"kind": "all", "stores": store_codes},
+                    "starts_on": date.today() - timedelta(days=15),
+                    "ends_on": date.today() + timedelta(days=45),
+                    "status": Offer.Status.LIVE,
+                    "approved_by": owner,
+                    "created_by": ops1,
+                },
+            )
+
+        if lp:
+            Offer.objects.get_or_create(
+                name="Louis Philippe - Buy 2 Get 1 Free",
+                defaults={
+                    "brand": lp,
+                    "funder": Offer.Funder.BRAND,
+                    "layer": Offer.Layer.BRAND,
+                    "trigger_type": Offer.Trigger.QTY,
+                    "trigger_config": {"min_qty": 3},
+                    "reward_type": Offer.Reward.ITEM_FREE,
+                    "reward_config": {"free_qty": 1},
+                    "item_scope": {"brands": ["Louis Philippe"]},
+                    "store_scope": {"kind": "all", "stores": store_codes},
+                    "starts_on": date.today() - timedelta(days=10),
+                    "ends_on": date.today() + timedelta(days=30),
+                    "status": Offer.Status.LIVE,
+                    "approved_by": owner,
+                    "created_by": ops1,
+                },
+            )
+
+        if bb:
+            Offer.objects.get_or_create(
+                name="Blackberrys Suit Fest - ₹1000 Instant Off",
+                defaults={
+                    "brand": bb,
+                    "funder": Offer.Funder.BRAND,
+                    "layer": Offer.Layer.BRAND,
+                    "trigger_type": Offer.Trigger.SPEND,
+                    "trigger_config": {"min_spend_paise": 499900},
+                    "reward_type": Offer.Reward.AMT_OFF,
+                    "reward_config": {"amount_paise": 100000},
+                    "item_scope": {"brands": ["Blackberrys"]},
+                    "store_scope": {"kind": "all", "stores": store_codes},
+                    "starts_on": date.today() - timedelta(days=5),
+                    "ends_on": date.today() + timedelta(days=60),
+                    "status": Offer.Status.LIVE,
+                    "approved_by": owner,
+                    "created_by": ops1,
+                },
+            )
+
+        Offer.objects.get_or_create(
+            name="End of Season Sale - Storewide 15% Off",
+            defaults={
+                "brand": None,
+                "funder": Offer.Funder.KDPS,
+                "layer": Offer.Layer.STOREWIDE,
+                "trigger_type": Offer.Trigger.SPEND,
+                "trigger_config": {"min_spend_paise": 299900},
+                "reward_type": Offer.Reward.PCT_OFF,
+                "reward_config": {"percent": 15},
+                "item_scope": {},
+                "store_scope": {"kind": "all", "stores": store_codes},
+                "starts_on": date.today() - timedelta(days=2),
+                "ends_on": date.today() + timedelta(days=20),
+                "status": Offer.Status.LIVE,
+                "approved_by": owner,
+                "created_by": ops1,
+            },
+        )
+        self.stdout.write("  Offers: 4 live promotional rules seeded")
+
+    def _seed_customers(self) -> None:
+        customers = [
+            ("9835012345", "Rajesh Kumar", "10ABCDE1234F1Z1"),
+            ("9431098765", "Priya Sharma", ""),
+            ("9934123456", "Amit Verma", "20XYZAB5678C1Z9"),
+            ("9835999888", "Sanjay Gupta", ""),
+            ("9709876543", "Ananya Roy", ""),
+        ]
+        for mobile, name, gstin in customers:
+            Customer.objects.get_or_create(
+                mobile=mobile,
+                defaults={"name": name, "gstin": gstin},
+            )
+        self.stdout.write(f"  Customers: {len(customers)} registered customers seeded")
