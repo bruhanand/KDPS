@@ -235,7 +235,6 @@ class Offer(TimeStampedModel):
         }
 
 
-
 # ---------------------------------------------------------------------------
 # EOSS planning - a sell-through-triggered markdown ladder (D5, docs/05-offers).
 #
@@ -278,7 +277,8 @@ class SellThroughTarget(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.brand.code if self.brand else 'default'} wk{self.week_number} → {self.target_pct}%"
+        brand_code = self.brand.code if self.brand else "default"
+        return f"{brand_code} wk{self.week_number} → {self.target_pct}%"
 
 
 class EossLadderStep(TimeStampedModel):
@@ -308,7 +308,9 @@ class EossLadderStep(TimeStampedModel):
     trigger_value = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        help_text="Points behind target (gap) or weeks in stock (age), whichever trigger_type says.",
+        help_text=(
+            "Points behind target (gap) or weeks in stock (age), whichever trigger_type says."
+        ),
     )
     discount_pct = models.DecimalField(max_digits=5, decimal_places=2)
 
@@ -319,7 +321,8 @@ class EossLadderStep(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.brand.code if self.brand else 'default'} step {self.step_no} → {self.discount_pct}%"
+        brand_code = self.brand.code if self.brand else "default"
+        return f"{brand_code} step {self.step_no} → {self.discount_pct}%"
 
 
 class EossRecommendation(TimeStampedModel):
@@ -368,7 +371,9 @@ class EossRecommendation(TimeStampedModel):
     reason = models.TextField(blank=True, default="")
 
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
-    decided_discount_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    decided_discount_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
     )

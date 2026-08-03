@@ -13,10 +13,10 @@
 # Deploy: push to GitHub, then Render Dashboard → New → Blueprint → pick this
 # repo. Render reads this file and creates all three. See DEPLOY.md.
 #
-# BRANCH MODEL: `main` is Anand's development line and does NOT
-# deploy directly. The alpha the client tests on is built from `testing` — every
-# service below pins `branch: testing`. To ship work to the client:
-# merge main → testing and push; Render auto-deploys that branch only.
+# BRANCH MODEL (23 Jul 2026): `main` is Anand's development line and does NOT
+# deploy. The alpha the client tests on is built from `client-testing` — every
+# service below pins `branch: client-testing`. To ship work to the client:
+# merge main → client-testing and push; Render auto-deploys that branch only.
 #
 # IMPORTANT (one manual step): the two cross-URLs below assume the service
 # subdomains `kdps-erp-api` and `kdps-erp-web` are free on onrender.com. If
@@ -37,7 +37,7 @@ services:
   - type: web
     name: kdps-erp-api
     runtime: python
-    branch: testing     # never follow main — this stack is the client's
+    branch: client-testing     # never follow main — this stack is the client's
     plan: free                 # free web services spin down when idle (~50s cold start)
     region: singapore
     rootDir: app/backend
@@ -90,7 +90,7 @@ services:
   - type: web
     name: kdps-erp-web
     runtime: static
-    branch: testing     # never follow main — this stack is the client's
+    branch: client-testing     # never follow main — this stack is the client's
     # NOTE: static sites are served from Render's global CDN — no `region` allowed.
     rootDir: app/frontend
     buildCommand: npm install && npm run build

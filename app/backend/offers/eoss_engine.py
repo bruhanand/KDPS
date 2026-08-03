@@ -40,9 +40,15 @@ def _ladder_discount(brand: Brand | None, *, gap: Decimal, age_weeks: int) -> De
         steps = EossLadderStep.objects.filter(brand__isnull=True)
     best = Decimal("0")
     for step in steps:
-        if step.trigger_type == EossLadderStep.Trigger.SELL_THROUGH_GAP and gap >= step.trigger_value:
+        if (
+            step.trigger_type == EossLadderStep.Trigger.SELL_THROUGH_GAP
+            and gap >= step.trigger_value
+        ):
             best = max(best, step.discount_pct)
-        elif step.trigger_type == EossLadderStep.Trigger.AGE_WEEKS and Decimal(age_weeks) >= step.trigger_value:
+        elif (
+            step.trigger_type == EossLadderStep.Trigger.AGE_WEEKS
+            and Decimal(age_weeks) >= step.trigger_value
+        ):
             best = max(best, step.discount_pct)
     return best
 
@@ -69,8 +75,15 @@ def _margin_floor_pct(design: str, color: str, brand_name: str, season_code: str
 
 
 def _reason(
-    *, sell_through: Decimal, week: int, target: Decimal, gap: Decimal, discount: Decimal,
-    broken_size: bool, floor: Decimal | None, capped: bool,
+    *,
+    sell_through: Decimal,
+    week: int,
+    target: Decimal,
+    gap: Decimal,
+    discount: Decimal,
+    broken_size: bool,
+    floor: Decimal | None,
+    capped: bool,
 ) -> str:
     bits = [
         f"{sell_through:.0f}% sold by week {week} (target {target:.0f}%) — "
@@ -107,7 +120,10 @@ def generate_recommendations(season_code: str) -> int:
     written = 0
     for group in groups:
         brand_name, design, color, item = (
-            group["brand"], group["design"], group["color"], group["item"]
+            group["brand"],
+            group["design"],
+            group["color"],
+            group["item"],
         )
         brand = Brand.objects.filter(name=brand_name).first() if brand_name else None
         on_hand = int(group["on_hand"] or 0)
@@ -138,10 +154,7 @@ def generate_recommendations(season_code: str) -> int:
             .annotate(t=Sum("net_qty"))
         )
         sizes = list(by_size)
-        broken_size = (
-            len(sizes) > 1
-            and 0 < sum(1 for s in sizes if (s["t"] or 0) > 0) < len(sizes)
-        )
+        broken_size = len(sizes) > 1 and 0 < sum(1 for s in sizes if (s["t"] or 0) > 0) < len(sizes)
 
         # Low-volume styles: sell-through is noise, so trigger on age instead.
         use_gap = total_units >= MIN_UNITS_FOR_SELL_THROUGH
@@ -175,8 +188,14 @@ def generate_recommendations(season_code: str) -> int:
                 margin_floor_pct=floor,
                 recommended_discount_pct=recommended,
                 reason=_reason(
-                    sell_through=sell_through, week=weeks_in_stock, target=target, gap=gap,
-                    discount=recommended, broken_size=broken_size, floor=floor, capped=capped,
+                    sell_through=sell_through,
+                    week=weeks_in_stock,
+                    target=target,
+                    gap=gap,
+                    discount=recommended,
+                    broken_size=broken_size,
+                    floor=floor,
+                    capped=capped,
                 ),
                 status=EossRecommendation.Status.PENDING,
             ),
