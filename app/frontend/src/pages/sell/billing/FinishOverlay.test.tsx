@@ -31,6 +31,7 @@ describe("the finish overlay", () => {
         bill={bill()}
         cashReceivedPaise={50000}
         printProblem=""
+        busy={false}
         onPrint={() => undefined}
         onNext={() => undefined}
       />,
@@ -54,6 +55,7 @@ describe("the finish overlay", () => {
         bill={bill({ exchange: { original: { fy: "26-27", till_seq: 40 }, lines: [] } })}
         cashReceivedPaise={49900}
         printProblem="The printer is off. The bill is saved - press Reprint when ready."
+        busy={false}
         onPrint={() => undefined}
         onNext={() => undefined}
       />,
@@ -62,5 +64,20 @@ describe("the finish overlay", () => {
     expect(html).toContain("Exchange saved");
     expect(html).toContain("The printer is off");
     expect(html).toContain("Print again");
+  });
+
+  it("waits for the initial print attempt before starting the next bill", () => {
+    const html = renderToStaticMarkup(
+      <FinishOverlay
+        bill={bill()}
+        cashReceivedPaise={49900}
+        printProblem=""
+        busy={true}
+        onPrint={() => undefined}
+        onNext={() => undefined}
+      />,
+    );
+
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
   });
 });

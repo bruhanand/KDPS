@@ -1377,6 +1377,7 @@ function Counter({
           bill={lastBill.bill}
           cashReceivedPaise={lastBill.cashReceivedPaise}
           printProblem={printProblem}
+          busy={saving}
           onPrint={() => void print(lastBill.receipt)}
           onNext={nextBill}
         />

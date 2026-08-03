@@ -12,12 +12,14 @@ export function FinishOverlay({
   bill,
   cashReceivedPaise,
   printProblem,
+  busy,
   onPrint,
   onNext,
 }: {
   bill: QueuedBill;
   cashReceivedPaise: number;
   printProblem: string;
+  busy: boolean;
   onPrint: () => void;
   onNext: () => void;
 }) {
@@ -30,8 +32,8 @@ export function FinishOverlay({
   const change = changeFor(cashReceivedPaise, cashTaken);
 
   useEffect(() => {
-    nextButton.current?.focus();
-  }, []);
+    if (!busy) nextButton.current?.focus();
+  }, [busy]);
 
   function keepFocusInside(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== "Tab" || !printButton.current || !nextButton.current) return;
@@ -101,10 +103,10 @@ export function FinishOverlay({
         </div>
 
         <footer className="bill-finish-actions">
-          <button ref={printButton} type="button" className="btn" onClick={onPrint}>
+          <button ref={printButton} type="button" className="btn" disabled={busy} onClick={onPrint}>
             <Printer size={16} /> Print again
           </button>
-          <button ref={nextButton} type="button" className="btn primary" onClick={onNext}>
+          <button ref={nextButton} type="button" className="btn primary" disabled={busy} onClick={onNext}>
             Next bill <kbd>Enter</kbd>
           </button>
         </footer>
