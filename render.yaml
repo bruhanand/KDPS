@@ -47,7 +47,9 @@ services:
       uv run python manage.py collectstatic --noinput &&
       uv run python manage.py migrate &&
       uv run python manage.py seed_foundation &&
-      uv run python manage.py seed_ptmapper
+      uv run python manage.py seed_ptmapper &&
+      uv run python manage.py seed_outbound_demo &&
+      uv run python manage.py seed_demo_data
     startCommand: uv run uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
