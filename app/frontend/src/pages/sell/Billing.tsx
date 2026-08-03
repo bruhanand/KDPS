@@ -58,6 +58,7 @@ import { BillBar } from "./billing/BillBar";
 import type { CounterMode } from "./billing/BillBar";
 import { ScanHero } from "./billing/ScanHero";
 import { CustomerStrip } from "./billing/CustomerStrip";
+import { FinishOverlay } from "./billing/FinishOverlay";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
 import { RailFoot } from "./billing/RailFoot";
@@ -173,7 +174,15 @@ function Counter({
   const [holding, setHolding] = useState(false);
   const [note, setNote] = useState("");
   const [printProblem, setPrintProblem] = useState("");
-  const [lastBill, setLastBill] = useState<{ bill: QueuedBill; receipt: string } | null>(null);
+  const [lastBill, setLastBill] = useState<{
+    bill: QueuedBill;
+    receipt: string;
+    cashReceivedPaise: number;
+  } | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
+  /** Only the newest print attempt may speak to the screen. A reprint can be
+   * superseded by another reprint or by the next customer's first scan. */
+  const printRun = useRef(0);
   const [typed, setTyped] = useState("");
   /** A barcode this counter could not place, waiting on the cashier to say
    *  whether it is a mistyped tag or a piece that arrived before its paperwork
@@ -564,6 +573,7 @@ function Counter({
    *  `resumeHold` needs its own message rather than a blank `note`, so it
    *  keeps clearing `printProblem` on its own instead of calling this. */
   const startingANewBill = useCallback(() => {
+    printRun.current += 1;
     setNote("");
     setPrintProblem("");
   }, []);
@@ -849,6 +859,13 @@ function Counter({
     scan.focus();
   }
 
+  function nextBill() {
+    freshCounter();
+    startingANewBill();
+    setFinishOpen(false);
+    window.requestAnimationFrame(scan.focus);
+  }
+
   // --- bills on hold (#185, grill Q13) --------------------------------------
 
   const holds = till?.held ?? [];
@@ -961,7 +978,9 @@ function Counter({
   }
 
   async function print(receipt: string): Promise<void> {
+    const run = ++printRun.current;
     const outcome = await browserPrintAdapter.print(receipt);
+    if (run !== printRun.current) return;
     setPrintProblem(
       outcome.ok
         ? ""
@@ -984,6 +1003,7 @@ function Counter({
    */
   async function save() {
     if (!engine || blocked || saving) return;
+    let refocusScan = true;
     setSaving(true);
     setPrintProblem("");
     try {
@@ -999,11 +1019,17 @@ function Counter({
         cashReceivedPaise: cart.payment.cash_received_paise,
         describe: describeFrom(bill.lines),
       });
-      setLastBill({ bill: queued, receipt });
+      setLastBill({
+        bill: queued,
+        receipt,
+        cashReceivedPaise: cart.payment.cash_received_paise,
+      });
       freshCounter();
       await clearDraft(engine.db);
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
+        setFinishOpen(true);
+        refocusScan = false;
         await print(receipt);
       } else {
         leavePaperMode();
@@ -1016,7 +1042,7 @@ function Counter({
       setNote(messageOf(error));
     } finally {
       setSaving(false);
-      scan.focus();
+      if (refocusScan) scan.focus();
     }
   }
 
@@ -1057,11 +1083,13 @@ function Counter({
 
   useCounterKeys({
     disabled: Boolean(asking || charging || showHolds || counterBlocked || saving || holding),
+    finishOpen,
     onHold: () => void holdBill(),
     onLookup: () => navigate("/sell/customers"),
     onNewBill: newBill,
     onSave: () => void save(),
     onBackToScan: dismissCounterError,
+    onNextBill: nextBill,
   });
 
   // "Did you mean" and "bill it off the tag" both hang off the scan box as one
@@ -1082,7 +1110,7 @@ function Counter({
     <div className="bill-page" data-mode={mode}>
       {/* The counter owns its identity now: no generic page header, breadcrumb,
           or section tabs are allowed into this room. */}
-      <div className="bill-top">
+      <div className="bill-top" aria-hidden={finishOpen || undefined}>
         <BillBar
           mode={mode}
           nextNumber={till?.nextNumber ?? ""}
@@ -1106,7 +1134,7 @@ function Counter({
             mode={mode}
             boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
             value={typed}
-            disabled={locked || counterBlocked}
+            disabled={locked || counterBlocked || finishOpen}
             placeholder={mode === "sale" ? "Scan a tag, or type a design number" : "Scan a bill number"}
             hasError={Boolean(unknown)}
             errorBarcode={unknown}
@@ -1255,7 +1283,7 @@ function Counter({
           window on one till - and Rule 5 says collapsing alerts to one line
           must not soften that: rather than a thin banner above a bill nobody
           can act on, a blocked counter takes over this whole band. */}
-      <div className="bill-work">
+      <div className="bill-work" aria-hidden={finishOpen || undefined}>
         {till?.blocked ? (
           <p
             className="bill-alert bill-alert-stop bill-blocked-area"
@@ -1343,6 +1371,17 @@ function Counter({
           </>
         )}
       </div>
+
+      {finishOpen && lastBill && (
+        <FinishOverlay
+          bill={lastBill.bill}
+          cashReceivedPaise={lastBill.cashReceivedPaise}
+          printProblem={printProblem}
+          busy={saving}
+          onPrint={() => void print(lastBill.receipt)}
+          onNext={nextBill}
+        />
+      )}
 
       {/* "Did you mean" and "bill it off the tag" (G-4): portaled to
           `document.body` and placed by `usePositionedPopover`, so neither can

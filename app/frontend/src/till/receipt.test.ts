@@ -127,6 +127,16 @@ describe("the customer's copy", () => {
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain("</html>");
   });
+
+  it("prints a scannable full bill number at the foot of every copy", () => {
+    const html = receiptHtml(bill(), STORE);
+
+    expect(html).toContain('class="receipt-barcode"');
+    expect(html).toContain('aria-label="Bill 26-27/DEO/SAL/74"');
+    expect(html).toContain("Scan it to bring anything back");
+    expect(html).toContain("26-27/DEO/SAL/74");
+    expect(html).toContain("box-sizing: border-box; width: 80mm");
+  });
 });
 
 describe("a B2B tax invoice (#187)", () => {

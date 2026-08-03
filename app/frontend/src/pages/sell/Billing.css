@@ -485,6 +485,46 @@ select.bill-salesman-missing { border-color: var(--amber-bd); background: var(--
 .bill-known-customer { display: flex; align-items: center; gap: 7px; margin: 9px 0 0; color: var(--green); font-size: 12px; }
 .bill-known-customer > span { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 
+/* The sale is already durable when this lands. It takes over the counter so a
+   second customer cannot be added behind a saved bill; Enter is its one key. */
+.bill-finish-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
+  padding: 24px; background: var(--scrim-modal); backdrop-filter: blur(5px);
+}
+.bill-finish {
+  width: min(720px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+  border: 1px solid var(--hairline); border-radius: 18px; background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.bill-finish-head { display: flex; align-items: center; gap: 14px; padding: 22px 24px 16px; }
+.bill-finish-head h2 { margin: 2px 0; font-size: 24px; }
+.bill-finish-head p { margin: 0; }
+.bill-finish-check {
+  flex: 0 0 auto; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 50%; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
+.bill-finish-print-problem { margin: 0 24px 16px; }
+.bill-finish-body { display: grid; grid-template-columns: 1fr 1.25fr; gap: 18px; padding: 0 24px 22px; }
+.bill-finish-payment, .bill-finish-barcode { border: 1px solid var(--hairline); border-radius: 12px; background: var(--inner); }
+.bill-finish-paid { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px; }
+.bill-finish-paid strong { font: 600 23px/1 var(--mono); }
+.bill-finish-split { border-top: 1px solid var(--hairline); padding: 8px 14px; }
+.bill-finish-split > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; color: var(--muted); }
+.bill-finish-split .bill-finish-change { margin-top: 5px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--green); }
+.bill-finish-barcode { display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 14px; text-align: center; }
+.bill-finish-barcode svg { display: block; width: 100%; height: 74px; fill: var(--ink); }
+.bill-finish-barcode > strong { overflow-wrap: anywhere; }
+.bill-finish-barcode > span { color: var(--muted); font-size: 11px; }
+.bill-finish-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--hairline); }
+.bill-finish-actions .btn { min-width: 140px; justify-content: center; }
+.bill-finish-actions kbd { margin-left: 8px; padding: 2px 6px; border: 1px solid currentColor; border-radius: 4px; font: 10px/1 var(--mono); opacity: .72; }
+
+@media (max-width: 680px) {
+  .bill-finish-body { grid-template-columns: 1fr; }
+  .bill-finish-actions { flex-direction: column-reverse; }
+  .bill-finish-actions .btn { width: 100%; }
+}
+
 /* The phone book, under the mobile field (#249, Q11: nothing pushes the
    layout). Portaled to `document.body` and placed by `usePositionedPopover`,
    which here is load-bearing twice: the rail is a scroll box of its own and
