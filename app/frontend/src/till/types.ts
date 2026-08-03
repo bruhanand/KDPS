@@ -140,6 +140,8 @@ export interface TillPolicy {
   /** Whether head office allows a cashier's manual discount to stack on a line
    * already reduced by the rulebook. Defaults to false for an older server. */
   manual_discount_on_offer_lines: boolean;
+  /** How many local calendar days after its bill an exchange needs no manager. */
+  return_window_days: number;
 }
 
 export interface TillStoreIdentity {

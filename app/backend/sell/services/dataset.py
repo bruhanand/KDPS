@@ -392,7 +392,7 @@ def _seasons() -> list[dict[str, Any]]:
     ]
 
 
-def _policy() -> dict[str, str | bool]:
+def _policy() -> dict[str, str | bool | int]:
     """The dials the counter has to hold offline.
 
     The cap is B2: below it a manual discount is the cashier's to give, above it
@@ -406,7 +406,8 @@ def _policy() -> dict[str, str | bool]:
     arrived as 7.499999 would put the counter and the server on opposite sides of
     a cap.
     """
-    return SellPolicy.current().as_till_policy()
+    policy = SellPolicy.current()
+    return {**policy.as_till_policy(), "return_window_days": policy.return_window_days}
 
 
 def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:

@@ -42,9 +42,16 @@ describe("the dataset landing", () => {
 
     await applyDataset(db, old);
 
-    expect(await readMeta<TillPolicy>(db, META.policy, { manual_discount_cap_percent: "99.00", manual_discount_on_offer_lines: true })).toEqual({
+    expect(
+      await readMeta<TillPolicy>(db, META.policy, {
+        manual_discount_cap_percent: "99.00",
+        manual_discount_on_offer_lines: true,
+        return_window_days: 99,
+      }),
+    ).toEqual({
       manual_discount_cap_percent: "0.00",
       manual_discount_on_offer_lines: false,
+      return_window_days: 0,
     });
   });
 
@@ -55,9 +62,16 @@ describe("the dataset landing", () => {
 
     await applyDataset(db, old);
 
-    expect(await readMeta<TillPolicy>(db, META.policy, { manual_discount_cap_percent: "0.00", manual_discount_on_offer_lines: true })).toEqual({
+    expect(
+      await readMeta<TillPolicy>(db, META.policy, {
+        manual_discount_cap_percent: "0.00",
+        manual_discount_on_offer_lines: true,
+        return_window_days: 99,
+      }),
+    ).toEqual({
       manual_discount_cap_percent: "7.50",
       manual_discount_on_offer_lines: false,
+      return_window_days: 0,
     });
   });
 

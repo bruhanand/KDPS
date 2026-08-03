@@ -9,6 +9,7 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import {
   describeOriginal,
+  isPastReturnWindow,
   lateReturnAsk,
   legFor,
   parkExchange,
@@ -80,20 +81,16 @@ function Counter() {
   const [asking, setAsking] = useState<Ask[] | null>(null);
   /** Wrong PINs at this counter, and the pause they earn - see `useWrongPins`. */
   const pins = useWrongPins();
-  /** The manager's *second* answer, for a bill older than the window. Asked for
-   *  separately because it is a separate decision - a tick that came free with
-   *  the first one would make the window a thing nobody ever chose to set
-   *  aside. */
-  const [lateOk, setLateOk] = useState(false);
-
   const online = till?.online ?? false;
   const legs = useMemo(() => legsFrom(found, picked), [found, picked]);
   const total = legs.reduce((n, leg) => n + leg.refund_paise, 0);
+  const isLate = found
+    ? isPastReturnWindow(found.billed_at, world.policy.return_window_days)
+    : false;
 
   function reset() {
     setFound(null);
     setPicked({});
-    setLateOk(false);
     setFailed("");
   }
 
@@ -191,7 +188,7 @@ function Counter() {
   }
 
   const asks: Ask[] =
-    legs.length && lateOk && found
+    legs.length && isLate && found
       ? [lateReturnAsk({ original: found.original, lines: legs })]
       : [];
 
@@ -267,16 +264,12 @@ function Counter() {
               What the customer actually paid for these pieces, not today&rsquo;s ticket price.
             </p>
 
-            <label className="rx-late">
-              <input
-                type="checkbox"
-                data-testid="rx-late"
-                checked={lateOk}
-                onChange={(e) => setLateOk(e.target.checked)}
-              />
-              This bill is past the store&rsquo;s return window and the manager is taking it back
-              anyway
-            </label>
+            {isLate && (
+              <p className="warn-note" data-testid="rx-late">
+                This bill is past the store&rsquo;s {world.policy.return_window_days}-day return
+                window. A manager must approve taking it back.
+              </p>
+            )}
 
             <div className="rx-buttons">
               <button

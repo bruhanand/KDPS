@@ -206,6 +206,19 @@ export function lateReturnAsk(exchange: Exchange): Ask {
   };
 }
 
+/** Whether the original bill is beyond the cached local-calendar-day window. */
+export function isPastReturnWindow(
+  billedAt: string,
+  windowDays: number,
+  now: Date = new Date(),
+): boolean {
+  const billed = new Date(billedAt);
+  if (Number.isNaN(billed.getTime())) return true;
+  const localDay = (date: Date): number =>
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+  return localDay(now) - localDay(billed) > Math.max(0, windowDays);
+}
+
 /** Whether this bill can close with these legs on it - or why not.
  *
  *  Only the counter's own refusals; what the *bill* still needs is

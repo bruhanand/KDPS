@@ -231,7 +231,7 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     store = _resolve_store(data["store"], actor)  # step 1
     original_bill = _resolve_original_bill(data, store)  # step 8
     lines = _prepare_lines(data, store, original_bill)  # steps 5, 8
-    late_return = _mark_late_returns(lines, original_bill)
+    late_return = _mark_late_returns(lines, original_bill, data["billed_at"])
     _check_line_arithmetic(lines)  # step 3
     _check_totals(data, lines)  # step 3
     rulebook = _server_resolution(data, store, lines)  # steps 6 and 12 share it
@@ -360,7 +360,9 @@ def _prepare_lines(
     return prepared
 
 
-def _mark_late_returns(lines: list[_PreparedLine], original_bill: Sale | None) -> bool:
+def _mark_late_returns(
+    lines: list[_PreparedLine], original_bill: Sale | None, exchanged_at: Any
+) -> bool:
     """Mark a known exchange whose original bill is outside the policy window.
 
     Lateness is derived from the submitted original and today's policy, never
@@ -369,7 +371,10 @@ def _mark_late_returns(lines: list[_PreparedLine], original_bill: Sale | None) -
     """
     if original_bill is None or not any(line.is_return for line in lines):
         return False
-    days_old = (timezone.localdate() - timezone.localdate(original_bill.billed_at)).days
+    # Judge when the offline exchange happened, not when its queue eventually
+    # reaches head office. Crossing midnight while offline must not turn a valid,
+    # already-printed bill into a refusal.
+    days_old = (timezone.localdate(exchanged_at) - timezone.localdate(original_bill.billed_at)).days
     late = days_old > SellPolicy.current().return_window_days
     if late:
         for line in lines:

@@ -33,6 +33,9 @@ import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./t
 export const DEFAULT_POLICY: TillPolicy = {
   manual_discount_cap_percent: "0.00",
   manual_discount_on_offer_lines: false,
+  // An older server cannot establish that yesterday's bill is still in-window.
+  // Zero fails closed: anything from an earlier local date asks a manager.
+  return_window_days: 0,
 };
 
 /** Slowest a failing queue will retry, and the plain interval it drains on
@@ -149,6 +152,8 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
               payload.policy?.manual_discount_cap_percent ?? DEFAULT_POLICY.manual_discount_cap_percent,
             manual_discount_on_offer_lines:
               payload.policy?.manual_discount_on_offer_lines ?? false,
+            return_window_days:
+              payload.policy?.return_window_days ?? DEFAULT_POLICY.return_window_days,
           },
         },
         { key: META.syncedAt, value: new Date().toISOString() },

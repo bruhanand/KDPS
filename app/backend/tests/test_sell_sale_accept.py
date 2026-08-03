@@ -788,6 +788,7 @@ def test_a_late_exchange_needs_a_store_manager_and_records_their_evidence(counte
     assert original_response.status_code == 201
     original = Sale.objects.get(pk=original_response.json()["id"])
     payload = _exchange_payload(counter, original, till_seq=2)
+    payload["billed_at"] = timezone.now().isoformat()
 
     refused = _post(counter, payload)
 
@@ -809,6 +810,25 @@ def test_a_late_exchange_needs_a_store_manager_and_records_their_evidence(counte
     assert exchange.override_kind == "late_return"
     assert exchange.override_at is not None
     assert exchange.lines.get(direction=SaleLine.Direction.RETURN).override_by == counter["manager"]
+
+
+def test_an_offline_exchange_is_judged_when_it_happened_not_when_it_syncs(counter):
+    policy = SellPolicy.current()
+    policy.return_window_days = 7
+    policy.save(update_fields=["return_window_days"])
+    original_payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    original_payload["billed_at"] = (timezone.now() - timedelta(days=8)).isoformat()
+    original_response = _post(counter, original_payload)
+    original = Sale.objects.get(pk=original_response.json()["id"])
+    payload = _exchange_payload(counter, original, till_seq=2)
+    # The exchange happened yesterday, exactly seven local dates after the sale,
+    # but only reached the server today after its window had crossed.
+    payload["billed_at"] = (timezone.now() - timedelta(days=1)).isoformat()
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get(pk=response.json()["id"]).override_by is None
 
 
 def test_an_in_window_exchange_discards_unsolicited_manager_evidence(counter):

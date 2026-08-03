@@ -309,6 +309,7 @@ def test_the_discount_cap_rides_down_so_the_counter_can_hold_it(till):
     assert body["policy"] == {
         "manual_discount_cap_percent": "7.50",
         "manual_discount_on_offer_lines": False,
+        "return_window_days": policy.return_window_days,
     }
 
 

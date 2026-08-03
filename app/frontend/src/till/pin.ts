@@ -41,9 +41,6 @@ export const LATE_RETURN = "late_return" as const;
 
 export type AuthorisationKind = typeof LATE_RETURN;
 
-/** The kinds a *bill* can carry, which is what `override.kind` is spelled from. */
-export const WIRE_KINDS = [LATE_RETURN] as const;
-
 /**
  * One thing on a bill that a manager has to agree to.
  *
@@ -93,11 +90,6 @@ export function covers(authorisation: Authorisation | null, asks: Ask[]): boolea
       (seen) => seen.kind === ask.kind && seen.ref === ask.ref && ask.paise <= seen.paise,
     ),
   );
-}
-
-/** The kinds among a set of asks, in the fixed order they are always written. */
-export function kindsOf(asks: Ask[]): AuthorisationKind[] {
-  return WIRE_KINDS.filter((kind) => asks.some((ask) => ask.kind === kind));
 }
 
 /**

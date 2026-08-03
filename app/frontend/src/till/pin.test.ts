@@ -14,7 +14,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   covers,
-  kindsOf,
   LATE_RETURN,
   verifyPin,
   whoAuthorised,
@@ -165,17 +164,5 @@ describe("what an authorisation covers", () => {
 
   it("is needed by a bill that asks for something", () => {
     expect(covers(null, [note("CRN/9", 1)])).toBe(false);
-  });
-});
-
-describe("the kinds among a set of asks", () => {
-  it("is always written in one order, whatever order they arrived in", () => {
-    const asks = [note("CRN/9", 1), note("CRN/10", 1)];
-
-    expect(kindsOf(asks)).toEqual(["late_return"]);
-  });
-
-  it("is empty for an ordinary bill", () => {
-    expect(kindsOf([])).toEqual([]);
   });
 });
