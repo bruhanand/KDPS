@@ -243,7 +243,7 @@ class CreditNote(Document):
         blank=True,
         on_delete=models.PROTECT,
         related_name="credit_notes_issued",
-        help_text="The historical standalone return that issued it. Exactly one of the two sources "
+        help_text="The plain return that issued it. Exactly one of the two sources "
         "is ever set - a note is handed over either at the end of a bill or at the "
         "end of a return, and never both.",
     )
