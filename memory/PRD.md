@@ -184,7 +184,7 @@ The app now RUNS in the Emergent container (previously down: no Django in venv +
 - Installed Django 5.1 + psycopg + DRF + simplejwt + drf-spectacular + cors + whitenoise + openpyxl/xlrd/pyxlsb into the served venv `/root/.venv` (py3.11). `aiagents` is NOT in INSTALLED_APPS so litellm/emergentintegrations (already present) aren't needed at boot.
 - Ran `migrate` (incl. pg_trgm) + `seed_foundation` + `seed_ptmapper`. Restarted backend.
 - **Verified:** local + external login → 200 (JWT); external authed `/api/masters/stores` returns seeded Bihar/Jharkhand stores; frontend renders; CORS clean; console shows only Vite connect.
-- App URL: `https://promo-engine-core.preview.emergentagent.com` (also reachable via APP_URL host `4c10e8e1-…`). Both route to this backend. Frontend `.env` REACT_APP_BACKEND_URL left as-is (`kdps-delivery-check…`, confirmed routing to this container).
+- App URL: `https://fabric-flow-mbo.preview.emergentagent.com` (also reachable via APP_URL host `4c10e8e1-…`). Both route to this backend. Frontend `.env` REACT_APP_BACKEND_URL left as-is (`kdps-delivery-check…`, confirmed routing to this container).
 - One-command re-provision script: `/app/scripts/dev-bootstrap.sh` (idempotent).
 - NOTE: this container uses PostgreSQL for KDPS; MongoDB also runs (platform default) but is unused by the app.
 

@@ -6,7 +6,7 @@ Sprint 1: Build the Outbound module (transfers, returns, adjustments, write-offs
 ## Application Overview
 - **Backend**: Django 5.1 + DRF + PostgreSQL at http://localhost:8001
 - **Frontend**: React + TypeScript + Vite PWA at http://localhost:3000
-- **Preview**: https://promo-engine-core.preview.emergentagent.com
+- **Preview**: https://fabric-flow-mbo.preview.emergentagent.com
 - **OpenAPI schema**: GET http://localhost:8001/api/schema/ (YAML)
 
 ## Auth

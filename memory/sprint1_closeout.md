@@ -112,7 +112,7 @@ LP-SLIM-WHT-38        brand=V Louis Philippe          qty=13
 
 | File | Before | After |
 |------|--------|-------|
-| `frontend/.env` | `REACT_APP_BACKEND_URL=https://promo-engine-core.preview.emergentagent.com` | `REACT_APP_BACKEND_URL=` (empty → same-origin) |
+| `frontend/.env` | `REACT_APP_BACKEND_URL=https://fabric-flow-mbo.preview.emergentagent.com` | `REACT_APP_BACKEND_URL=` (empty → same-origin) |
 | `frontend/src/lib/api.ts` | Hard throw on missing BASE | Graceful fallback to `""` (same-origin) |
 
 ---
