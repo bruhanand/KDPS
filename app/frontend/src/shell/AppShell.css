@@ -1,5 +1,5 @@
 /* The shell is a column: one bar across the whole top, then a row holding the
-   sidebar card and the page (macOS System Settings, not an admin template).
+   navigation rail and the page.
    `.shell` is the only box sized to the window and `.content` the only box
    that scrolls - every popup cap in this app is written against a window that
    never scrolls itself. */
@@ -7,34 +7,34 @@
 .shell-body { flex: 1; display: flex; min-height: 0; }
 
 /* ---------- sidebar ---------- */
-/* A card that floats on the paper beside the page and runs the whole height of
-   the working area, whatever it holds. It used to close under its last item
+/* A flat rail attached to the viewport edge and running the whole height of the
+   working area, whatever it holds. It used to close under its last item
    (`align-self: flex-start`, macOS System Settings) - which left a cashier's
    ten-item menu stopping half way down the window with bare page beneath it,
    and put the profile in nobody's corner. Stretching is the default for a flex
-   item, so the card now simply fills the row between its margins.
+   item, so the rail simply fills the row.
 
    The menu keeps its own size at the top and the space below it stays blank -
-   nothing is stretched or spread to fill the card. When the menu is longer than
-   the card it is the *nav* that scrolls, inside a card whose head and profile
+   nothing is stretched or spread to fill the rail. When the menu is longer than
+   the rail it is the *nav* that scrolls, inside a rail whose head and profile
    stay put. The width animates between rail and open - and stays out of the way
    of a live drag, which must track the pointer exactly. */
 .sidebar {
   flex: none;
   min-height: 0;
   background: var(--sidebar);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 18px;
-  box-shadow: var(--shadow-rest);
-  margin: 12px 0 12px 12px;
+  border: 0;
+  border-right: 1px solid var(--sidebar-border);
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
   display: flex;
   flex-direction: column;
   position: relative;
   transition: width .18s ease;
 }
 body.sidebar-resizing .sidebar { transition: none; }
-/* A thin rounded scrollbar, so a long menu scrolling inside the card does not
-   put a system-width gutter through the card's rounded edge. */
+/* A thin scrollbar keeps a long menu from taking a system-width gutter. */
 .nav { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .nav::-webkit-scrollbar { width: 8px; }
 .nav::-webkit-scrollbar-thumb {
@@ -43,11 +43,15 @@ body.sidebar-resizing .sidebar { transition: none; }
 }
 .nav::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
 
-/* The gutter between card and page *is* the resize handle: a flex sibling of
-   the card, so it spans the full height and never scrolls with the menu. */
-.sidebar-resizer { flex: none; width: 12px; cursor: col-resize; position: relative; z-index: 5; }
+/* The resize handle straddles the divider without inserting a gutter between
+   the rail and the page. It remains a flex sibling so it spans the full height
+   and never scrolls with the menu. */
+.sidebar-resizer {
+  flex: none; width: 12px; margin-left: -6px; margin-right: -6px;
+  cursor: col-resize; position: relative; z-index: 5;
+}
 .sidebar-resizer::after {
-  content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 52px;
+  content: ""; position: absolute; top: 50%; left: 5px; width: 2px; height: 52px;
   transform: translateY(-50%); border-radius: 999px; background: transparent;
   transition: background-color .15s;
 }
@@ -71,14 +75,13 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .nav-group { padding: 2px 0; }
 .nav-group-head {
   display: flex; align-items: center; gap: 10px; padding: 7px 10px;
-  border-radius: 10px; transition: background-color .12s;
+  min-height: 44px; border-radius: 10px; position: relative;
+  transition: background-color .12s, color .12s;
 }
 .nav-group-toggle {
   width: 100%; background: none; border: 0; cursor: pointer; text-align: left;
   font: inherit;
 }
-.nav-group-toggle:hover { background: rgba(var(--rust-rgb), .06); }
-.nav-group-toggle:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
 .nav-chev {
   margin-left: auto; color: var(--caption); flex: none;
   transform: rotate(-90deg); transition: transform .16s ease;
@@ -86,30 +89,28 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .nav-chev.open { transform: rotate(0deg); }
 .nav-group-label.holds-active { color: var(--rust); }
 .nav-ic {
-  width: 30px; height: 30px; border-radius: 9px; background: var(--surface);
-  border: 1px solid var(--sidebar-border); display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 0; background: transparent;
+  border: 0; display: flex; align-items: center; justify-content: center;
   flex: none;
 }
+.nav-group-toggle:has(+ .nav-items .nav-item.active) .nav-ic { color: var(--rust) !important; }
 .nav-group-label { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--caption); }
-/* A one-line row is a link the whole way across, so its pill covers the icon
-   too - the same shape a section head hovers into. */
+/* A one-line row is a link the whole way across, so its transient interaction
+   state covers the icon as well as the label. */
 .nav-grouplink { font-size: 14.5px; font-weight: 600; color: var(--navy); }
-.nav-grouplink:hover { background: rgba(var(--rust-rgb), .08); }
 .nav-grouplink.active { background: rgba(var(--rust-rgb), .14); color: var(--rust); font-weight: 700; }
-.nav-grouplink.active .nav-ic { border-color: rgba(var(--rust-rgb), .35); }
+.nav-grouplink.active .nav-ic { color: var(--rust) !important; }
 /* #96's grouping heading, which nested section heads one step in, is gone:
    D10 folds those sections onto one page instead, and a fold draws as a plain
    one-line section (`.nav-grouplink`). No subsections in the sidebar, ever. */
 .nav-items { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 2px 40px; }
 .nav-item {
+  display: flex; align-items: center;
   font-size: 13.5px; color: var(--muted); padding: 7px 11px; border-radius: 10px;
   transition: background-color .12s, color .12s; position: relative;
 }
 .nav-item[draggable="true"] { cursor: grab; }
 .nav-item[draggable="true"]:active { cursor: grabbing; }
-.nav-item:hover { background: rgba(var(--rust-rgb), .08); color: var(--ink); }
-/* The tinted pill is the whole of "you are here". The left bar this row used
-   to carry as well was a second indicator for one state. */
 .nav-item.active { background: rgba(var(--rust-rgb), .14); color: var(--rust); font-weight: 700; }
 
 /* ---------- icon rail (#230) ----------
@@ -121,11 +122,31 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 
 .rail-link, .rail-flyout-trigger {
   display: flex; align-items: center; justify-content: center; width: 100%;
-  padding: 4px 0; border: 0; background: transparent; cursor: pointer; border-radius: 9px;
+  min-height: 44px; padding: 4px 0; border: 0; background: transparent;
+  border-radius: 10px; cursor: pointer; position: relative;
 }
-.rail-link:hover .nav-ic, .rail-flyout-trigger:hover .nav-ic { background: rgba(var(--rust-rgb), .08); }
+.rail-link.active, .rail-flyout-trigger.active { background: rgba(var(--rust-rgb), .14); }
 .rail-link.active .nav-ic, .rail-flyout-trigger.active .nav-ic {
-  background: rgba(var(--rust-rgb), .14); border-color: var(--rust);
+  background: transparent; color: var(--rust) !important;
+}
+
+/* Hover and press are transient state layers; keyboard focus remains visible
+   without turning any control back into a persistent tile. */
+.nav-group-toggle:hover, .nav-grouplink:hover, .nav-item:hover,
+.rail-link:hover, .rail-flyout-trigger:hover,
+.sidebar-rail-toggle:hover, .profile-btn:hover {
+  background: rgba(var(--rust-rgb), .08);
+}
+.nav-group-toggle:active, .nav-grouplink:active, .nav-item:active,
+.rail-link:active, .rail-flyout-trigger:active,
+.sidebar-rail-toggle:active, .profile-btn:active {
+  background: rgba(var(--rust-rgb), .14);
+}
+.nav-grouplink:not(.active):hover, .nav-item:not(.active):hover { color: var(--ink); }
+.nav-group-toggle:focus-visible, .nav-grouplink:focus-visible, .nav-item:focus-visible,
+.rail-link:focus-visible, .rail-flyout-trigger:focus-visible,
+.sidebar-rail-toggle:focus-visible, .profile-btn:focus-visible {
+  outline: 2px solid var(--rust); outline-offset: -2px;
 }
 
 .rail-flyout-wrap { position: relative; width: 100%; }
@@ -145,10 +166,11 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 
 .sidebar-rail-toggle {
   display: flex; align-items: center; justify-content: center; flex: none;
-  padding: 7px; border: 1px solid var(--sidebar-border); border-radius: 9px;
-  background: var(--surface); color: var(--muted); cursor: pointer; transition: background-color .12s;
+  width: 44px; height: 44px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background-color .12s, color .12s;
 }
-.sidebar-rail-toggle:hover { background: var(--inner); color: var(--ink); }
+.sidebar-rail-toggle:hover { color: var(--ink); }
 .rail-chev { transition: transform .16s ease; }
 .rail-chev.flipped { transform: rotate(180deg); }
 
@@ -276,37 +298,28 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .switcher-btn.locked:hover { background: var(--inner); }
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---------- the profile, in the bottom corner of the sidebar card ----------
+/* ---------- the profile footer ----------
    The sidebar owns who you are; the bar owns where you are. Outside the
    nav's scroller like the head, so a long menu scrolls between the two and
-   the person - and the way out - stay under the hand. `margin-top: auto` is
-   what puts it in the corner: the card runs the full height now, so that
-   corner really is the bottom corner of the window.
-
-   A tile, not a row. It has its own surface, border and shadow and sits inside
-   the card with a margin all round, so it reads as a separate object you can
-   press rather than the hover-only strip it used to be. There is no hairline
-   above it - the margin is the separation. */
+   the person - and the way out - stay under the hand. It is a flat row at the
+   bottom of the rail, separated from navigation by one hairline. */
 .sidebar-profile {
   margin-top: auto; flex: none;
-  padding: 12px; background: var(--sidebar);
+  padding: 8px 12px; background: transparent; border-top: 1px solid var(--sidebar-border);
 }
 .profile-btn {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  background: var(--surface); border: 1px solid var(--sidebar-border); cursor: pointer;
-  padding: 11px 12px 11px 10px; border-radius: 14px; box-shadow: var(--shadow-rest);
-  transition: background-color .15s, border-color .15s, box-shadow .15s;
+  min-height: 44px; background: transparent; border: 0; cursor: pointer;
+  padding: 7px 8px; border-radius: 0; box-shadow: none;
+  transition: background-color .15s;
   text-align: left;
 }
-.profile-btn:hover { border-color: rgba(var(--rust-rgb), .35); box-shadow: var(--shadow-hover); }
-.profile-btn:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
-/* Pushed to the right edge of the tile, and gone in the rail, where the tile is
-   a square of initials with no room for it. */
+/* Pushed to the right edge of the row, and gone in the collapsed rail. */
 .profile-chev { margin-left: auto; flex: none; color: var(--caption); }
 .sidebar.rail .sidebar-profile { padding: 8px; }
 .sidebar.rail .profile-btn { justify-content: center; padding: 7px 0; }
 /* Fixed and portaled, like the rail flyout and for the same reason: the
-   card's own overflow would clip it invisibly. */
+   rail's own overflow would clip it invisibly. */
 .profile-panel {
   position: fixed; z-index: 50; min-width: 268px;
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
@@ -378,9 +391,8 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar {
     position: fixed; top: var(--topbar-h); bottom: 0; left: 0; z-index: 60;
     width: min(82vw, 300px) !important;
-    /* The drawer already ran the full height before the card did, so height is
-       not the question here - the phone only gains the new profile tile. */
-    margin: 0; border-radius: 0 18px 18px 0; border-left: 0;
+    /* The mobile drawer shares the desktop rail's flat, square edge. */
+    margin: 0; border-radius: 0; border-left: 0;
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
   }
@@ -394,6 +406,9 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
      would be an empty band above the menu. */
   .sidebar-head { display: none; }
   .sidebar-rail-toggle { display: none; }
+  /* Keep the drawer comfortably tappable without imposing phone-sized row
+     spacing on the denser desktop navigation. */
+  .nav-item { min-height: 44px; }
 
   .topbar { padding: 0 10px; gap: 8px; }
   /* No room for equal halves on a phone: the groups shrink to their content
@@ -442,7 +457,7 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 
 /* ---------- reduced motion ----------
    The shell animates three things that move a large part of the screen: the
-   card's width between rail and open, the drawer sliding in, and the chevrons
+   rail's width between collapsed and open, the drawer sliding in, and the chevrons
    that turn with them. Someone who has asked their machine for less motion
    gets the end state directly - the sidebar still collapses, the drawer still
    opens, they simply arrive rather than travel. The colour and background

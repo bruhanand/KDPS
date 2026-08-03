@@ -4,12 +4,13 @@
 # app/frontend = React/TS PWA via Vite). See README.md + DEPLOY.md.
 #
 # EVERY WORKSPACE IS ITS OWN RUNNING SYSTEM. Conductor gives each workspace a
-# stable name and a block of ten host ports; `scripts/workspace-env.sh` turns
-# those into a per-workspace Docker Compose project, so each workspace gets its
-# own Postgres container, its own volume, its own database and its own three
-# ports (PWA, API, Postgres). Workspaces can run and be tested in parallel, and
-# `archive` below destroys the container and the volume when the workspace goes:
-# the database lives exactly as long as the workspace does.
+# block of ten host ports; `scripts/workspace-env.sh` combines those with the
+# stable checkout directory (not the editable workspace display name) to create
+# a Docker Compose project. Each workspace gets its own Postgres container,
+# volume, database and three ports (PWA, API, Postgres). Workspaces can run and
+# be tested in parallel, and `archive` below destroys the container and the
+# volume when the workspace goes: the database lives exactly as long as the
+# workspace does.
 #
 # There is deliberately NO [environment_variables] DATABASE_URL here, and there
 # must never be one again. TOML values are static strings, so a URL written here
@@ -54,9 +55,10 @@ git -C "$CONDUCTOR_ROOT_PATH" fetch --prune origin && git -C "$CONDUCTOR_ROOT_PA
 # workspace sitting on an old branch cannot archive itself with a stale — or
 # missing — copy of it. The inline fallback covers the one case that leaves:
 # archiving a branch created before this landed, where the root checkout may not
-# have the script either. It must keep computing the same name as `_kdps_slug` in
-# workspace-env.sh. A mismatch would leave a workspace's database behind rather
-# than delete the wrong one, since a name that matches no project deletes nothing.
+# have the script either. It must keep computing the same directory-derived name
+# as `_kdps_slug` in workspace-env.sh. A mismatch would leave a workspace's
+# database behind rather than delete the wrong one, since a name that matches no
+# project deletes nothing.
 archive = """
 if [ -x "$CONDUCTOR_ROOT_PATH/scripts/stop-stack.sh" ]; then
   "$CONDUCTOR_ROOT_PATH/scripts/stop-stack.sh" "$PWD" || true
@@ -64,7 +66,7 @@ fi
 if [ -f "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh" ]; then
   . "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh"
 else
-  KDPS_PROJECT="kdps-$(printf '%s' "$CONDUCTOR_WORKSPACE_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9_-]/-/g' -e 's/^[^a-z0-9]*//' -e 's/[^a-z0-9]*$//')"
+  KDPS_PROJECT="kdps-$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9_-]/-/g' -e 's/^[^a-z0-9]*//' -e 's/[^a-z0-9]*$//')"
 fi
 docker compose -p "$KDPS_PROJECT" -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" down -v --remove-orphans || true
 rm -rf node_modules app/frontend/node_modules app/frontend/dist app/backend/.venv || true

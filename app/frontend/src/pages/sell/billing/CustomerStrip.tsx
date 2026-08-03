@@ -214,8 +214,7 @@ export function CustomerStrip({
             disabled={locked}
             onClick={() => setAskedForGstin(true)}
           >
-            <FileText size={14} />
-            Business bill?
+            Need a GST business bill?
           </button>
         )}
         {showGstin && (
@@ -275,7 +274,9 @@ export function CustomerStrip({
             )}
           </>
         )}
-        <p className="muted-cell bill-customer-note">The bill works without any of these.</p>
+        {showGstin && (
+          <p className="muted-cell bill-customer-note">The bill works without any of these.</p>
+        )}
       </div>
 
       {/* Portaled and placed, like every other prompt on this screen (Q11:

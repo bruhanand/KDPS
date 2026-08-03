@@ -1,3 +1,5 @@
+// @ts-expect-error Vitest runs in Node, while the production frontend deliberately excludes Node types.
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../auth/AuthContext";
 import { SyncLight } from "../till/SyncLight";
 import { AppShell } from "./AppShell";
+
+const appShellCss = readFileSync(new URL("./AppShell.css", import.meta.url), "utf8");
+const appShellRules = appShellCss.replace(/\/\*[\s\S]*?\*\//g, "");
 
 vi.mock("../till/TillProvider", () => ({
   useTill: () => ({
@@ -60,5 +65,41 @@ describe("the counter's shell chrome", () => {
 
     expect(html).toContain(">Offline<");
     expect(html).not.toContain("Offline · will sync");
+  });
+});
+
+describe("the flat sidebar stylesheet contract", () => {
+  it("attaches a square, shadowless rail directly to the left edge", () => {
+    expect(appShellRules).toMatch(
+      /\.sidebar\s*\{[^}]*border:\s*0;[^}]*border-right:\s*1px solid var\(--sidebar-border\);[^}]*border-radius:\s*0;[^}]*box-shadow:\s*none;[^}]*margin:\s*0;/s,
+    );
+    expect(appShellRules).toMatch(
+      /\.sidebar-resizer\s*\{[^}]*margin-left:\s*-6px;[^}]*margin-right:\s*-6px;/s,
+    );
+  });
+
+  it("leaves icons, the collapse control, and the profile row unboxed", () => {
+    expect(appShellRules).toMatch(
+      /\.nav-ic\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*border:\s*0;/s,
+    );
+    expect(appShellRules).toMatch(
+      /\.sidebar-rail-toggle\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s,
+    );
+    expect(appShellRules).toMatch(
+      /\.profile-btn\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*box-shadow:\s*none;/s,
+    );
+  });
+
+  it("uses a rust-tinted selected tab for expanded, nested, and rail destinations", () => {
+    expect(appShellRules).toMatch(
+      /\.nav-grouplink\.active\s*\{[^}]*background:\s*rgba\(var\(--rust-rgb\),\s*\.14\);[^}]*color:\s*var\(--rust\);[^}]*font-weight:\s*700;/s,
+    );
+    expect(appShellRules).toMatch(
+      /\.nav-item\.active\s*\{[^}]*background:\s*rgba\(var\(--rust-rgb\),\s*\.14\);[^}]*color:\s*var\(--rust\);[^}]*font-weight:\s*700;/s,
+    );
+    expect(appShellRules).toMatch(
+      /\.rail-link\.active,\s*\.rail-flyout-trigger\.active\s*\{[^}]*background:\s*rgba\(var\(--rust-rgb\),\s*\.14\);/s,
+    );
+    expect(appShellRules).not.toMatch(/\.nav-grouplink\.active::before/);
   });
 });

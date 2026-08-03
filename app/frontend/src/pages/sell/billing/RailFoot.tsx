@@ -1,4 +1,4 @@
-import { AlertTriangle, Printer } from "lucide-react";
+import { CircleAlert } from "lucide-react";
 
 /** The rail's fixed commit point, below the scrollable payment and customer tiles. */
 export function RailFoot({
@@ -20,7 +20,7 @@ export function RailFoot({
     <footer className="bill-rail-foot">
       {blocked && (
         <p className="bill-rail-blocked" data-testid="bill-blocked">
-          <AlertTriangle size={14} />
+          <CircleAlert size={14} />
           {blocked}
         </p>
       )}
@@ -33,7 +33,6 @@ export function RailFoot({
           disabled={!lastBillNumber || saving}
           onClick={onReprint}
         >
-          <Printer size={15} />
           Reprint
           {lastBillNumber && <span className="mono">{lastBillNumber}</span>}
         </button>

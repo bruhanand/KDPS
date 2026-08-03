@@ -9,8 +9,8 @@
 # own host ports. Two workspaces can run `npm run dev` at the same time and
 # neither can see - or migrate, or seed, or drop - the other's database.
 #
-# Conductor hands each workspace a stable CONDUCTOR_WORKSPACE_NAME and a block of
-# ten host ports starting at CONDUCTOR_PORT. We spend three of the ten:
+# Conductor hands each workspace a block of ten host ports starting at
+# CONDUCTOR_PORT. We spend three of the ten:
 #
 #   CONDUCTOR_PORT + 0   React PWA (Vite)
 #   CONDUCTOR_PORT + 1   Django API
@@ -29,21 +29,22 @@
 # is sourced into them.
 
 _kdps_slug() {
-  # Compose project names must match [a-z0-9][a-z0-9_-]*. Workspace names are
-  # city names today ("indianapolis"), but a branch-derived name can carry a
-  # slash or a capital, so normalise rather than trust.
+  # Compose project names must match [a-z0-9][a-z0-9_-]*. Worktree directory
+  # names can carry a slash or a capital, so normalise rather than trust.
   printf '%s' "$1" \
     | tr '[:upper:]' '[:lower:]' \
     | sed -e 's/[^a-z0-9_-]/-/g' -e 's/^[^a-z0-9]*//' -e 's/[^a-z0-9]*$//'
 }
 
-if [ -n "${CONDUCTOR_WORKSPACE_NAME:-}" ]; then
-  KDPS_SLUG="$(_kdps_slug "$CONDUCTOR_WORKSPACE_NAME")"
-else
-  # `git rev-parse --show-toplevel` and not $0/$BASH_SOURCE: this file is sourced,
-  # and Conductor runs scripts under zsh, where BASH_SOURCE does not exist.
-  KDPS_SLUG="$(_kdps_slug "$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")")"
-fi
+# The worktree directory, unlike a Conductor workspace display name, does not
+# change when someone retitles a workspace. Compose persists its project name in
+# container and volume names, so deriving it from a display name leaves an old
+# project holding the same allocated port after a rename. Use the checkout's
+# stable directory identity everywhere that names local resources.
+#
+# `git rev-parse --show-toplevel` and not $0/$BASH_SOURCE: this file is sourced,
+# and Conductor runs scripts under zsh, where BASH_SOURCE does not exist.
+KDPS_SLUG="$(_kdps_slug "$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")")"
 [ -n "$KDPS_SLUG" ] || KDPS_SLUG=default
 
 KDPS_PROJECT="kdps-$KDPS_SLUG"
