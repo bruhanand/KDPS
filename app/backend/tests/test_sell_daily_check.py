@@ -275,7 +275,7 @@ def test_a_cancelled_bill_is_not_repriced(counter):
 
 
 def _return_bill(counter, till_seq: int, original: Sale, qty: int) -> None:
-    """A bill that sells one piece and takes `qty` back against `original`."""
+    """An equal-value bill that sells and takes back `qty` pieces."""
     line = original.lines.get()
     # Whole pieces at what they were paid, so the server's own back-calculation
     # lands on the same paisa - an integer division of the line's tax would be
@@ -283,7 +283,7 @@ def _return_bill(counter, till_seq: int, original: Sale, qty: int) -> None:
     # the test is about.
     refund = int(line.net_paise) * qty // int(line.qty)
     refund_gst = gst_on(refund)
-    payload = bill_payload(counter["store"], counter["salesman"], till_seq=till_seq)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=till_seq, qty=qty)
     payload["exchange"] = {
         "original": {"store": counter["store"].code, "fy": FY, "till_seq": original.till_seq},
         "lines": [
@@ -300,9 +300,10 @@ def _return_bill(counter, till_seq: int, original: Sale, qty: int) -> None:
             }
         ],
     }
-    net = MRP_PAISE - refund
+    outgoing = MRP_PAISE * qty
+    net = outgoing - refund
     payload["totals"]["net_paise"] = net
-    payload["totals"]["gst_paise"] = gst_on(MRP_PAISE) - refund_gst
+    payload["totals"]["gst_paise"] = gst_on(outgoing) - refund_gst
     payload["tenders"] = [{"mode": "cash", "amount_paise": net}] if net > 0 else []
     response = client_for(counter["cashier"]).post(SALES_URL, payload, format="json")
     assert response.status_code == 201, response.json()

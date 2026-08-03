@@ -167,24 +167,24 @@ def test_a_cancelled_bill_leaves_the_day(counter):
     assert body["modes"]["cash"] == 0
 
 
-def test_a_credit_note_tender_is_counted_but_is_not_cash(counter):
-    """It extinguishes a liability rather than filling a drawer, so it has its own
-    column and must never land in the cash one."""
+def test_a_credit_note_cannot_enter_the_current_day_as_a_tender(counter):
+    """Historical note columns remain, but a current bill cannot add to them."""
     note = CreditNote.objects.create(
         store=counter["store"], fy=FY, value_paise=50000, expires_on="2027-01-30"
     )
     note.post()
-    _bill(
-        counter,
-        1,
-        tenders=[
-            {"mode": "credit_note", "amount_paise": 50000, "credit_note": note.doc_number},
-            {"mode": "cash", "amount_paise": MRP_PAISE - 50000},
-        ],
-    )
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": note.doc_number},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 50000},
+    ]
+    response = client_for(counter["cashier"]).post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
     body = _summary(counter["cashier"], date=BILLED_DAY)
-    assert body["modes"]["cash"] == MRP_PAISE - 50000
-    assert body["modes"]["credit_note"] == 50000
+    assert body["modes"]["cash"] == 0
+    assert body["modes"]["credit_note"] == 0
 
 
 def test_open_exceptions_from_the_day_are_counted_and_cleared_ones_are_not(counter):
@@ -315,16 +315,41 @@ def test_pieces_given_back_are_counted_apart_from_pieces_sold(counter):
     assert body["returns"] == 1
 
 
-def test_a_bill_that_owes_the_customer_hands_over_a_note_and_no_cash(counter):
-    """Cash never leaves the drawer on a return (grill Q7), so the day's cash does
-    not fall - the store's liability rises instead, and that is its own figure."""
+def test_a_bill_that_would_owe_the_customer_never_enters_the_day(counter):
+    """The equal-or-up gate writes neither a bill nor a change-note liability."""
     _bill(counter, 1, qty=2)
-    _exchange(counter, 2, Sale.objects.get(till_seq=1), refund_multiple=2)
+    original = Sale.objects.get(till_seq=1)
+    line = original.lines.get()
+    refund = int(line.net_paise)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=2)
+    payload["exchange"] = {
+        "original": {"store": counter["store"].code, "fy": FY, "till_seq": 1},
+        "lines": [
+            {
+                "line_no": 2,
+                "barcode": line.barcode,
+                "qty": 2,
+                "refund_paise": refund,
+                "gst_rate": "5",
+                "gst_paise": int(line.gst_paise),
+                "condition": "good",
+                "reason": "size",
+                "original_line": 1,
+            }
+        ],
+    }
+    payload["totals"]["net_paise"] = MRP_PAISE - refund
+    payload["totals"]["gst_paise"] = int(payload["totals"]["gst_paise"]) - int(line.gst_paise)
+    payload["tenders"] = []
+
+    response = client_for(counter["cashier"]).post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "EXCHANGE_SHORT"
 
     body = _summary(counter["cashier"], date=BILLED_DAY)
-    note = CreditNote.objects.get(source_sale__till_seq=2)
-    assert body["credit_notes_issued_paise"] == int(note.value_paise) > 0
-    assert body["modes"]["cash"] == MRP_PAISE * 2  # the first bill's takings, undisturbed
+    assert body["credit_notes_issued_paise"] == 0
+    assert body["modes"]["cash"] == MRP_PAISE * 2
 
 
 def test_the_summary_ties_to_the_cash_ledger_as_well_as_to_the_tenders(counter):
