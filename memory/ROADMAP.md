@@ -15,8 +15,6 @@ store flag + configurable billing) are both shipped and tested.
   vs per-store counter caps; the promo user's writ; booking value at cost or
   MRP; booking band. See `CHANGELOG.md`'s booking/price entry.
 - **Open-to-buy at booking time** — needs trustworthy sell-through history first.
-- Real printer integration for the tag-printing screen (currently an explicit
-  frontend-only mock — see 4 Aug 2026 changelog entry).
 
 ## P2
 - Value-banded countersignature on a re-ticket; tender/bank offers + payments;

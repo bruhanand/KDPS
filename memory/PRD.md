@@ -99,6 +99,36 @@ manual edit is never silently clobbered). `testing_agent_v4` (iteration_31):
 row's independent pre-fill, no-auto-recompute-on-dest-change, re-split-picks-up
 -new-dest-set, submit still creates drafts correctly).
 
+**Follow-up (same session): Partner Dues Report + Real Tag Printer.**
+
+*Partner Dues report* (Money → Partner Dues, `/money/partner-dues`): a
+read-only summary of what each partner store owes, summed directly off
+`StoreTransfer.partner_billing_value_paise` for `SUBMITTED` transfers to
+`is_partner=True` destinations — new `PartnerDuesView` (`money:view`,
+`GET /api/outbound/partner-dues`), returns per-store totals + a drill-down
+transfer list. Means the same thing under either `BillingPolicy` mode, since
+it reads the figure every transfer already carries rather than the GL.
+No payment/settlement tracking exists yet, so "owed" is a running total
+billed, not netted against anything received — called out on the page itself.
+
+*Real tag printing*, replacing the earlier mock: user's choice was "the most
+universal option" (no vendor SDK, no specific printer in hand) at a
+**50mm × 50mm rounded label**, "2 tags or it should be configurable" for
+copies. Implemented as browser-native `window.print()` with `@media print`
+CSS (`TagPrint.tsx` + `TagPrint.css`) sized to exactly that label — works with
+whatever printer/driver is installed on the computer, including thermal
+label printers (Zebra/TSC/Brother QL) that install as a normal OS printer.
+Price Book rows got a checkbox column + "Print N selected tags" bulk toolbar
+button, so one print job can cover many SKUs at once; a "Copies per tag"
+input (default 2, clamped 1–20) applies to every tag in that job. This is
+**no longer mocked** — it is a genuine (browser-based) print integration.
+
+`testing_agent_v4` (iteration_32): 100% pass, no bugs — nav item, summary
+card, expand/drill-down, doc-number link to transfer detail, checkbox
+selection + bulk button + count, copies clamp at both ends, Print button
+label reflecting rows×copies, no crash/hang on click, no leftover "mock"
+wording anywhere, and the pre-existing "Ticket & trail" modal unaffected.
+
 **Testing.** Backend: `pytest outbound masters core/tests tests/test_outbound_*
 tests/test_cross_store_*` all green (run in the `/opt/kdpsvenv` venv, budget
 ~90–150s per batch, the sandbox's own command timeout — not pytest — is what
