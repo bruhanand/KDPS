@@ -180,6 +180,9 @@ function Counter({
     cashReceivedPaise: number;
   } | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
+  /** Only the newest print attempt may speak to the screen. A reprint can be
+   * superseded by another reprint or by the next customer's first scan. */
+  const printRun = useRef(0);
   const [typed, setTyped] = useState("");
   /** A barcode this counter could not place, waiting on the cashier to say
    *  whether it is a mistyped tag or a piece that arrived before its paperwork
@@ -570,6 +573,7 @@ function Counter({
    *  `resumeHold` needs its own message rather than a blank `note`, so it
    *  keeps clearing `printProblem` on its own instead of calling this. */
   const startingANewBill = useCallback(() => {
+    printRun.current += 1;
     setNote("");
     setPrintProblem("");
   }, []);
@@ -859,7 +863,7 @@ function Counter({
     freshCounter();
     startingANewBill();
     setFinishOpen(false);
-    scan.focus();
+    window.requestAnimationFrame(scan.focus);
   }
 
   // --- bills on hold (#185, grill Q13) --------------------------------------
@@ -974,7 +978,9 @@ function Counter({
   }
 
   async function print(receipt: string): Promise<void> {
+    const run = ++printRun.current;
     const outcome = await browserPrintAdapter.print(receipt);
+    if (run !== printRun.current) return;
     setPrintProblem(
       outcome.ok
         ? ""
@@ -997,6 +1003,7 @@ function Counter({
    */
   async function save() {
     if (!engine || blocked || saving) return;
+    let refocusScan = true;
     setSaving(true);
     setPrintProblem("");
     try {
@@ -1022,6 +1029,7 @@ function Counter({
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
         setFinishOpen(true);
+        refocusScan = false;
         await print(receipt);
       } else {
         leavePaperMode();
@@ -1034,7 +1042,7 @@ function Counter({
       setNote(messageOf(error));
     } finally {
       setSaving(false);
-      scan.focus();
+      if (refocusScan) scan.focus();
     }
   }
 
@@ -1102,7 +1110,7 @@ function Counter({
     <div className="bill-page" data-mode={mode}>
       {/* The counter owns its identity now: no generic page header, breadcrumb,
           or section tabs are allowed into this room. */}
-      <div className="bill-top">
+      <div className="bill-top" aria-hidden={finishOpen || undefined}>
         <BillBar
           mode={mode}
           nextNumber={till?.nextNumber ?? ""}
@@ -1126,7 +1134,7 @@ function Counter({
             mode={mode}
             boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
             value={typed}
-            disabled={locked || counterBlocked}
+            disabled={locked || counterBlocked || finishOpen}
             placeholder={mode === "sale" ? "Scan a tag, or type a design number" : "Scan a bill number"}
             hasError={Boolean(unknown)}
             errorBarcode={unknown}
@@ -1275,7 +1283,7 @@ function Counter({
           window on one till - and Rule 5 says collapsing alerts to one line
           must not soften that: rather than a thin banner above a bill nobody
           can act on, a blocked counter takes over this whole band. */}
-      <div className="bill-work">
+      <div className="bill-work" aria-hidden={finishOpen || undefined}>
         {till?.blocked ? (
           <p
             className="bill-alert bill-alert-stop bill-blocked-area"

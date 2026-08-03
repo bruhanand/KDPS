@@ -31,7 +31,7 @@ export function counterKeyAction(key: string): CounterKeyAction | null {
 export function activeCounterKeyAction(
   key: string,
   disabled: boolean,
-  finishOpen = false,
+  finishOpen: boolean,
 ): CounterKeyAction | null {
   if (disabled) return null;
   if (finishOpen) return key === "Enter" ? "next-bill" : null;
@@ -42,22 +42,22 @@ export function activeCounterKeyAction(
  * question. A modal owns its own Escape handling, so the bill must stay still. */
 export function useCounterKeys({
   disabled,
-  finishOpen = false,
+  finishOpen,
   onHold,
   onLookup,
   onNewBill,
   onSave,
   onBackToScan,
-  onNextBill = () => undefined,
+  onNextBill,
 }: {
   disabled: boolean;
-  finishOpen?: boolean;
+  finishOpen: boolean;
   onHold: () => void;
   onLookup: () => void;
   onNewBill: () => void;
   onSave: () => void;
   onBackToScan: () => void;
-  onNextBill?: () => void;
+  onNextBill: () => void;
 }): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

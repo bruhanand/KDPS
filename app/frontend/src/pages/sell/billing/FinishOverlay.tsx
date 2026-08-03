@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { AlertTriangle, Check, Printer } from "lucide-react";
 
 import { formatINR } from "../../../lib/format";
@@ -19,11 +21,28 @@ export function FinishOverlay({
   onPrint: () => void;
   onNext: () => void;
 }) {
+  const printButton = useRef<HTMLButtonElement>(null);
+  const nextButton = useRef<HTMLButtonElement>(null);
   const paid = bill.tenders.reduce((sum, tender) => sum + tender.amount_paise, 0);
   const cashTaken = bill.tenders
     .filter((tender) => tender.mode === "cash")
     .reduce((sum, tender) => sum + tender.amount_paise, 0);
   const change = changeFor(cashReceivedPaise, cashTaken);
+
+  useEffect(() => {
+    nextButton.current?.focus();
+  }, []);
+
+  function keepFocusInside(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab" || !printButton.current || !nextButton.current) return;
+    if (event.shiftKey && document.activeElement === printButton.current) {
+      event.preventDefault();
+      nextButton.current.focus();
+    } else if (!event.shiftKey && document.activeElement === nextButton.current) {
+      event.preventDefault();
+      printButton.current.focus();
+    }
+  }
 
   return (
     <div className="bill-finish-backdrop" role="presentation">
@@ -32,6 +51,7 @@ export function FinishOverlay({
         role="dialog"
         aria-modal="true"
         aria-labelledby="bill-finish-title"
+        onKeyDown={keepFocusInside}
       >
         <header className="bill-finish-head">
           <span className="bill-finish-check" aria-hidden="true">
@@ -81,10 +101,10 @@ export function FinishOverlay({
         </div>
 
         <footer className="bill-finish-actions">
-          <button type="button" className="btn" onClick={onPrint}>
+          <button ref={printButton} type="button" className="btn" onClick={onPrint}>
             <Printer size={16} /> Print again
           </button>
-          <button type="button" className="btn primary" onClick={onNext}>
+          <button ref={nextButton} type="button" className="btn primary" onClick={onNext}>
             Next bill <kbd>Enter</kbd>
           </button>
         </footer>

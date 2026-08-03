@@ -50,10 +50,10 @@ function attr(value: string): string {
  * on both sides and the SVG scales as one unit, so it stays inside 80mm paper. */
 export function code128Svg(
   value: string,
-  options: { className?: string; height?: number } = {},
+  options: { className?: string } = {},
 ): string {
   const quiet = 10;
-  const height = options.height ?? 64;
+  const height = 64;
   let x = quiet;
   const bars: string[] = [];
 

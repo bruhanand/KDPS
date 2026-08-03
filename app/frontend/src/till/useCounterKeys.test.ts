@@ -25,11 +25,11 @@ describe("the counter keyboard map", () => {
   });
 
   it("leaves the counter untouched while a decision surface is open", () => {
-    expect(activeCounterKeyAction("F2", true)).toBeNull();
-    expect(activeCounterKeyAction("F3", true)).toBeNull();
-    expect(activeCounterKeyAction("F4", true)).toBeNull();
-    expect(activeCounterKeyAction("F9", true)).toBeNull();
-    expect(activeCounterKeyAction("Escape", true)).toBeNull();
+    expect(activeCounterKeyAction("F2", true, false)).toBeNull();
+    expect(activeCounterKeyAction("F3", true, false)).toBeNull();
+    expect(activeCounterKeyAction("F4", true, false)).toBeNull();
+    expect(activeCounterKeyAction("F9", true, false)).toBeNull();
+    expect(activeCounterKeyAction("Escape", true, false)).toBeNull();
     expect(activeCounterKeyAction("Enter", true, true)).toBeNull();
   });
 });
