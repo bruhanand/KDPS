@@ -72,3 +72,6 @@ ds-bundle/
 # per sandbox), so it is derived data, never source. Matches both app/graphify-out
 # and the root symlink the sandbox creates so `graphify`'s default path resolves.
 graphify-out
+
+
+sandcastle-demo/
