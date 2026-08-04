@@ -159,6 +159,50 @@ against the deployed preview — verdict was DO-NOT-LAUNCH on 4 findings. User s
   check) — 100% pass, backend + frontend, zero regressions from the
   secret-key rotation / DEBUG flip; all seeded passwords still work.
 
+**Follow-up (same session): Cookie-only sessions.** The one hardening item
+deferred above — moved the frontend fully onto the httpOnly-cookie auth path
+the backend already supported (`CookieOrHeaderJWTAuthentication`,
+`_set_auth_cookies`/`_clear_auth_cookies` in `accounts/views.py`), instead of
+storing the access/refresh JWTs in `localStorage`. `frontend/src/lib/api.ts`:
+removed the `tokens` object (`kdps_access`/`kdps_refresh` localStorage keys)
+entirely; the request interceptor no longer attaches any `Authorization`
+header (pure `withCredentials: true` + auto-sent httpOnly cookies); the
+401→refresh→retry flow now posts an empty body to `/auth/refresh` (the
+existing `CookieRefreshView` already falls back to
+`request.COOKIES.get('refresh_token')`); replaced the old "compare the
+localStorage refresh token before/after" race-guard with a small
+`authSession.bump()` epoch counter, bumped by `AuthContext` on every
+login/logout, so a stale request's failed refresh can never fire a spurious
+`kdps:session-expired` after a newer login/logout already replaced the
+session. `AuthContext.tsx`: the mount-time bootstrap now always calls
+`/auth/me` (can't check "is there a token" client-side anymore — a 401 just
+means logged out, not an error). Backend: `LogoutView` now also falls back to
+`request.COOKIES.get('refresh_token')` for blacklisting, since the browser
+no longer sends it in the body. **Login/refresh still return the JWTs in the
+JSON body too** — intentionally preserved for curl/Postman/API-testing via
+`Authorization: Bearer`, only the *browser* stopped using that path.
+Hit one debugging red herring worth recording: direct `curl` against
+`localhost:8001` over plain HTTP showed the `access_token` cookie
+inconsistently surviving logout in curl's own cookie jar while
+`refresh_token` cleared correctly — proved via Django's test client that the
+server's two delete-cookie responses are byte-for-byte symmetric, then
+confirmed with a real Playwright/Chromium session against the public HTTPS
+URL that both cookies clear correctly in an actual browser. That curl
+behaviour was a curl-specific quirk (likely its inconsistent enforcement of
+the `Secure` attribute over a plain-HTTP direct connection), not a real bug —
+**test cookie-clearing against a real browser or the public HTTPS URL, not
+raw curl on the local HTTP port.**
+`testing_agent_v4` (iteration_35): wrote `backend/tests/
+test_auth_cookie_migration.py` (7 pytest) + full real-browser Playwright pass
+— 100% pass. Confirmed: localStorage stays empty of token keys post-login;
+session survives a full reload; logout clears both cookies and truly ends the
+server-side session (direct nav to `/` post-logout bounces to `/login`); 3-role
+regression (owner/accounts1/deo.manager) all fine; a real mutation (Partner
+Dues → Record Payment) succeeds with zero `Authorization` headers anywhere;
+a fresh cookie-less context hitting `/` redirects cleanly with no retry loop;
+header-based `Authorization: Bearer` auth for non-browser clients (curl/API
+testing) still works fully, unaffected.
+
 **Follow-up (same session): Partner Settlements — Accounts can now record a
 payment against a partner store's dues.** New append-only
 `finledger.PartnerLedgerEntry` (mirrors `VendorLedgerEntry`'s shape, but only

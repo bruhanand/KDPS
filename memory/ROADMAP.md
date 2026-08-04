@@ -6,8 +6,8 @@ the problem statement and current architecture.
 ## P0
 None open. The two P0s from the 4 Aug 2026 session (Distribution grid, Partner
 store flag + configurable billing) are both shipped and tested, as is the
-same-day follow-up (Partner Settlements, and a security-hardening pass — see
-`PRD.md`).
+same-day follow-up (Partner Settlements, a security-hardening pass, and the
+cookie-only session migration — see `PRD.md`).
 
 ## P1
 - **AI PT-file chat assistant** (Emergent Universal Key) — explicitly deferred
@@ -23,10 +23,6 @@ same-day follow-up (Partner Settlements, and a security-hardening pass — see
   store acknowledgement of a published offer.
 - True bin/location tracking for physical warehouse storage.
 - HRMS & Attendance module.
-- Move the frontend from localStorage JWTs to the httpOnly-cookie-only auth
-  path the backend already supports (`CookieOrHeaderJWTAuthentication`) —
-  security hardening, deferred 4 Aug 2026 as disproportionate-risk for an
-  app-wide auth refactor against a theoretical (not active) XSS vector.
 - Minor, non-blocking (found by testing agent, iteration_29): the login
   payload's granted-sections list for `it_admin` omits `money` even though a
   direct `userCan(user, "money", "view")` check returns true for that role —
