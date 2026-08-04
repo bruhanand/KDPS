@@ -105,6 +105,60 @@ for this. No partner store came pre-seeded; BANKA (`store_id=5`) was flagged
 `is_partner=True` and given one dispatched transfer via Django shell so the
 Partner Dues / Settlements screens had real data (see next entry).
 
+**Follow-up (same session): Security audit + hardening.** Ran `security_audit_agent`
+against the deployed preview — verdict was DO-NOT-LAUNCH on 4 findings. User said
+"fix all of the findings," so:
+- **[CRITICAL, fixed]** `DJANGO_SECRET_KEY` was the dev/CI placeholder
+  (`kdps-dev-secret-not-for-production`) in the deployed `.env` — forgeable JWTs,
+  including an Owner login. Rotated to a strong random 64-byte key. Added a
+  startup guard in `config/settings.py`: raises `RuntimeError` if `DJANGO_DEBUG=0`
+  and `SECRET_KEY` is still a known placeholder, so this can't silently regress.
+- **[HIGH, fixed]** `DJANGO_DEBUG` was `1` in the deployed env — leaked
+  tracebacks on 500s, published migration names, and (per `config/urls.py`'s
+  existing `_ENABLE_ADMIN` gate) mounted Django admin. Set to `0`. Ran
+  `collectstatic` (WhiteNoise needs it once DEBUG=0).
+- **[HIGH, fixed — same DEBUG flip]** `/admin/` is no longer mounted by Django
+  (confirmed 404 hitting the backend directly on :8001). Left the seeded
+  superuser password unchanged — it's a documented test credential
+  (`test_credentials.md`) and the admin route is now unreachable regardless.
+- **[MEDIUM, fixed]** CORS was reflecting any `*.emergentagent.com` origin
+  with credentials (`CORS_ALLOWED_ORIGIN_REGEXES`, DEBUG-gated already but
+  DEBUG was on). Pinned `CORS_ALLOWED_ORIGINS` + `CSRF_TRUSTED_ORIGINS` env
+  vars to the exact deployed origin instead. Verified at the Django layer: an
+  allowed origin gets echoed back with credentials, a disallowed one gets no
+  CORS header at all. **Caveat surfaced by the testing pass:** on *this*
+  preview platform, the ingress/edge in front of the app adds its own
+  unconditional `Access-Control-Allow-Origin: *` to every response — so this
+  fix is real and correct for actual production hosting (Render, custom
+  domain) but is superseded by the platform's own edge on the shared preview
+  URL. Told the user this plainly rather than claiming the preview URL itself
+  is now CORS-locked.
+- **[Hardening, fixed]** `AUTH_PASSWORD_VALIDATORS` had only
+  `MinimumLengthValidator`; added `CommonPasswordValidator`,
+  `UserAttributeSimilarityValidator`, `NumericPasswordValidator`. Applies to
+  new/changed passwords only — existing seeded hashes untouched, verified all
+  still authenticate.
+- **[Attempted, reverted]** Tried tightening `DJANGO_ALLOWED_HOSTS` from `*`
+  to an explicit host list — this broke every request through the platform's
+  public ingress with `400 DisallowedHost` (the Host header this platform's
+  edge forwards doesn't match the public hostname 1:1). Reverted to `*`.
+  **Do not retry this on this platform** unless the actual forwarded Host
+  header is confirmed first.
+- **[Deferred, not done]** Moving the frontend off `localStorage` JWTs onto
+  the httpOnly-cookie-only path the backend already supports
+  (`CookieOrHeaderJWTAuthentication`, `_set_auth_cookies` in
+  `accounts/views.py`) was flagged as a lower-priority hardening note in the
+  audit. Skipped: it's an app-wide auth-flow change (every page's axios
+  interceptor + session-bootstrap logic) for a defense-in-depth improvement
+  against a currently-theoretical XSS vector, not an active exploit path —
+  disproportionate risk for the residual gain. Offered as a backlog item.
+- `testing_agent_v4` (iteration_34): wrote
+  `backend/tests/test_security_hardening_regression.py` (14 tests: health,
+  clean 404/no-traceback, login for 4 roles with valid JWT, `/me`, logout,
+  unauth rejection, Partner Dues/Vendor Ledger/Stores reads, admin-route
+  check) — 100% pass, backend + frontend, zero regressions from the
+  secret-key rotation / DEBUG flip; all seeded passwords still work.
+
 **Follow-up (same session): Partner Settlements — Accounts can now record a
 payment against a partner store's dues.** New append-only
 `finledger.PartnerLedgerEntry` (mirrors `VendorLedgerEntry`'s shape, but only
