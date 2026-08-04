@@ -86,6 +86,55 @@ everything. If backend 500s on boot with `ModuleNotFoundError: No module named
 'django'`, that's this exact situation — check `.env` files first before
 anything else.
 
+**Recurred again (Partner Settlements session, same day):** fresh pod, `.env`
+files this time DID exist but Postgres itself was never started and the
+`kdps`/`kdps_dev` role+db didn't exist, and `/root/.venv` had no packages at
+all (not even Django) — `dev-bootstrap.sh` was not run automatically this
+time either. Fixed manually: `pg_ctlcluster 15 main start`, then as the
+`postgres` OS user `CREATE ROLE kdps WITH LOGIN PASSWORD 'kdps' CREATEDB;`
++ `CREATE DATABASE kdps_dev OWNER kdps;`, then `cd backend && UV_PROJECT_
+ENVIRONMENT=/root/.venv uv sync --active` (installs straight into the venv
+supervisor's uvicorn shim already points at — do NOT let `uv sync` create a
+second venv at `backend/.venv`; pass `--active`/set `UV_PROJECT_ENVIRONMENT`
+so it targets `/root/.venv`), then `manage.py migrate` + `manage.py
+seed_foundation` + `manage.py seed_demo_data` (the latter is idempotent —
+if it errors partway through on a fresh DB, just re-run it once, it will
+skip already-seeded steps and complete). **Run `bash scripts/dev-bootstrap.sh`
+first thing next time** rather than these manual steps — it exists precisely
+for this. No partner store came pre-seeded; BANKA (`store_id=5`) was flagged
+`is_partner=True` and given one dispatched transfer via Django shell so the
+Partner Dues / Settlements screens had real data (see next entry).
+
+**Follow-up (same session): Partner Settlements — Accounts can now record a
+payment against a partner store's dues.** New append-only
+`finledger.PartnerLedgerEntry` (mirrors `VendorLedgerEntry`'s shape, but only
+`payment`/`reversal` kinds — there is deliberately no `BILL` kind on this
+ledger; the billed side stays `StoreTransfer.partner_billing_value_paise` as
+before, so nothing double-counts). `finledger.posting.post_partner_settlement()`
+/ `reverse_partner_settlement()`: records the payment (+ optional paired
+cash-in receipt on the cash ledger), and only bridges to the value GL
+(`Dr CASH / Cr PARTNER_RECEIVABLE`) when `BillingPolicy.mode == GL_POSTING` —
+under `informational` mode there was never a GL receivable to clear, so a
+settlement stays subledger-only too, exactly mirroring the billing side's own
+GL-skip logic. `outbound.PartnerDuesView` now also returns `total_paid_paise`
+/ `net_outstanding_paise` per store and in aggregate (Outstanding = Owed −
+Paid). New `PartnerSettlementsView` (`GET`/`POST /api/outbound/
+partner-settlements`, `money:view` read / `money:manage` write) and
+`PartnerSettlementReverseView` (`POST .../<id>/reverse`). User's explicit
+choices: payment mode is a free-form dropdown (cash/bank/upi/cheque/other,
+not restricted); partial payments are allowed with no blocking (overpayment
+is allowed too — Net Outstanding can go negative, meaning a credit); payment
+history is shown in the UI. Frontend: `/money/partner-dues` now shows
+Owed/Paid/Outstanding stat cards + table columns, a per-row "Record Payment"
+inline form, and a per-store expandable "Payments received" history table
+with a Reverse action per entry (append-only correction, not an edit).
+`testing_agent_v4` (iteration_33): wrote `backend/tests/
+test_partner_settlements.py` (12 tests: dues aggregation math, full payment
+lifecycle incl. partial/overpay/reverse/double-reverse-409, non-positive
+amount rejection, RBAC 403 for a non-finance role) — 100% pass, backend +
+frontend, no bugs found, no regression on Vendor Ledger / Partner Billing
+Policy pages.
+
 **Follow-up (same session): Distribution grid now suggests a starting split.**
 Adding a SKU row pre-fills its qty-per-destination cells with an even split of
 the available quantity across the currently-selected destinations (remainder to

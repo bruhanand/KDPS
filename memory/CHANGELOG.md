@@ -4,9 +4,11 @@ Dated history of every review/build pass, newest first. See `PRD.md` for the
 static problem statement + current architecture snapshot, and `ROADMAP.md` for
 open backlog by priority.
 
-## 4 Aug 2026 — Warehouse Ops (Distribution grid, Partner billing) + Offers/Pricing IA
+## 4 Aug 2026 — Warehouse Ops (Distribution grid, Partner billing) + Offers/Pricing IA + Partner Settlements
 See `PRD.md`'s "Current state" section for the full writeup — kept there rather
-than duplicated here since it is this repo's newest entry.
+than duplicated here since it is this repo's newest entry. Same-day follow-up:
+Partner Settlements (Accounts can record/reverse a payment against a partner
+store's dues; Partner Dues report now nets Paid against Owed).
 
 
 ## Review pass 2 — 26 July 2026, night (static-analysis report, verified before applied)

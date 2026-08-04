@@ -5,7 +5,8 @@ the problem statement and current architecture.
 
 ## P0
 None open. The two P0s from the 4 Aug 2026 session (Distribution grid, Partner
-store flag + configurable billing) are both shipped and tested.
+store flag + configurable billing) are both shipped and tested, as is the
+same-day follow-up (Partner Settlements — see `PRD.md`).
 
 ## P1
 - **AI PT-file chat assistant** (Emergent Universal Key) — explicitly deferred
