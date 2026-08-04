@@ -299,6 +299,45 @@ selection + bulk button + count, copies clamp at both ends, Print button
 label reflecting rows×copies, no crash/hang on click, no leftover "mock"
 wording anywhere, and the pre-existing "Ticket & trail" modal unaffected.
 
+**Follow-up (new session): Daily Cash Dashboard + Bank Reconciliation — wired
+in and shipped.** Backend (models, `finledger/reconciliation.py` matching
+engine, `/api/finledger/cash/daily` + `/api/finledger/bank/imports` +
+`/api/finledger/bank/imports/<id>/lines` + `/api/finledger/bank/lines/<pk>/
+match`) and both screens (`DailyCash.tsx`, `BankReconciliation.tsx`) were
+already fully coded from the prior session — the actual gap was that neither
+screen was in `routes.tsx`'s `BUILT` table, so `/money/daily-cash` and
+`/money/bank` 404'd/redirected despite already showing in the sidebar. Fixed:
+added both imports + route entries. Also added a static, non-interactive
+roadmap note on Bank Reconciliation (`data-testid="bank-api-roadmap-note"`)
+acknowledging the user's stated wish for a future direct bank-API sync ("using
+file upload for now — direct bank API sync is on the roadmap once your bank
+provides API access") — deliberately not a fake button, just an honest
+acknowledgement; `finledger.reconciliation`'s own module docstring already
+notes the parser/matcher split so a real bank API feed would plug in without
+a rebuild. Self-verified backend via curl: logged in as `accounts1`, read
+real daily-cash figures, uploaded a CSV, confirmed the matcher correctly
+excludes an already-matched `CashLedgerEntry` from later candidates
+(append-only, no double-matching), confirmed `ignore` action works.
+Also fixed an unrelated environment issue hit while smoke-testing: this pod's
+inotify watch limit (`/proc/sys/fs/inotify/max_user_watches`, read-only,
+cannot be raised) was exhausted, crash-looping the vite dev server with
+`ENOSPC`. Fixed in `vite.config.ts`: `server.watch = { usePolling: true,
+interval: 300 }`, which bypasses inotify entirely. **If a fresh pod hits the
+same `ENOSPC` crash-loop again, this is already fixed in committed config —
+no action needed unless the fix itself was reverted.**
+`testing_agent_v4` (iteration_36): 100% pass, frontend-focused (backend
+pre-verified via curl) — login/sidebar nav, Daily Cash date picker + refetch
++ empty-day state, Bank Reconciliation upload → imports table row → lines
+table, all 5 status tabs, link/unlink/ignore full round-trip, roadmap note
+renders, zero console errors, no regression on Cash Ledger/Vendor Ledger/
+Partner Dues/Partner Billing. Also explicitly investigated and could **not**
+reproduce a "stuck on 'Loading KDPS…' forever" concern the main agent raised
+from its own screenshot-tool session (that tool's Playwright wrapper was
+returning unawaited coroutines from several sync-looking calls this session —
+a tool/env artifact, not an app bug; confirmed by clean backend curl results,
+clean `vite`-transformed source with no build errors, and the testing agent's
+own clean Playwright pass).
+
 **Testing.** Backend: `pytest outbound masters core/tests tests/test_outbound_*
 tests/test_cross_store_*` all green (run in the `/opt/kdpsvenv` venv, budget
 ~90–150s per batch, the sandbox's own command timeout — not pytest — is what
