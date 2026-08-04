@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { authApi, tokens, unitContext } from "../lib/api";
+import { authApi, authSession, unitContext } from "../lib/api";
 
 export interface Store {
   id: number;
@@ -171,15 +171,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const epoch = sessionEpoch.current;
     (async () => {
-      if (tokens.access) {
-        try {
-          const { data } = await authApi.me();
-          if (!cancelled && sessionEpoch.current === epoch) startSession(data);
-        } catch {
-          if (!cancelled && sessionEpoch.current === epoch) tokens.clear();
-        }
+      // The session lives in an httpOnly cookie this code can't read, so the
+      // only way to learn "is anyone logged in" is to ask — a 401 here just
+      // means no one is, not an error.
+      try {
+        const { data } = await authApi.me();
+        if (!cancelled && sessionEpoch.current === epoch) startSession(data);
+      } catch {
+        // Stay logged out.
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -197,15 +199,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(username: string, password: string) {
     sessionEpoch.current += 1;
+    authSession.bump();
     const { data } = await authApi.login(username, password);
-    tokens.set({ access: data.access, refresh: data.refresh });
     startSession(data.user);
   }
 
   function logout() {
     sessionEpoch.current += 1;
+    authSession.bump();
     authApi.logout().catch(() => undefined);
-    tokens.clear();
     endSession();
   }
 

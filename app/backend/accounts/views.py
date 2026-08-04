@@ -185,7 +185,11 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request) -> Response:
-        refresh = request.data.get("refresh")
+        # The browser client no longer carries the refresh token anywhere JS
+        # can read it (it moved to the httpOnly cookie, #cookie-only-sessions),
+        # so the cookie is the primary source now — the request-body path stays
+        # for a non-browser caller (curl/tests) that never held a cookie at all.
+        refresh = request.data.get("refresh") or request.COOKIES.get("refresh_token")
         if refresh:
             try:
                 RefreshToken(refresh).blacklist()

@@ -9,23 +9,19 @@ const BASE = (import.meta.env.REACT_APP_BACKEND_URL as string) || "";
 
 export const api = axios.create({ baseURL: `${BASE}/api`, withCredentials: true });
 
-const ACCESS_KEY = "kdps_access";
-const REFRESH_KEY = "kdps_refresh";
-
-export const tokens = {
-  get access() {
-    return localStorage.getItem(ACCESS_KEY);
-  },
-  get refresh() {
-    return localStorage.getItem(REFRESH_KEY);
-  },
-  set({ access, refresh }: { access: string; refresh?: string }) {
-    localStorage.setItem(ACCESS_KEY, access);
-    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
-  },
-  clear() {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
+// Sessions live in the httpOnly `access_token`/`refresh_token` cookies the
+// backend already sets on login/refresh (`accounts.views._set_auth_cookies`) —
+// nothing token-shaped is ever kept in localStorage or any other JS-readable
+// spot, so an XSS bug on this page can't walk off with a bearer token. Bumped
+// by `AuthContext` on every login/logout so a stale request's failed refresh
+// (kicked off *before* a fresh login/logout) never clobbers the session that
+// already replaced it — same race this file used to guard by comparing
+// localStorage's refresh token before/after, now done with a counter because
+// there is no longer a client-readable token to compare.
+let authEpoch = 0;
+export const authSession = {
+  bump() {
+    authEpoch += 1;
   },
 };
 
@@ -53,28 +49,21 @@ export const unitContext = {
 };
 
 api.interceptors.request.use((config) => {
-  const t = tokens.access;
-  if (t) config.headers.Authorization = `Bearer ${t}`;
   if (unitContext.unit) config.headers["X-KDPS-Unit"] = unitContext.unit;
   if (unitContext.brand) config.headers["X-KDPS-Brand"] = unitContext.brand;
   return config;
 });
 
 // Single-flight refresh: N simultaneous 401s share one /auth/refresh call, so a
-// rotating refresh token is spent exactly once (the backend blacklists after rotation).
-let refreshPromise: Promise<string> | null = null;
+// rotating refresh token is spent exactly once (the backend blacklists after
+// rotation). The refresh cookie is httpOnly — nothing to read or pass here, the
+// browser attaches it and the new access/refresh cookies land in the response.
+let refreshPromise: Promise<void> | null = null;
 
-function refreshAccessToken(): Promise<string> {
+function refreshAccessToken(): Promise<void> {
   refreshPromise ??= axios
-    .post(
-      `${BASE}/api/auth/refresh`,
-      { refresh: tokens.refresh },
-      { withCredentials: true },
-    )
-    .then(({ data }) => {
-      tokens.set({ access: data.access, refresh: data.refresh });
-      return data.access as string;
-    })
+    .post(`${BASE}/api/auth/refresh`, {}, { withCredentials: true })
+    .then(() => undefined)
     .finally(() => {
       refreshPromise = null;
     });
@@ -86,18 +75,16 @@ api.interceptors.response.use(
   (r) => r,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && original && !original._retry && tokens.refresh) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
-      const staleRefresh = tokens.refresh;
+      const epochAtStart = authEpoch;
       try {
-        const access = await refreshAccessToken();
-        original.headers.Authorization = `Bearer ${access}`;
+        await refreshAccessToken();
         return api(original);
       } catch {
-        // Only wipe tokens if a newer login hasn't already replaced them — a
-        // losing racer must never clear the fresh session's credentials.
-        if (tokens.refresh === staleRefresh) {
-          tokens.clear();
+        // Only fire the expiry event if a newer login/logout hasn't already
+        // moved past this attempt — see the `authEpoch` note above.
+        if (authEpoch === epochAtStart) {
           window.dispatchEvent(new Event("kdps:session-expired"));
         }
       }
@@ -110,17 +97,9 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post("/auth/login", { username, password }),
   me: () => api.get("/auth/me"),
-  // Read tokens at call time and pass the header explicitly so logout survives
-  // the request-interceptor microtask even after tokens.clear() runs.
-  logout: () => {
-    const refresh = tokens.refresh;
-    const access = tokens.access;
-    return api.post(
-      "/auth/logout",
-      { refresh },
-      { headers: access ? { Authorization: `Bearer ${access}` } : {} },
-    );
-  },
+  // The refresh token is read straight off the httpOnly cookie server-side
+  // (`LogoutView`), so there is nothing for this call to carry.
+  logout: () => api.post("/auth/logout", {}),
 };
 
 export type ApiSchemas = components["schemas"];
