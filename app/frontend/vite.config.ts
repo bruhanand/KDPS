@@ -24,5 +24,10 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
     hmr: process.env.VITE_LOCAL_DEV === "1" ? true : { clientPort: 443 },
+    // This container's inotify watch limit (/proc/sys/fs/inotify/max_user_watches)
+    // is read-only and cannot be raised, so native fs events run out of watches
+    // (ENOSPC) and crash the dev server under this repo's file count. Polling
+    // avoids inotify entirely.
+    watch: { usePolling: true, interval: 300 },
   },
 });

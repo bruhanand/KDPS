@@ -18,6 +18,8 @@ import { AccessMatrixPage } from "./pages/AccessMatrix";
 import { SellPolicySettingsPage } from "./pages/SellPolicySettings";
 import { PartnerBillingPage } from "./pages/PartnerBilling";
 import { PartnerDuesPage } from "./pages/PartnerDues";
+import { DailyCashPage } from "./pages/DailyCash";
+import { BankReconciliationPage } from "./pages/BankReconciliation";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -154,9 +156,14 @@ const BUILT: Screen[] = [
   { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
+  // Same day, split into money in vs out per account instead of one running
+  // balance (#254) — reads the cash ledger, so it sits right after it.
+  { id: "daily-cash", path: "/money/daily-cash", element: <DailyCashPage /> },
   { id: "irn-queue", path: "/money/irn-queue", element: <IrnQueue /> },
   { id: "partner-billing", path: "/money/partner-billing", element: <PartnerBillingPage /> },
   { id: "partner-dues", path: "/money/partner-dues", element: <PartnerDuesPage /> },
+  // Upload a bank statement, matched against the cash ledger (finledger.reconciliation).
+  { id: "bank-reconciliation", path: "/money/bank", element: <BankReconciliationPage /> },
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },

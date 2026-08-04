@@ -115,6 +115,12 @@ export function BankReconciliationPage() {
     <div className="page-pad" data-testid="bank-reconciliation-page">
       <PageHeader lead="Upload a bank statement (CSV or Excel) and it's matched against the books automatically — what's left is what needs a look." />
 
+      <div className="warn-note" style={{ marginBottom: 18 }} data-testid="bank-api-roadmap-note">
+        Using file upload for now — direct bank API sync is on the roadmap once your bank
+        provides API access. When that's available it will feed the same matching engine
+        below, so this screen won't need to change.
+      </div>
+
       <div className="card section-card" style={{ marginBottom: 24 }}>
         <div className="form-grid">
           <input
