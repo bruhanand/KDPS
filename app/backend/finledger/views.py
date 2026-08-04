@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from typing import Any
 
 from django.db.models import Count, Sum
@@ -18,9 +19,11 @@ from accounts.permissions import require_section, user_can
 from accounts.sections import CAP_MANAGE
 from core.money import paise_to_rupees_str
 from core.textsearch import search_term, text_filter
-from finledger.models import CashLedgerEntry, VendorLedgerEntry
+from files.models import StoredFile, UploadTooLarge
+from finledger.models import BankStatementImport, BankStatementLine, CashLedgerEntry, VendorLedgerEntry
 from finledger.posting import (
     AlreadyReversedError,
+    account_for_mode,
     post_cash_movement,
     post_vendor_bill,
     post_vendor_payment,
@@ -28,6 +31,7 @@ from finledger.posting import (
     reverse_vendor_entry,
     rupees_to_paise,
 )
+from finledger.reconciliation import UnsupportedFormat, parse_statement, process_import
 from finledger.serializers import CashLedgerEntrySerializer, VendorLedgerEntrySerializer
 from vendors.models import Vendor
 
@@ -240,13 +244,17 @@ class VendorPaymentView(APIView):
         amount = rupees_to_paise(request.data.get("amount"))
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
+        mode = request.data.get("mode", "cash")
         entry = post_vendor_payment(
             vendor,
             amount,
             request.data.get("description", ""),
             request.user,
-            mode=request.data.get("mode", "cash"),
-            account=request.data.get("account", "CASH"),
+            mode=mode,
+            # See `account_for_mode` — buckets by *how* the vendor was paid
+            # instead of trusting a request-supplied `account` that no caller
+            # actually sends.
+            account=account_for_mode(mode),
             also_cash=request.data.get("also_cash", True),
         )
         return Response(VendorLedgerEntrySerializer(entry).data, status=201)
@@ -288,6 +296,62 @@ class CashEntriesView(generics.ListAPIView):
             qs = qs.filter(account=account)
         # The screen's own search box (#102), applied last.
         return text_filter(qs, search_term(self.request), CASH_ENTRY_SEARCH_FIELDS)
+
+
+class CashDailyView(APIView):
+    """A day's money in vs out, split by account (Cash/Bank/Card/UPI) — the
+    dashboard Accounts asked for directly (`KDPS Daily Work Survey - Accounts
+    Team.pdf`): a same-day read of what moved, rather than only finding out at
+    month-end DSR reconciliation. Reads the same `CashLedgerEntry` rows the
+    Cash Ledger (#106) already lists; this just slices them to one day and
+    splits the signed `amount` into in/out instead of netting it into one
+    running balance."""
+
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
+
+    def get(self, request: Request) -> Response:
+        day_str = request.query_params.get("date")
+        try:
+            day = date.fromisoformat(day_str) if day_str else timezone.localdate()
+        except ValueError:
+            return Response({"detail": "date must be YYYY-MM-DD."}, status=400)
+
+        qs = (
+            CashLedgerEntry.objects.select_related("vendor")
+            .filter(created_at__date=day)
+            .order_by("-created_at")
+        )
+
+        by_account: dict[str, dict[str, int]] = {
+            choice: {"in_paise": 0, "out_paise": 0} for choice in CashLedgerEntry.Account.values
+        }
+        for e in qs:
+            bucket = by_account.setdefault(e.account, {"in_paise": 0, "out_paise": 0})
+            if e.amount >= 0:
+                bucket["in_paise"] += e.amount
+            else:
+                bucket["out_paise"] += -e.amount
+
+        money_in = sum(a["in_paise"] for a in by_account.values())
+        money_out = sum(a["out_paise"] for a in by_account.values())
+        return Response(
+            {
+                "date": day.isoformat(),
+                "money_in_paise": money_in,
+                "money_out_paise": money_out,
+                "net_paise": money_in - money_out,
+                "accounts": [
+                    {
+                        "account": account,
+                        "in_paise": a["in_paise"],
+                        "out_paise": a["out_paise"],
+                        "net_paise": a["in_paise"] - a["out_paise"],
+                    }
+                    for account, a in by_account.items()
+                ],
+                "entries": CashLedgerEntrySerializer(qs, many=True).data,
+            }
+        )
 
 
 class CashSummaryView(APIView):
@@ -358,3 +422,142 @@ class CashReverseView(APIView):
         except AlreadyReversedError as exc:
             return Response({"detail": str(exc)}, status=409)
         return Response(CashLedgerEntrySerializer(rev).data, status=201)
+
+
+def _line_dict(line: BankStatementLine) -> dict[str, Any]:
+    return {
+        "id": line.id,
+        "import_id": line.import_batch_id,
+        "txn_date": line.txn_date,
+        "narration": line.narration,
+        "debit_paise": line.debit_paise,
+        "credit_paise": line.credit_paise,
+        "balance_paise": line.balance_paise,
+        "status": line.status,
+        "match_confidence": line.match_confidence,
+        "candidates": line.candidates,
+        "matched_entry_id": line.matched_entry_id,
+        "matched_entry_doc_number": line.matched_entry.doc_number if line.matched_entry_id else None,
+        "matched_by_name": (
+            (line.matched_by.full_name or line.matched_by.username) if line.matched_by_id else ""
+        ),
+    }
+
+
+class BankStatementImportsView(APIView):
+    """Upload a bank statement (`money: manage`) — parsed and auto-matched in
+    one shot (`finledger.reconciliation`) — or list past uploads
+    (`money: view`, same rung as reading the cash ledger these lines offset)."""
+
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
+
+    def get(self, request: Request) -> Response:
+        batches = BankStatementImport.objects.select_related("file", "uploaded_by").order_by(
+            "-created_at"
+        )[:100]
+        return Response(
+            {
+                "rows": [
+                    {
+                        "id": b.id,
+                        "created_at": b.created_at,
+                        "filename": b.file.filename,
+                        "bank_label": b.bank_label,
+                        "row_count": b.row_count,
+                        "matched_count": b.matched_count,
+                        "uploaded_by_name": (
+                            (b.uploaded_by.full_name or b.uploaded_by.username)
+                            if b.uploaded_by_id
+                            else ""
+                        ),
+                    }
+                    for b in batches
+                ]
+            }
+        )
+
+    def post(self, request: Request) -> Response:
+        if not _keeps_books(request.user):
+            return Response({"detail": "Not permitted."}, status=403)
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response({"detail": "A file is required."}, status=400)
+        try:
+            stored = StoredFile.from_upload(upload, StoredFile.Kind.BANK_STATEMENT, request.user)
+        except UploadTooLarge as exc:
+            return Response({"detail": str(exc)}, status=413)
+        try:
+            rows = parse_statement(bytes(stored.content), stored.filename, stored.content_type)
+        except UnsupportedFormat as exc:
+            stored.delete()
+            return Response({"detail": str(exc)}, status=400)
+        batch = BankStatementImport.objects.create(
+            file=stored,
+            bank_label=request.data.get("bank_label", ""),
+            uploaded_by=request.user,
+        )
+        process_import(batch, rows)
+        return Response(
+            {
+                "id": batch.id,
+                "filename": stored.filename,
+                "row_count": batch.row_count,
+                "matched_count": batch.matched_count,
+            },
+            status=201,
+        )
+
+
+class BankStatementLinesView(APIView):
+    """A batch's rows, optionally narrowed to one status — the review queue
+    Accounts works through after an upload."""
+
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
+
+    def get(self, request: Request, import_id: int) -> Response:
+        qs = BankStatementLine.objects.select_related("matched_entry", "matched_by").filter(
+            import_batch_id=import_id
+        )
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return Response({"rows": [_line_dict(line) for line in qs]})
+
+
+class BankStatementLineMatchView(APIView):
+    """Accounts' say on one line once the matcher's own guess isn't good
+    enough on its own: link it to a specific `CashLedgerEntry` (from the
+    cached `candidates` or picked by id another way), unlink a wrong
+    auto-match, or mark it `ignored` (a bank charge/interest row with no
+    ledger counterpart at all)."""
+
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
+
+    def post(self, request: Request, pk: int) -> Response:
+        if not _keeps_books(request.user):
+            return Response({"detail": "Not permitted."}, status=403)
+        line = BankStatementLine.objects.filter(pk=pk).first()
+        if not line:
+            return Response({"detail": "Not found."}, status=404)
+
+        action = request.data.get("action", "link")
+        if action == "ignore":
+            line.status = BankStatementLine.Status.IGNORED
+            line.matched_entry = None
+            line.matched_by = request.user
+        elif action == "unlink":
+            line.status = BankStatementLine.Status.REVIEW if line.candidates else BankStatementLine.Status.UNMATCHED
+            line.matched_entry = None
+            line.matched_by = None
+        else:
+            entry_id = request.data.get("entry_id")
+            entry = CashLedgerEntry.objects.filter(pk=entry_id).first()
+            if not entry:
+                return Response({"detail": "entry_id is required and must be a cash ledger entry."}, status=400)
+            if BankStatementLine.objects.filter(matched_entry=entry).exclude(pk=line.pk).exists():
+                return Response({"detail": "That cash ledger entry is already matched to another line."}, status=409)
+            line.status = BankStatementLine.Status.MATCHED
+            line.matched_entry = entry
+            line.matched_by = request.user
+        line.save(update_fields=["status", "matched_entry", "matched_by"])
+        return Response(_line_dict(line))

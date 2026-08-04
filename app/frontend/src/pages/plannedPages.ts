@@ -124,14 +124,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     ],
     module: ACCOUNTS,
   },
-  "/money/bank": {
-    summary: "Matching the bank statement against what the books say.",
-    contains: [
-      "Bank reconciliation, statement line against book entry",
-      "Unmatched entries listed openly, not hidden",
-    ],
-    module: ACCOUNTS,
-  },
   "/money/collections": {
     summary: "Money collected at the stores against money actually banked.",
     contains: [

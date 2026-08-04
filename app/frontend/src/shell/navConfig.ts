@@ -295,6 +295,10 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Store Targets", to: "/money/store-targets" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
+      // Same day, split into money in vs out per account instead of one
+      // running balance (#254) — the daily read Accounts asked for directly,
+      // reading the same `CashLedgerEntry` rows "Cash" already lists.
+      { label: "Daily Cash", to: "/money/daily-cash", minCapability: "manage" },
       // The partner-billing dial (Rule 12): filed under Money, not Setup, for
       // the same reason Store Targets is — the gate deciding the filing is
       // `money`, which Owner and Accounts already hold, and putting it behind
@@ -312,7 +316,7 @@ export const SECTIONS: NavSectionDef[] = [
       // endpoint behind it is gated at `money: manage` for the same reason, so
       // the sidebar and the API agree (#85).
       { label: "IRN Queue", to: "/money/irn-queue", minCapability: "manage" },
-      { label: "Bank", to: "/money/bank", planned: true, minCapability: "manage" },
+      { label: "Bank Reconciliation", to: "/money/bank", minCapability: "manage" },
       { label: "Collections", to: "/money/collections", planned: true, minCapability: "manage" },
       { label: "Expenses", to: "/money/expenses", planned: true },
       { label: "Tally", to: "/money/tally", planned: true, minCapability: "manage" },

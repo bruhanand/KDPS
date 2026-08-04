@@ -35,6 +35,7 @@ from core.textsearch import search_term, text_filter
 from finledger.models import PartnerLedgerEntry
 from finledger.posting import (
     AlreadyReversedError,
+    account_for_mode,
     post_partner_settlement,
     reverse_partner_settlement,
     rupees_to_paise,
@@ -879,13 +880,18 @@ class PartnerSettlementsView(APIView):
         amount = rupees_to_paise(request.data.get("amount"))
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
+        mode = request.data.get("mode", "cash")
         entry = post_partner_settlement(
             store,
             amount,
             request.data.get("description", ""),
             request.user,
-            mode=request.data.get("mode", "cash"),
-            account=request.data.get("account", "CASH"),
+            mode=mode,
+            # Which cash-ledger bucket (and so, later, whether Bank
+            # Reconciliation can even see this row) — derived from `mode`
+            # itself rather than trusted from the request, so a "bank"/"upi"
+            # payment doesn't silently land under CASH.
+            account=account_for_mode(mode),
             reference=request.data.get("reference", ""),
         )
         return Response(

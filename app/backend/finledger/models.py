@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from django.db import models
 
+from core.base import TimeStampedModel
 from core.ledger import LedgerEntry
 
 
@@ -150,3 +151,73 @@ class CashLedgerEntry(LedgerEntry):
 
     def __str__(self) -> str:
         return f"{self.doc_number} · {self.account} · {self.amount}"
+
+
+class BankStatementImport(TimeStampedModel):
+    """One uploaded bank statement file. Not a ledger — this is import
+    metadata (which file, how many rows matched), mutable by design (ADR-0004
+    only binds the money facts in `*LedgerEntry`, not the paperwork about
+    them), so a batch's summary counters can be corrected as its lines are
+    reviewed without any append-only churn."""
+
+    file = models.OneToOneField(
+        "files.StoredFile", on_delete=models.PROTECT, related_name="bank_statement_import"
+    )
+    bank_label = models.CharField(max_length=80, blank=True, default="")
+    uploaded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    row_count = models.IntegerField(default=0)
+    matched_count = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "finledger_bank_statement_import"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.file.filename} ({self.matched_count}/{self.row_count} matched)"
+
+
+class BankStatementLine(TimeStampedModel):
+    """One row of an uploaded statement, and — once
+    `finledger.reconciliation` has had a look — what it thinks that row is:
+    `matched` (confident enough to auto-link), `review` (candidates exist,
+    none certain), `unmatched` (nothing plausible), or `ignored` (Accounts
+    said so — a bank charge/interest line with no ledger counterpart at all).
+    `matched_entry` is a plain FK onto the append-only `CashLedgerEntry`
+    table: this row is mutable and gets corrected freely; the ledger row it
+    points at never does."""
+
+    class Status(models.TextChoices):
+        MATCHED = "matched", "Matched"
+        REVIEW = "review", "Needs review"
+        UNMATCHED = "unmatched", "Unmatched"
+        IGNORED = "ignored", "Ignored"
+
+    import_batch = models.ForeignKey(
+        BankStatementImport, on_delete=models.CASCADE, related_name="lines"
+    )
+    txn_date = models.DateField()
+    narration = models.CharField(max_length=500, blank=True, default="")
+    debit_paise = models.BigIntegerField(default=0)
+    credit_paise = models.BigIntegerField(default=0)
+    balance_paise = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.UNMATCHED)
+    matched_entry = models.OneToOneField(
+        "finledger.CashLedgerEntry",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bank_statement_line",
+    )
+    match_confidence = models.IntegerField(default=0)
+    #: Top few candidates the matcher considered at import time (entry id,
+    #: score, and enough of the entry to show without a join) — cached so the
+    #: review screen doesn't re-score on every page load.
+    candidates = models.JSONField(default=list, blank=True)
+    matched_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        db_table = "finledger_bank_statement_line"
+        ordering = ["-txn_date", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.txn_date} · {self.narration[:40]} · {self.status}"

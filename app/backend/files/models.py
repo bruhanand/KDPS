@@ -22,6 +22,7 @@ class StoredFile(TimeStampedModel):
         BOOKING_RECEIPT = "booking_receipt", "Booking receipt"
         INVOICE = "invoice", "Invoice"
         PT_FILE = "pt_file", "PT file"
+        BANK_STATEMENT = "bank_statement", "Bank statement"
         OTHER = "other", "Other"
 
     filename = models.CharField(max_length=255)

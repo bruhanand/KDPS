@@ -60,6 +60,28 @@ def gl_control_for(account: str) -> str:
     return CASH_CONTROL_ACCOUNTS.get(account, GLAccount.CASH)
 
 
+#: The `mode` field is free-text/descriptive (what the payer/payee said "how"
+#: they paid, e.g. the dropdown on the Partner Settlement or Vendor Payment
+#: form); this is the one place that turns "how" into "which bucket" for the
+#: cash ledger, so a bank-transfer or UPI payment actually lands in BANK/UPI
+#: instead of silently defaulting to CASH just because the caller only ever
+#: passed `mode`, never a separate `account`. Feeds both the Daily Cash
+#: Dashboard's per-account split and Bank Reconciliation's "only bank/UPI/
+#: cheque money can appear on a bank statement" scope.
+MODE_TO_ACCOUNT: dict[str, str] = {
+    "bank": CashLedgerEntry.Account.BANK,
+    "neft": CashLedgerEntry.Account.BANK,
+    "rtgs": CashLedgerEntry.Account.BANK,
+    "cheque": CashLedgerEntry.Account.BANK,
+    "upi": CashLedgerEntry.Account.UPI,
+    "card": CashLedgerEntry.Account.CARD,
+}
+
+
+def account_for_mode(mode: str) -> str:
+    return MODE_TO_ACCOUNT.get((mode or "").strip().lower(), CashLedgerEntry.Account.CASH)
+
+
 class AlreadyReversedError(Exception):
     """A ledger entry that already has a live reversal cannot be reversed again
     (a second reversal would over-credit the vendor / over-pay the cash account)."""
