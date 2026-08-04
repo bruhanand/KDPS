@@ -3,7 +3,7 @@
 // net of whatever Accounts has recorded against it (`PartnerSettlementsView`).
 import { useState, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight, IndianRupee, Plus, RotateCcw, Send, X } from "lucide-react";
+import { ChevronDown, ChevronRight, IndianRupee, Plus, Printer, RotateCcw, Send, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { userCan } from "../shell/navConfig";
@@ -11,6 +11,8 @@ import { api, apiErrorMessage } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { Money } from "../lib/format";
 import { useDoc } from "../lib/hooks";
+import { settlementReceiptHtml } from "../lib/settlementReceipt";
+import { browserPrintAdapter } from "../till/print";
 import "./PtMapper.css";
 
 interface DueTransfer {
@@ -47,11 +49,14 @@ interface SettlementRow {
   doc_number: string;
   kind: "payment" | "reversal";
   store_id: number;
+  store_code: string;
+  store_name: string;
   amount_paise: number;
   amount_rupees: string;
   description: string;
   reference: string;
   mode: string;
+  posted_by_name: string;
 }
 
 function fmtDate(iso: string | null): string {
@@ -115,6 +120,22 @@ export function PartnerDuesPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function printReceipt(h: SettlementRow) {
+    await browserPrintAdapter.print(
+      settlementReceiptHtml({
+        doc_number: h.doc_number,
+        created_at: h.created_at,
+        store_code: h.store_code,
+        store_name: h.store_name,
+        amount_paise: h.amount_paise,
+        mode: h.mode,
+        reference: h.reference,
+        description: h.description,
+        posted_by_name: h.posted_by_name,
+      }),
+    );
   }
 
   return (
@@ -304,9 +325,18 @@ export function PartnerDuesPage() {
                                             {h.amount_rupees}
                                           </td>
                                           <td>{h.kind !== "reversal" && (
-                                            <button className="btn btn-sm" disabled={busy} onClick={() => reverseSettlement(h.id)} data-testid={`pd-history-reverse-${h.id}`}>
-                                              <RotateCcw size={12} /> Reverse
-                                            </button>
+                                            <div style={{ display: "flex", gap: 6 }}>
+                                              <button
+                                                className="btn btn-sm"
+                                                onClick={() => printReceipt(h)}
+                                                data-testid={`pd-history-print-${h.id}`}
+                                              >
+                                                <Printer size={12} /> Receipt
+                                              </button>
+                                              <button className="btn btn-sm" disabled={busy} onClick={() => reverseSettlement(h.id)} data-testid={`pd-history-reverse-${h.id}`}>
+                                                <RotateCcw size={12} /> Reverse
+                                              </button>
+                                            </div>
                                           )}</td>
                                         </tr>
                                       ))}

@@ -841,7 +841,9 @@ class PartnerSettlementsView(APIView):
     permission_classes = [IsAuthenticated, CanManagePartnerSettlements]
 
     def get(self, request: Request) -> Response:
-        qs = PartnerLedgerEntry.objects.select_related("store").order_by("-created_at", "-id")
+        qs = PartnerLedgerEntry.objects.select_related("store", "posted_by").order_by(
+            "-created_at", "-id"
+        )
         store_id = request.query_params.get("store")
         if store_id:
             qs = qs.filter(store_id=store_id)
@@ -861,6 +863,9 @@ class PartnerSettlementsView(APIView):
                         "description": e.description,
                         "reference": e.reference,
                         "mode": e.mode,
+                        "posted_by_name": (
+                            (e.posted_by.full_name or e.posted_by.username) if e.posted_by else ""
+                        ),
                     }
                     for e in qs[:200]
                 ]

@@ -159,6 +159,29 @@ against the deployed preview — verdict was DO-NOT-LAUNCH on 4 findings. User s
   check) — 100% pass, backend + frontend, zero regressions from the
   secret-key rotation / DEBUG flip; all seeded passwords still work.
 
+**Follow-up (same session): Settlement Receipts.** A "Receipt" button on every
+payment row in `PartnerDues.tsx`'s history table (only on `payment` rows, not
+reversals — a reversal isn't money received) opens a printable, letterhead-
+styled A4 voucher: `frontend/src/lib/settlementReceipt.ts` builds a whole HTML
+document (same convention as the till's own customer receipt,
+`till/receipt.ts`) and prints it through the already-built, already-tested
+`till/print.ts`'s `browserPrintAdapter` (hidden iframe + `window.print()`) —
+reused as-is, no till-specific coupling in that module. User's explicit
+choices: letterhead style ("KDPS LIFESTYLE PVT LTD"), titled "Settlement
+Receipt." No fabricated address/GSTIN on it — `masters.LegalEntity` has no
+address field and this is an internal payment voucher, not a GST tax invoice,
+so it doesn't need one. Shows voucher no., date, store, amount, mode,
+reference, note, and who recorded it (`PartnerSettlementsView` now also
+returns `posted_by_name`, resolved server-side from
+`PartnerLedgerEntry.posted_by`). Prompted by a user-uploaded document, `KDPS
+Daily Work Survey - Accounts Team.pdf` (Chetna, Account Head) — her stated
+pain point is not trusting a figure until she's chased it down, which a
+printable per-payment voucher directly answers. Self-tested (Playwright):
+button renders only on payment rows, click spawns the print iframe with the
+correct letterhead/amount, no console errors; a direct unit check of
+`settlementReceiptHtml()` confirmed correct data substitution and that
+free-text `reference`/`description` fields are HTML-escaped (no injection).
+
 **Follow-up (same session): Cookie-only sessions.** The one hardening item
 deferred above — moved the frontend fully onto the httpOnly-cookie auth path
 the backend already supported (`CookieOrHeaderJWTAuthentication`,
