@@ -42,6 +42,8 @@ from outbound.views import (
     GapClosureSubmitView,
     MarkDamagedView,
     PartnerDuesView,
+    PartnerSettlementReverseView,
+    PartnerSettlementsView,
     RequestApprovalView,
     ReturnablePoolView,
     RTVCreditNoteView,
@@ -124,6 +126,13 @@ urlpatterns = [
     path("partner-billing-policy", BillingPolicyView.as_view(), name="partner-billing-policy"),
     # What each partner store owes, summed off that same dial's own figures.
     path("partner-dues", PartnerDuesView.as_view(), name="partner-dues"),
+    # A payment received against a partner store's dues (+ its history).
+    path("partner-settlements", PartnerSettlementsView.as_view(), name="partner-settlements"),
+    path(
+        "partner-settlements/<int:pk>/reverse",
+        PartnerSettlementReverseView.as_view(),
+        name="partner-settlement-reverse",
+    ),
     # Stock requests — the pull side of a transfer (#74)
     path("stock-search", CrossLocationStockSearchView.as_view(), name="stock-search"),
     path("stock-requests", StockRequestListCreateView.as_view(), name="stock-request-list"),

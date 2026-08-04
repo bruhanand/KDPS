@@ -20,6 +20,7 @@ import io
 from typing import Any
 
 import openpyxl
+from django.db.models import Sum
 from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -29,8 +30,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
+from core.money import paise_to_rupees_str
 from core.textsearch import search_term, text_filter
-from masters.models import Brand
+from finledger.models import PartnerLedgerEntry
+from finledger.posting import (
+    AlreadyReversedError,
+    post_partner_settlement,
+    reverse_partner_settlement,
+    rupees_to_paise,
+)
+from masters.models import Brand, Store
 from masters.scoping import (
     actionable_store_ids,
     scope_by_entitlement,
@@ -74,6 +83,7 @@ from outbound.permissions import (
     CanExecuteVFlip,
     CanFlipOwnership,
     CanManageBillingPolicy,
+    CanManagePartnerSettlements,
     CanReadReturnToBrand,
     CanReadTransferPT,
     CanViewPartnerDues,
@@ -749,7 +759,12 @@ class PartnerDuesView(APIView):
     over data that exists regardless of `BillingPolicy.mode`, so it means the
     same thing whether or not that figure ever reached the ledger. A dispatch
     still in DRAFT owes nothing yet: this only counts SUBMITTED transfers,
-    the same rung `posting._bill_partner_store` only ever sets the figure at."""
+    the same rung `posting._bill_partner_store` only ever sets the figure at.
+
+    Net Outstanding offsets that billed total against `PartnerLedgerEntry` —
+    what Accounts has recorded as received (`PartnerSettlementsView`). There
+    is no BILL kind on that ledger to double-count: the billed side stays this
+    view's own aggregation, exactly as before settlements existed."""
 
     permission_classes = [IsAuthenticated, CanViewPartnerDues]
 
@@ -793,14 +808,104 @@ class PartnerDuesView(APIView):
                 }
             )
 
-        stores = sorted(by_store.values(), key=lambda r: r["total_owed_paise"], reverse=True)
+        paid_by_store = {
+            r["store_id"]: r["paid"] or 0
+            for r in PartnerLedgerEntry.objects.filter(store_id__in=by_store.keys())
+            .values("store_id")
+            .annotate(paid=Sum("amount"))
+        }
+        for store_id, row in by_store.items():
+            paid = paid_by_store.get(store_id, 0)
+            row["total_paid_paise"] = paid
+            row["net_outstanding_paise"] = row["total_owed_paise"] - paid
+
+        stores = sorted(by_store.values(), key=lambda r: r["net_outstanding_paise"], reverse=True)
+        total_paid = sum(paid_by_store.values())
+        total_owed = sum(r["total_owed_paise"] for r in stores)
         return Response(
             {
                 "stores": stores,
-                "total_owed_paise": sum(r["total_owed_paise"] for r in stores),
+                "total_owed_paise": total_owed,
+                "total_paid_paise": total_paid,
+                "net_outstanding_paise": total_owed - total_paid,
                 "billing_mode": BillingPolicy.current().mode,
             }
         )
+
+
+class PartnerSettlementsView(APIView):
+    """Record a payment against a partner store's dues (`money: manage`), or
+    list its settlement history (`money: view`) — the other half of
+    `PartnerDuesView`'s Total Owed, offset there rather than double-kept here."""
+
+    permission_classes = [IsAuthenticated, CanManagePartnerSettlements]
+
+    def get(self, request: Request) -> Response:
+        qs = PartnerLedgerEntry.objects.select_related("store").order_by("-created_at", "-id")
+        store_id = request.query_params.get("store")
+        if store_id:
+            qs = qs.filter(store_id=store_id)
+        return Response(
+            {
+                "rows": [
+                    {
+                        "id": e.id,
+                        "created_at": e.created_at,
+                        "doc_number": e.doc_number,
+                        "kind": e.kind,
+                        "store_id": e.store_id,
+                        "store_code": e.store.code,
+                        "store_name": e.store.name,
+                        "amount_paise": e.amount,
+                        "amount_rupees": paise_to_rupees_str(e.amount),
+                        "description": e.description,
+                        "reference": e.reference,
+                        "mode": e.mode,
+                    }
+                    for e in qs[:200]
+                ]
+            }
+        )
+
+    def post(self, request: Request) -> Response:
+        store = Store.objects.filter(pk=request.data.get("store_id"), is_partner=True).first()
+        if not store:
+            return Response({"detail": "store_id is required / must be a partner store."}, status=400)
+        amount = rupees_to_paise(request.data.get("amount"))
+        if amount <= 0:
+            return Response({"detail": "A positive amount is required."}, status=400)
+        entry = post_partner_settlement(
+            store,
+            amount,
+            request.data.get("description", ""),
+            request.user,
+            mode=request.data.get("mode", "cash"),
+            account=request.data.get("account", "CASH"),
+            reference=request.data.get("reference", ""),
+        )
+        return Response(
+            {
+                "id": entry.id,
+                "doc_number": entry.doc_number,
+                "amount_paise": entry.amount,
+                "amount_rupees": paise_to_rupees_str(entry.amount),
+            },
+            status=201,
+        )
+
+
+class PartnerSettlementReverseView(APIView):
+    permission_classes = [IsAuthenticated, CanManagePartnerSettlements]
+
+    def post(self, request: Request, pk: int) -> Response:
+        entry = PartnerLedgerEntry.objects.filter(pk=pk).first()
+        if not entry:
+            return Response({"detail": "Not found."}, status=404)
+        try:
+            rev = reverse_partner_settlement(entry, request.user)
+        except AlreadyReversedError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        return Response({"id": rev.id, "doc_number": rev.doc_number}, status=201)
 
 
 # ---------------------------------------------------------------------------

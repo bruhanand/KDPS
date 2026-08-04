@@ -95,6 +95,11 @@ CanManageBillingPolicy = require_section("money", CAP_VIEW, write_minimum=CAP_MA
 #: read-only report, same rung as reading the billing dial itself.
 CanViewPartnerDues = require_section("money", CAP_VIEW)
 
+#: Recording (and reversing) a payment against what a partner store owes —
+#: the same money-manage rung as changing the billing dial itself. Reading the
+#: settlement history sits at `money: view`, same as the dues report it offsets.
+CanManagePartnerSettlements = require_section("money", CAP_VIEW, write_minimum=CAP_MANAGE)
+
 
 class CanExecuteVFlip(BasePermission):
     """Live policy above the immutable Accounts/Owner value-posting floor."""

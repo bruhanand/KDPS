@@ -25,12 +25,13 @@ from django.db import transaction
 from core.documents import VoucherSeries
 from core.gl import GLAccount, GLEntry
 from core.posting import Leg, PostingRef, cr, dr, post_entries
-from finledger.models import CashLedgerEntry, VendorLedgerEntry
+from finledger.models import CashLedgerEntry, PartnerLedgerEntry, VendorLedgerEntry
 from masters.models import Brand
 
 HO_CODE = "HO"
 VENDOR_DOC = "VEND"
 CASH_DOC = "CASH"
+PARTNER_DOC = "PSET"
 
 #: Which value-GL control account each cash-ledger account rolls up into.
 #:
@@ -382,6 +383,121 @@ def reverse_pt_vendor_bills(pt, user) -> int:
         reverse_vendor_entry(entry, user)
         count += 1
     return count
+
+
+# --- Partner ledger ---------------------------------------------------------
+
+
+@transaction.atomic
+def post_partner_settlement(
+    store,
+    amount_paise: int,
+    description: str,
+    user,
+    *,
+    mode: str = "",
+    account: str = "CASH",
+    reference: str = "",
+    also_cash: bool = True,
+) -> PartnerLedgerEntry:
+    """+amount: a payment received from a partner store, reducing what it owes
+    (billed off `StoreTransfer.partner_billing_value_paise` — there is no BILL
+    kind on this ledger to net against; see the model docstring).
+
+    Optionally a paired cash-in on the cash ledger (``also_cash``). Also books
+    ONE balanced GL voucher Dr CASH / Cr PARTNER_RECEIVABLE — but only when the
+    chain's `BillingPolicy` actually posted the receivable in the first place
+    (`GL_POSTING` mode): under `INFORMATIONAL` there is nothing in the GL to
+    clear, so a settlement stays subledger-only too, exactly mirroring how the
+    bill side already behaves (`outbound.posting._bill_partner_store`).
+
+    Deferred import of `BillingPolicy`: `outbound` already imports
+    `finledger.posting` (for PT vendor bills), so importing it back at module
+    load time here would cycle.
+    """
+    from outbound.models import BillingPolicy
+
+    entry = PartnerLedgerEntry.objects.create(
+        store=store,
+        amount=abs(amount_paise),
+        kind=PartnerLedgerEntry.Kind.PAYMENT,
+        doc_number=_allocate(PARTNER_DOC),
+        description=description,
+        reference=reference,
+        mode=mode,
+        posted_by=_user(user),
+    )
+    if also_cash and amount_paise:
+        CashLedgerEntry.objects.create(
+            account=account,
+            amount=abs(amount_paise),
+            kind=CashLedgerEntry.Kind.RECEIPT,
+            doc_number=_allocate(CASH_DOC),
+            description=description or f"Settlement from {store.name}",
+            mode=mode,
+            link_doc=entry.doc_number,
+            posted_by=_user(user),
+        )
+    if amount_paise and BillingPolicy.current().mode == BillingPolicy.Mode.GL_POSTING:
+        debit_account = gl_control_for(account) if also_cash else GLAccount.SUSPENSE
+        _post_gl(
+            PARTNER_DOC,
+            entry.doc_number,
+            [
+                dr(
+                    debit_account,
+                    abs(amount_paise),
+                    memo=description or f"Settlement from {store.name}",
+                ),
+                cr(
+                    GLAccount.PARTNER_RECEIVABLE,
+                    abs(amount_paise),
+                    party_type="store",
+                    party_code=store.code,
+                    memo=f"Settlement from {store.code}",
+                ),
+            ],
+            user,
+        )
+    return entry
+
+
+@transaction.atomic
+def reverse_partner_settlement(entry: PartnerLedgerEntry, user) -> PartnerLedgerEntry:
+    """Append a negative mirror; also reverse a paired cash-in if one exists, and
+    append the negated GL mirror of the entry's value voucher (if any)."""
+    if entry.kind == PartnerLedgerEntry.Kind.REVERSAL:
+        raise AlreadyReversedError("a reversal cannot itself be reversed")
+    if PartnerLedgerEntry.objects.filter(reverses=entry).exists():
+        raise AlreadyReversedError(f"{entry.doc_number} has already been reversed")
+    number = _allocate(PARTNER_DOC)
+    rev = PartnerLedgerEntry.objects.create(
+        store=entry.store,
+        amount=-entry.amount,
+        kind=PartnerLedgerEntry.Kind.REVERSAL,
+        doc_number=number,
+        description=f"Reversal of {entry.doc_number}",
+        reverses=entry,
+        posted_by=_user(user),
+    )
+    for cash in CashLedgerEntry.objects.filter(
+        link_doc=entry.doc_number, kind=CashLedgerEntry.Kind.RECEIPT
+    ):
+        if CashLedgerEntry.objects.filter(reverses=cash).exists():
+            continue  # this paired cash-in was already reversed
+        CashLedgerEntry.objects.create(
+            account=cash.account,
+            amount=-cash.amount,
+            kind=CashLedgerEntry.Kind.REVERSAL,
+            doc_number=_allocate(CASH_DOC),
+            description=f"Reversal of {cash.doc_number}",
+            mode=cash.mode,
+            link_doc=number,
+            reverses=cash,
+            posted_by=_user(user),
+        )
+    _reverse_gl(entry.doc_number, number, PARTNER_DOC, user)
+    return rev
 
 
 # --- Cash ledger -----------------------------------------------------------

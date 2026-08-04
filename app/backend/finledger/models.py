@@ -1,8 +1,13 @@
-"""Vendor (accounts-payable) and Cash ledgers — append-only over `core.LedgerEntry`.
+"""Vendor (accounts-payable), Partner (accounts-receivable) and Cash ledgers —
+append-only over `core.LedgerEntry`.
 
 Sign conventions (so a running Σ(amount) IS the balance):
   VendorLedgerEntry  +amount = we owe more (a bill/credit), −amount = a payment.
                      Σ = outstanding payable to that vendor.
+  PartnerLedgerEntry +amount = a payment received from the partner store.
+                     Σ, subtracted from `partner_billing_value_paise` billed to
+                     it, = what the partner store still owes (there is no BILL
+                     kind here — see the class docstring).
   CashLedgerEntry    +amount = cash in (receipt),           −amount = cash out (payment).
                      Σ = cash on hand in that account.
 
@@ -58,6 +63,45 @@ class VendorLedgerEntry(LedgerEntry):
 
     def __str__(self) -> str:
         return f"{self.doc_number} · {self.vendor_id} · {self.amount}"
+
+
+class PartnerLedgerEntry(LedgerEntry):
+    """Payments received from a partner store, offset against what
+    `outbound.PartnerDuesView` says it owes (billed at Purchase Price on every
+    transfer it receives — `outbound.posting._bill_partner_store`).
+
+    There is no BILL kind here: unlike the vendor ledger, the bill side of this
+    account is not posted through this table at all — it is
+    `StoreTransfer.partner_billing_value_paise`, computed once at dispatch. This
+    ledger only ever records what came back in payment of that running total,
+    so "what a partner still owes" is billed-off-transfers minus Σ(amount) here.
+    """
+
+    class Kind(models.TextChoices):
+        PAYMENT = "payment", "Payment received"
+        REVERSAL = "reversal", "Reversal"
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="partner_ledger_entries"
+    )
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    doc_number = models.CharField(max_length=128, db_index=True)
+    description = models.CharField(max_length=240, blank=True, default="")
+    reference = models.CharField(max_length=120, blank=True, default="")
+    mode = models.CharField(max_length=24, blank=True, default="")  # cash / bank / upi / cheque
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    # The entry this row reverses — guards against a second reversal (over-crediting
+    # the partner, i.e. understating what it still owes).
+    reverses = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="reversed_by"
+    )
+
+    class Meta:
+        db_table = "finledger_partner_entry"
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.doc_number} · {self.store_id} · {self.amount}"
 
 
 class CashLedgerEntry(LedgerEntry):
