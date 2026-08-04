@@ -39,6 +39,17 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "ci-secret-not-for-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
+# A forgeable SECRET_KEY forges every JWT this process signs, up to and
+# including an Owner login — the one placeholder that must never survive into
+# a real deployment. DEBUG is the same signal Render/CI already use to tell
+# "this is a real deployment" from "this is dev/CI", so the guard rides it
+# rather than adding a second flag nobody remembers to set.
+if not DEBUG and SECRET_KEY in {"ci-secret-not-for-production", "kdps-dev-secret-not-for-production"}:
+    raise RuntimeError(
+        "DJANGO_SECRET_KEY is still the dev/CI placeholder with DJANGO_DEBUG=0. "
+        "Set a real, random DJANGO_SECRET_KEY before running non-DEBUG."
+    )
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -134,6 +145,9 @@ AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 PASSWORD_HASHERS = [

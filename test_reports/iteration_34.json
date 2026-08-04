@@ -1,0 +1,42 @@
+{
+  "summary": "Post-security-hardening full regression pass after DJANGO_SECRET_KEY rotation, DEBUG=0, admin unmount, and CORS tightening. Backend: created /app/backend/tests/test_security_hardening_regression.py (14 tests) covering health, clean 404 (no traceback), login for 4 roles (owner/accounts1/deo.manager/superadmin) with valid JWT access+refresh, invalid-creds rejection, /api/auth/me, logout, unauth rejection, Partner Dues / Vendor / Stores read endpoints, admin route via public URL. 14/14 passed. Frontend: verified login UI for owner/accounts1/deo.manager, session persists across page refresh, logout clears localStorage and redirects to /login, RBAC sidebar correctly differs per role (Accounts sees Money/Vendor Ledger/Partner Dues; Store Manager sees a narrow nav with no Setup/Access), Partner Dues page renders real data (BANKA store dues), Vendor Ledger page loads, Setup > Stores page loads with 6 stores. No regressions found from the secret-key rotation / DEBUG flip - JWT+RBAC path is fully intact and old passwords (Owner@123/Acct@123/Store@123/Super@123) still authenticate.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "security_verification": {
+    "GET /api/health via public URL": "200, clean JSON, no stack trace",
+    "GET /api/nonexistent-xyz via internal :8001": "404, clean HTML, NO Python traceback (DEBUG=0 confirmed effective)",
+    "GET /admin/ via internal :8001": "404 (admin unmounted, confirmed via curl direct to backend)",
+    "GET /admin/ via public preview URL": "200 - but this hits the frontend SPA catch-all (React app), NOT Django, as pre-warned in the review request; Django itself correctly 404s /admin/ when reached directly on :8001. Not a regression.",
+    "CORS on public URL (nginx/ingress layer)": "reflects Access-Control-Allow-Origin: * for ANY origin including a fabricated 'random-evil.emergentagent.com' - this is the platform's ingress/proxy adding its own permissive CORS headers, sitting in front of Django, not something the app config controls.",
+    "CORS on Django directly (:8001)": "correctly origin-restricted: allowed origin (https://fabric-flow-mbo.preview.emergentagent.com) gets echoed back with Access-Control-Allow-Credentials: true; a disallowed origin (random-evil.emergentagent.com) gets NO Access-Control-Allow-Origin header at all. CORS_ALLOWED_ORIGINS tightening verified working correctly at the Django layer.",
+    "JWT login shape": "access + refresh present, valid Bearer tokens, /api/auth/me round-trips correctly for all 4 roles tested",
+    "RBAC sidebar": "owner sees full nav (incl. Setup/Users&Roles/Access/Audit Log), accounts1 sees Money/Vendor Ledger/Partner Dues, deo.manager (store_manager) sees a narrow nav (Dashboard/Sell/Inventory/Receive Goods/Transfer/Booking/Money/Offers & Price/Reports/Attendance) with no Setup section - confirms role-gating unaffected by secret-key rotation"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_regression.py",
+    "/app/test_reports/pytest/pytest_results_security.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "settings.py startup guard (raise RuntimeError on placeholder SECRET_KEY + DEBUG=0) is a good fail-fast pattern - verified backend boots fine with the new rotated key.",
+    "urls.py admin-gating on settings.DEBUG or ENABLE_DJANGO_ADMIN=1 works as intended when hit directly on the Django process; note (not a bug) that on this hosting platform, /admin/ on the *public URL* is intercepted by the frontend's SPA routing before it ever reaches Django, so it will show the React app / 200 rather than Django's 404 unless a caller hits the backend host directly - this is purely an artifact of ingress routing rules (non-/api paths -> frontend), already flagged as expected in the review request.",
+    "No code changes made by this testing pass - all findings from the security hardening review verified as working; ALLOWED_HOSTS=* correctly NOT flagged per instructions."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_regression.py"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (all flows tested passed)"},
+  "test_credentials": "owner/Owner@123, accounts1/Acct@123, deo.manager/Store@123, superadmin/Super@123 (from /app/memory/test_credentials.md) - all verified working post-rotation",
+  "seed_data_creation": "none - used existing seeded accounts, no mutating writes performed beyond login/logout",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Security hardening pass (SECRET_KEY rotation, DEBUG=0, admin unmount, CORS tightening) fully verified with no regressions. Backend test file test_security_hardening_regression.py requires KDPS_TEST_ALLOW_REMOTE=1 env var to run against the live preview URL (there's a safety gate in conftest/live_gate blocking writes to shared/remote DBs by default) - remember this for future runs. Partner Settlements (iteration_33) smoke-checked via Partner Dues page load, still fine.",
+  "rca_of_the_issue": "N/A - no bug found. This was a proactive regression/verification pass post security-hardening, not a bug investigation."
+}
