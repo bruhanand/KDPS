@@ -12,7 +12,13 @@ name: CI
 #   backend-live   — migrate + seed + uvicorn + pytest tests/ (~12 min)
 #   frontend       — yarn install + tsc + vitest (~3 min)
 
+# `workflow_dispatch` is not a convenience. A push whose tip is a *merge* commit
+# does not trigger this workflow at all while `paths-ignore` is set — the filter
+# sees no changed files on the merge and skips the run — so merging a branch into
+# main can leave main unverified with nothing saying so. Until that is fixed
+# properly (#292), this is how you run the gate against main by hand.
 on:
+  workflow_dispatch:
   push:
     branches: ["**"]
     paths-ignore:
