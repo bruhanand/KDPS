@@ -49,6 +49,7 @@ ACCOUNTS = [
     (GLAccount.CASH, "Cash & bank", "asset"),
     (GLAccount.CARD_CLEARING, "Card, awaiting settlement", "asset"),
     (GLAccount.UPI_CLEARING, "UPI, awaiting settlement", "asset"),
+    (GLAccount.PARTNER_RECEIVABLE, "Partner store receivable", "asset"),
     (GLAccount.VENDOR_PAYABLE, "Vendor payable", "liability"),
     (GLAccount.GRNI, "Goods received, not invoiced", "liability"),
     (GLAccount.SOR_CONTRA, "SOR contra (off-book)", "liability"),

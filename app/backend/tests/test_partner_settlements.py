@@ -64,7 +64,13 @@ class TestPartnerDuesView:
         r = accounts_client.get(f"{API}/outbound/partner-dues")
         assert r.status_code == 200
         data = r.json()
-        for key in ("stores", "total_owed_paise", "total_paid_paise", "net_outstanding_paise", "billing_mode"):
+        for key in (
+            "stores",
+            "total_owed_paise",
+            "total_paid_paise",
+            "net_outstanding_paise",
+            "billing_mode",
+        ):
             assert key in data
         assert data["net_outstanding_paise"] == data["total_owed_paise"] - data["total_paid_paise"]
         for st in data["stores"]:
@@ -106,7 +112,9 @@ class TestPartnerSettlementsCRUDFlow:
         assert store_after["net_outstanding_paise"] == outstanding_before - pay_amount * 100
 
         # Verify history filtered by store shows the new entry
-        hist = accounts_client.get(f"{API}/outbound/partner-settlements", params={"store": banka_store_id})
+        hist = accounts_client.get(
+            f"{API}/outbound/partner-settlements", params={"store": banka_store_id}
+        )
         assert hist.status_code == 200
         rows = hist.json()["rows"]
         assert any(row["id"] == entry_id for row in rows)
@@ -129,19 +137,26 @@ class TestPartnerSettlementsCRUDFlow:
 
         dues_over = accounts_client.get(f"{API}/outbound/partner-dues").json()
         store_over = next(s for s in dues_over["stores"] if s["store_id"] == banka_store_id)
-        assert store_over["net_outstanding_paise"] < 0, "overpayment should push net outstanding negative"
+        assert store_over["net_outstanding_paise"] < 0, (
+            "overpayment should push net outstanding negative"
+        )
 
         # 3. Reverse the overpayment entry
-        rev = accounts_client.post(f"{API}/outbound/partner-settlements/{overpay_entry_id}/reverse", json={})
+        rev = accounts_client.post(
+            f"{API}/outbound/partner-settlements/{overpay_entry_id}/reverse", json={}
+        )
         assert rev.status_code == 201, rev.text
 
         dues_reversed = accounts_client.get(f"{API}/outbound/partner-dues").json()
         store_reversed = next(s for s in dues_reversed["stores"] if s["store_id"] == banka_store_id)
-        # Outstanding should go back up to roughly what it was right after step 1 (partial payment only)
+        # Outstanding should go back up to roughly what it was right after step 1
+        # (partial payment only)
         assert store_reversed["net_outstanding_paise"] == store_after["net_outstanding_paise"]
 
         # 4. Reversing the same entry twice should 409
-        rev2 = accounts_client.post(f"{API}/outbound/partner-settlements/{overpay_entry_id}/reverse", json={})
+        rev2 = accounts_client.post(
+            f"{API}/outbound/partner-settlements/{overpay_entry_id}/reverse", json={}
+        )
         assert rev2.status_code == 409, rev2.text
 
         # cleanup: reverse the partial payment too, to leave state roughly as found
@@ -184,7 +199,8 @@ class TestPartnerSettlementsRBAC:
 
     def test_store_manager_get_settlements_allowed_readonly(self, store_mgr_client):
         # store_manager holds money:operate (>= money:view on the ordinal ladder),
-        # so GET (read, gated at money:view) is allowed; only POST/reverse (money:manage) is blocked.
+        # so GET (read, gated at money:view) is allowed; only POST/reverse
+        # (money:manage) is blocked.
         r = store_mgr_client.get(f"{API}/outbound/partner-settlements")
         assert r.status_code == 200, r.text
 
@@ -200,7 +216,9 @@ class TestPartnerSettlementsRBAC:
 
 class TestRegressionSanity:
     def test_vendor_ledger_unaffected(self, accounts_client):
-        r = accounts_client.get(f"{API}/vendors/ledger" if False else f"{API}/outbound/partner-billing-policy")
+        r = accounts_client.get(
+            f"{API}/vendors/ledger" if False else f"{API}/outbound/partner-billing-policy"
+        )
         assert r.status_code == 200
 
     def test_partner_billing_policy_unaffected(self, accounts_client):

@@ -74,7 +74,7 @@ These are properties of the business, independent of any design choice:
 - **Understand before design:** current workflow first (`docs/my-understanding/workflow/`), then client wants, then design.
 - **Engineering-led build order:** build by architecture sequence, not the client's wishlist order.
 - When details are ambiguous, check `docs/my-understanding/workflow/KDPS-current-workflow.pdf` and meeting minutes rather than inventing.
-- Repo-level commands exist now. `npm run ci` (ruff · mypy strict · migration check · import-linter · pytest · tsc) is the **local acceptance gate**; `.github/workflows/ci.yml` runs pytest (kernel anti-cheat + API regression) on **real Postgres** + the frontend build on push; `docker-compose` gives a local Postgres and pre-commit hooks run ruff/mypy. See `README.md` (run) and `DEPLOY.md` (Render). Caveat: cloud CI runs only a subset (pytest + build), so the deployed alpha currently carries ~54 ruff findings + un-gated mypy strict — green cloud CI ≠ a green `npm run ci`.
+- Repo-level commands exist now. `npm run ci` (ruff · mypy strict · migration check · import-linter · pytest · tsc) is the **local acceptance gate**; `.github/workflows/ci.yml` runs pytest (kernel anti-cheat + API regression) on **real Postgres** + the frontend build on push; `docker-compose` gives a local Postgres and pre-commit hooks run ruff/mypy. See `README.md` (run) and `DEPLOY.md` (Render). Cloud CI runs four jobs: `lint` (ruff format · ruff check · `mypy core config` · import-linter), `backend-kernel`, `backend-live` (migrate + seed + uvicorn + API regression) and `frontend`. Two known holes, both tracked on #292: the `frontend` job runs `yarn build` but **not** vitest, and mypy covers only `core config`.
 
 ## Agent skills
 
