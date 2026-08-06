@@ -44,7 +44,10 @@ ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 # a real deployment. DEBUG is the same signal Render/CI already use to tell
 # "this is a real deployment" from "this is dev/CI", so the guard rides it
 # rather than adding a second flag nobody remembers to set.
-if not DEBUG and SECRET_KEY in {"ci-secret-not-for-production", "kdps-dev-secret-not-for-production"}:
+if not DEBUG and SECRET_KEY in {
+    "ci-secret-not-for-production",
+    "kdps-dev-secret-not-for-production",
+}:
     raise RuntimeError(
         "DJANGO_SECRET_KEY is still the dev/CI placeholder with DJANGO_DEBUG=0. "
         "Set a real, random DJANGO_SECRET_KEY before running non-DEBUG."

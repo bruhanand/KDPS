@@ -75,10 +75,13 @@ Fix as one piece of work if possible; the failures interlock:
 
 ### 0.6 Engineering gate (make green mean green)
 
-- Local `npm run ci` is currently red: **30 ruff errors** in `app/backend` (24 E501 line-too-long, 3 I001 unsorted-imports, 2 B023 function-uses-loop-variable, 1 UP037; 4 auto-fixable).
-  Burn to zero; the B023s are potential real bugs, look at them first.
-- Cloud CI (`.github/workflows/ci.yml`) runs only pytest + frontend build; ruff and mypy strict are not gated there.
-  Extend cloud CI to run the full local gate so a green PR means a green `npm run ci`.
+- ~~Local `npm run ci` is red: 30 ruff errors in `app/backend`.~~ **Fixed 7 Aug** together with main's red CI (see below).
+- **Correction (7 Aug):** the long-standing caveat that "cloud CI runs only pytest + frontend build" is **wrong**, and was inherited from a stale line in `CLAUDE.md`.
+  `.github/workflows/ci.yml` has four jobs: `lint` (ruff format, ruff check, `mypy core config`, import-linter), `backend-kernel` (kernel anti-cheat suites), `backend-live` (migrate + seed + uvicorn + the API regression suites) and `frontend`.
+  Main was red on 4-6 Aug *because* that gate works. Delete the stale caveat from `CLAUDE.md`.
+- The two real gate holes that remain, both on **#292**:
+  - The `frontend` job runs `yarn build` (tsc + bundle) and **never runs vitest**, so 850 tests in 58 files - including the shared offer/GSTIN/refund vector suites that stop the till's offline rules drifting from the server's - are invisible to CI. `package.json` already has `yarn ci` for this, and the whole suite runs in 9 seconds.
+  - `mypy` covers only `core config`; every other app is untyped as far as CI is concerned.
 - **#192 - The generated API client is about a thousand lines out of date.** Regenerate, diff-review, and add a CI drift check so it cannot silently rot again.
 
 ### 0.7 Declared-standard polish
@@ -91,8 +94,9 @@ Fix as one piece of work if possible; the failures interlock:
 ### 0.8 Process hygiene (needs a human decision, flag do not fix)
 
 - Recent history on `main` is entirely `auto-commit for <uuid>` / `Auto-generated changes` commits, outside the PR flow.
-  **BLOCKED-ON-HUMAN**: Anand must decide whether direct auto-commits on `main` are intended; agents should not "fix" this unilaterally.
-- `docs/invoices/July-2026/` sits untracked in the working tree; Anand to decide commit or ignore.
+  **BLOCKED-ON-HUMAN** (#293): Anand must decide whether direct auto-commits on `main` are intended; agents should not "fix" this unilaterally.
+  **This is no longer theoretical.** Those commits broke main's CI on 4 Aug and it stayed red for two days: Emergent auto-commits carrying the bank-reconciliation / partner-settlement work landed on main unformatted (failing `ruff format --check` on the very files they touched) and added a `PARTNER_RECEIVABLE` GL account without a side in `finledger.health.ACCOUNTS`, failing the books-health guard. The PR flow would have caught both before main. Nothing announced the breakage either - main going red deserves a notification whichever way #293 is decided.
+- ~~`docs/invoices/July-2026/` untracked~~ - committed 7 Aug alongside the tracked April and June invoices.
 
 ## Phase 1 - before a pilot store
 

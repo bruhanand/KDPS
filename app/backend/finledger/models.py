@@ -164,7 +164,9 @@ class BankStatementImport(TimeStampedModel):
         "files.StoredFile", on_delete=models.PROTECT, related_name="bank_statement_import"
     )
     bank_label = models.CharField(max_length=80, blank=True, default="")
-    uploaded_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    uploaded_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
+    )
     row_count = models.IntegerField(default=0)
     matched_count = models.IntegerField(default=0)
 
@@ -213,7 +215,9 @@ class BankStatementLine(TimeStampedModel):
     #: score, and enough of the entry to show without a join) — cached so the
     #: review screen doesn't re-score on every page load.
     candidates = models.JSONField(default=list, blank=True)
-    matched_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    matched_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
+    )
 
     class Meta:
         db_table = "finledger_bank_statement_line"

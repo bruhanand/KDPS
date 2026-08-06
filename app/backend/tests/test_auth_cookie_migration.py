@@ -7,9 +7,11 @@ Tested against the public HTTPS preview URL (not localhost plain-http, per
 agent-to-agent context note - curl cookie-jar quirks over plain HTTP are a
 known red herring, unrelated to server behavior).
 """
+
 import os
-import requests
+
 import pytest
+import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 

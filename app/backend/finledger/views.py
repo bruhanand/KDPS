@@ -20,7 +20,12 @@ from accounts.sections import CAP_MANAGE
 from core.money import paise_to_rupees_str
 from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
-from finledger.models import BankStatementImport, BankStatementLine, CashLedgerEntry, VendorLedgerEntry
+from finledger.models import (
+    BankStatementImport,
+    BankStatementLine,
+    CashLedgerEntry,
+    VendorLedgerEntry,
+)
 from finledger.posting import (
     AlreadyReversedError,
     account_for_mode,
@@ -437,7 +442,9 @@ def _line_dict(line: BankStatementLine) -> dict[str, Any]:
         "match_confidence": line.match_confidence,
         "candidates": line.candidates,
         "matched_entry_id": line.matched_entry_id,
-        "matched_entry_doc_number": line.matched_entry.doc_number if line.matched_entry_id else None,
+        "matched_entry_doc_number": line.matched_entry.doc_number
+        if line.matched_entry_id
+        else None,
         "matched_by_name": (
             (line.matched_by.full_name or line.matched_by.username) if line.matched_by_id else ""
         ),
@@ -546,16 +553,25 @@ class BankStatementLineMatchView(APIView):
             line.matched_entry = None
             line.matched_by = request.user
         elif action == "unlink":
-            line.status = BankStatementLine.Status.REVIEW if line.candidates else BankStatementLine.Status.UNMATCHED
+            line.status = (
+                BankStatementLine.Status.REVIEW
+                if line.candidates
+                else BankStatementLine.Status.UNMATCHED
+            )
             line.matched_entry = None
             line.matched_by = None
         else:
             entry_id = request.data.get("entry_id")
             entry = CashLedgerEntry.objects.filter(pk=entry_id).first()
             if not entry:
-                return Response({"detail": "entry_id is required and must be a cash ledger entry."}, status=400)
+                return Response(
+                    {"detail": "entry_id is required and must be a cash ledger entry."}, status=400
+                )
             if BankStatementLine.objects.filter(matched_entry=entry).exclude(pk=line.pk).exists():
-                return Response({"detail": "That cash ledger entry is already matched to another line."}, status=409)
+                return Response(
+                    {"detail": "That cash ledger entry is already matched to another line."},
+                    status=409,
+                )
             line.status = BankStatementLine.Status.MATCHED
             line.matched_entry = entry
             line.matched_by = request.user

@@ -1,11 +1,13 @@
 """Regression tests for post-security-hardening pass (SECRET_KEY rotation,
 DEBUG=0, admin unmount, CORS tightening). See iteration report for context.
 """
-import os
-import requests
-import pytest
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+import os
+
+import pytest
+import requests
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
 CREDS = [
     ("owner", "Owner@123", "owner"),
@@ -40,7 +42,9 @@ class TestHealthAndDebug:
 class TestLoginRoles:
     @pytest.mark.parametrize("username,password,role", CREDS)
     def test_login_success_and_jwt_shape(self, api_client, username, password, role):
-        r = api_client.post(f"{BASE_URL}/api/auth/login", json={"username": username, "password": password})
+        r = api_client.post(
+            f"{BASE_URL}/api/auth/login", json={"username": username, "password": password}
+        )
         assert r.status_code == 200, f"login failed for {username}: {r.status_code} {r.text}"
         data = r.json()
         assert "access" in data
@@ -49,13 +53,17 @@ class TestLoginRoles:
         assert isinstance(data["refresh"], str) and len(data["refresh"]) > 20
 
     def test_login_invalid_credentials_rejected(self, api_client):
-        r = api_client.post(f"{BASE_URL}/api/auth/login", json={"username": "owner", "password": "wrongpass"})
+        r = api_client.post(
+            f"{BASE_URL}/api/auth/login", json={"username": "owner", "password": "wrongpass"}
+        )
         assert r.status_code in (400, 401)
 
 
 class TestMeAndLogout:
     def test_me_endpoint_after_login(self, api_client):
-        login = api_client.post(f"{BASE_URL}/api/auth/login", json={"username": "owner", "password": "Owner@123"})
+        login = api_client.post(
+            f"{BASE_URL}/api/auth/login", json={"username": "owner", "password": "Owner@123"}
+        )
         assert login.status_code == 200
         token = login.json()["access"]
         r = api_client.get(f"{BASE_URL}/api/auth/me", headers={"Authorization": f"Bearer {token}"})
@@ -64,7 +72,9 @@ class TestMeAndLogout:
         assert data.get("username") == "owner"
 
     def test_logout_clears_session(self, api_client):
-        login = api_client.post(f"{BASE_URL}/api/auth/login", json={"username": "accounts1", "password": "Acct@123"})
+        login = api_client.post(
+            f"{BASE_URL}/api/auth/login", json={"username": "accounts1", "password": "Acct@123"}
+        )
         assert login.status_code == 200
         refresh = login.json().get("refresh")
         logout = api_client.post(f"{BASE_URL}/api/auth/logout", json={"refresh": refresh})
@@ -77,13 +87,17 @@ class TestMeAndLogout:
 
 class TestCoreReadFlows:
     def _login(self, api_client, username, password):
-        r = api_client.post(f"{BASE_URL}/api/auth/login", json={"username": username, "password": password})
+        r = api_client.post(
+            f"{BASE_URL}/api/auth/login", json={"username": username, "password": password}
+        )
         assert r.status_code == 200
         return r.json()["access"]
 
     def test_partner_dues_page_loads(self, api_client):
         token = self._login(api_client, "owner", "Owner@123")
-        r = api_client.get(f"{BASE_URL}/api/outbound/partner-dues", headers={"Authorization": f"Bearer {token}"})
+        r = api_client.get(
+            f"{BASE_URL}/api/outbound/partner-dues", headers={"Authorization": f"Bearer {token}"}
+        )
         assert r.status_code == 200, f"unexpected status {r.status_code}: {r.text[:300]}"
 
     def test_vendor_ledger_loads(self, api_client):
@@ -93,7 +107,9 @@ class TestCoreReadFlows:
 
     def test_stores_setup_loads(self, api_client):
         token = self._login(api_client, "owner", "Owner@123")
-        r = api_client.get(f"{BASE_URL}/api/masters/stores", headers={"Authorization": f"Bearer {token}"})
+        r = api_client.get(
+            f"{BASE_URL}/api/masters/stores", headers={"Authorization": f"Bearer {token}"}
+        )
         assert r.status_code in (200, 404), f"unexpected status {r.status_code}: {r.text[:300]}"
 
 

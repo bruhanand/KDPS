@@ -1523,7 +1523,6 @@ class Recount(models.Model):
         return f"Recount {self.sku_code}: {self.first_counted_qty} → {self.counted_qty}"
 
 
-
 # ---------------------------------------------------------------------------
 # Partner store billing policy (chain-wide dial, Rule 12)
 # ---------------------------------------------------------------------------
@@ -1573,7 +1572,7 @@ class BillingPolicy(TimeStampedModel):
         return f"Partner billing: {self.get_mode_display()}"
 
     @classmethod
-    def current(cls) -> "BillingPolicy":
+    def current(cls) -> BillingPolicy:
         """The live dial, creating the row at its safe default (informational,
         no ledger write) if it is somehow gone."""
 

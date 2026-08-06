@@ -147,26 +147,26 @@ def parse_statement(content: bytes, filename: str, content_type: str) -> list[Pa
         )
     header_i, cols = header
     parsed: list[ParsedRow] = []
+
+    def cell(row: list, field: str) -> object:
+        i = cols.get(field)
+        return row[i] if i is not None and i < len(row) else None
+
     for row in rows[header_i + 1 :]:
-
-        def cell(field: str) -> object:
-            i = cols.get(field)
-            return row[i] if i is not None and i < len(row) else None
-
-        txn_date = _parse_date(cell("date"))
+        txn_date = _parse_date(cell(row, "date"))
         if txn_date is None:
             continue
-        debit = _parse_amount(cell("debit"))
-        credit = _parse_amount(cell("credit"))
+        debit = _parse_amount(cell(row, "debit"))
+        credit = _parse_amount(cell(row, "credit"))
         if debit == 0 and credit == 0:
             continue
         parsed.append(
             ParsedRow(
                 txn_date=txn_date,
-                narration=str(cell("narration") or "").strip(),
+                narration=str(cell(row, "narration") or "").strip(),
                 debit_paise=debit,
                 credit_paise=credit,
-                balance_paise=_parse_amount(cell("balance")) if "balance" in cols else None,
+                balance_paise=_parse_amount(cell(row, "balance")) if "balance" in cols else None,
             )
         )
     if not parsed:

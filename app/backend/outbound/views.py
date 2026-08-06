@@ -876,7 +876,9 @@ class PartnerSettlementsView(APIView):
     def post(self, request: Request) -> Response:
         store = Store.objects.filter(pk=request.data.get("store_id"), is_partner=True).first()
         if not store:
-            return Response({"detail": "store_id is required / must be a partner store."}, status=400)
+            return Response(
+                {"detail": "store_id is required / must be a partner store."}, status=400
+            )
         amount = rupees_to_paise(request.data.get("amount"))
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
