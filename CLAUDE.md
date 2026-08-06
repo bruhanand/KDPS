@@ -100,6 +100,11 @@ tests before (the #146 hotfix); rebase-then-retest catches that class before the
 
 Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Gap register
+
+`docs/agents/improvement-plan.md` (7 Aug 2026) is the single prioritized register of every known gap between the current build and go-live, phased Phase 0 (pause: correctness + hygiene) → pilot → go-live.
+Read it before picking new work; it marks which items are blocked on human/CA rulings. Feature work is paused until its Phase 0 is closed.
+
 ### Triage labels
 
 The five triage states each map to a repo label of the same name: `needs-triage`, `needs-info`, **`ready-for-agent`**, `ready-for-human`, `wontfix`. `ready-for-agent` is tool-neutral — any AI agent picks up work with `gh issue list --label ready-for-agent`. (It replaced the tool-specific `Sandcastle` label on 25 Jul 2026.) See `docs/agents/triage-labels.md`.
