@@ -46,6 +46,12 @@ emergentintegrations = { index = "emergent" }
 dev = [
     "pytest>=8.3",
     "pytest-django>=4.9",
+    # Slices `tests/` into contiguous, duration-balanced chunks so cloud CI can
+    # run it across a matrix of runners instead of one 19-minute serial pass.
+    # Contiguous matters: these black-box suites are order-sensitive, and the
+    # default `duration_based_chunks` algorithm preserves collection order
+    # inside a chunk where an item-interleaving split would not.
+    "pytest-split>=0.9",
     "mypy>=1.13",
     "django-stubs[compatible-mypy]>=5.1",
     "ruff>=0.8",
