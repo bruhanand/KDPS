@@ -388,7 +388,7 @@ jobs:
 
   # The single required status check on `main`.
   #
-  # It exists because the four jobs above are conditional, and a conditional job
+  # It exists because the jobs above are conditional, and a conditional job
   # cannot be a required check: on a docs-only push it never runs, reports
   # nothing, and branch protection blocks the merge forever. This one runs on
   # every push without exception, so `main` can require exactly one check and
