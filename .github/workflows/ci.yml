@@ -117,7 +117,7 @@ jobs:
         run: uv run python manage.py migrate --noinput
 
       - name: Kernel anti-cheat suites (append-only, FSM, idempotency, money, vouchers)
-        run: uv run pytest core/tests -q
+        run: uv run pytest core/tests -q --durations=0
 
   backend-live:
     runs-on: ubuntu-latest
@@ -194,7 +194,7 @@ jobs:
       - name: API regression suites (auth, RBAC, inbound, PT, ledgers, security)
         env:
           REACT_APP_BACKEND_URL: http://localhost:8001
-        run: uv run pytest tests -q
+        run: uv run pytest tests -q --durations=0
 
   frontend:
     runs-on: ubuntu-latest
