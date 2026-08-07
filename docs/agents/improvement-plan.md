@@ -75,7 +75,9 @@ Fix as one piece of work if possible; the failures interlock:
 
 ### 0.6 Engineering gate (make green mean green)
 
-- ~~Local `npm run ci` is red: 30 ruff errors in `app/backend`.~~ **Fixed 7 Aug** together with main's red CI (see below).
+- **#301 - CI does not run on push; the repo is currently ungated. Fix this before trusting any other ticket's "green CI".**
+  Three pushes on 6-7 Aug produced zero runs, while a manual dispatch of the same workflow goes green on all four jobs. `workflow_dispatch` was added to `ci.yml` as an interim way to run the gate by hand (`gh workflow run ci.yml --ref main`).
+- ~~Local `npm run ci` is red: 30 ruff errors in `app/backend`.~~ **Fixed 7 Aug** together with main's red CI - main verified green on all four jobs (run 31127510884).
 - **Correction (7 Aug):** the long-standing caveat that "cloud CI runs only pytest + frontend build" is **wrong**, and was inherited from a stale line in `CLAUDE.md`.
   `.github/workflows/ci.yml` has four jobs: `lint` (ruff format, ruff check, `mypy core config`, import-linter), `backend-kernel` (kernel anti-cheat suites), `backend-live` (migrate + seed + uvicorn + the API regression suites) and `frontend`.
   Main was red on 4-6 Aug *because* that gate works. Delete the stale caveat from `CLAUDE.md`.
