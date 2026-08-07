@@ -222,6 +222,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "app/backend/uv.lock"
+          # Restore only, never save. Ten jobs in this workflow install the
+          # same dependencies from the same lockfile, so they would all race
+          # to write one identical cache key at teardown - which is exactly
+          # what reddened the first sharded run: shard 3 passed all 250 of
+          # its tests in 3m15s, then `Post Install uv` hung for five minutes
+          # on the contended save and failed the job. `lint` owns the save
+          # (it is the fastest job and always runs alongside these); everyone
+          # else reads what it wrote.
+          save-cache: false
 
       - name: Sync dependencies
         run: uv sync
@@ -295,6 +304,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "app/backend/uv.lock"
+          # Restore only, never save. Ten jobs in this workflow install the
+          # same dependencies from the same lockfile, so they would all race
+          # to write one identical cache key at teardown - which is exactly
+          # what reddened the first sharded run: shard 3 passed all 250 of
+          # its tests in 3m15s, then `Post Install uv` hung for five minutes
+          # on the contended save and failed the job. `lint` owns the save
+          # (it is the fastest job and always runs alongside these); everyone
+          # else reads what it wrote.
+          save-cache: false
 
       - name: Sync dependencies
         run: uv sync
@@ -338,9 +356,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22, not 20. Nothing else in the repo pins a version, and the till
+      # suites are written against the Node developers actually run: `navigator`
+      # only became a global in Node 21, and `src/till/numbering.ts` reads
+      # `navigator.onLine`. On Node 20 that is a ReferenceError and six till
+      # tests die; on 22 they pass, which is how 850 green tests locally could
+      # never once have been green here. Node 20 is also out of support.
+      #
+      # Worth knowing, and not fixed here: under vitest's default `node`
+      # environment `navigator.onLine` is *undefined* even on 22, so the bill's
+      # origin stamp always takes the "offline" branch in tests and the online
+      # branch is untested. That is a frontend-test-environment gap, not a CI
+      # one.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "yarn"
           cache-dependency-path: app/frontend/yarn.lock
 
@@ -384,3 +414,38 @@ jobs:
             esac
           done
           exit "${verdict}"
+
+  # "A red main notifies somebody" - the last acceptance criterion of #301, and
+  # the one that actually cost something: main was broken from 4 to 7 August
+  # with nobody told. GitHub's own failed-workflow email is a per-person
+  # notification preference that cannot be seen or audited from inside the
+  # repository, so the alarm is raised where this project already looks - an
+  # issue in the tracker. A still-open alarm is commented on rather than
+  # duplicated, so a main that stays red is one thread and not a pile.
+  red-main:
+    name: red-main
+    needs: ci
+    if: always() && needs.ci.result == 'failure' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Raise or update the alarm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-red \
+            --repo "$GITHUB_REPOSITORY" \
+            --color B60205 \
+            --description "main is failing CI; raised automatically by the CI workflow" \
+            --force
+          body="$(printf '`main` is red.\n\n- commit: %s\n- run: %s\n\nEvery "CI green" claim on a branch cut from main is unreliable until this closes.' "$GITHUB_SHA" "$RUN_URL")"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label ci-red --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "CI is red on main" --label ci-red --body "$body"
+          fi
