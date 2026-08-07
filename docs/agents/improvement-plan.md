@@ -75,15 +75,28 @@ Fix as one piece of work if possible; the failures interlock:
 
 ### 0.6 Engineering gate (make green mean green)
 
-- **#301 - CI does not run on push; the repo is currently ungated. Fix this before trusting any other ticket's "green CI".**
-  Three pushes on 6-7 Aug produced zero runs, while a manual dispatch of the same workflow goes green on all four jobs. `workflow_dispatch` was added to `ci.yml` as an interim way to run the gate by hand (`gh workflow run ci.yml --ref main`).
-- ~~Local `npm run ci` is red: 30 ruff errors in `app/backend`.~~ **Fixed 7 Aug** together with main's red CI - main verified green on all four jobs (run 31127510884).
+- ~~**#301 - CI does not run on push; the repo is currently ungated.**~~ **Diagnosed and fixed 7 Aug.**
+  The cause was not this repository.
+  A critical GitHub Actions incident ran from 6 Aug 15:22 UTC to 7 Aug 02:04 UTC, during which GitHub throttled webhook delivery to about 15% - "many events such as pushes and pull requests are not triggering workflow runs" - and the dropped events "cannot be replayed automatically".
+  Exactly one push fell in that window and was lost (`5443d9f2`, eight changed `.py` files); the next push did run, 30 minutes late, which is why it looked like nothing was running at all.
+  The other two pushes cited in the ticket were docs-only and were correctly filtered.
+  Push triggering was re-proven working on 7 Aug on a scratch branch and has been reliable since.
+  What the repository *did* get wrong was having no way to notice, and that is what was actually fixed - see below.
+- ~~Local `npm run ci` is red: 30 ruff errors in `app/backend`.~~ **Fixed 7 Aug** together with main's red CI - main verified green (run 31127510884).
 - **Correction (7 Aug):** the long-standing caveat that "cloud CI runs only pytest + frontend build" is **wrong**, and was inherited from a stale line in `CLAUDE.md`.
-  `.github/workflows/ci.yml` has four jobs: `lint` (ruff format, ruff check, `mypy core config`, import-linter), `backend-kernel` (kernel anti-cheat suites), `backend-live` (migrate + seed + uvicorn + the API regression suites) and `frontend`.
-  Main was red on 4-6 Aug *because* that gate works. Delete the stale caveat from `CLAUDE.md`.
-- The two real gate holes that remain, both on **#292**:
-  - The `frontend` job runs `yarn build` (tsc + bundle) and **never runs vitest**, so 850 tests in 58 files - including the shared offer/GSTIN/refund vector suites that stop the till's offline rules drifting from the server's - are invisible to CI. `package.json` already has `yarn ci` for this, and the whole suite runs in 9 seconds.
-  - `mypy` covers only `core config`; every other app is untyped as far as CI is concerned.
+  It ran a full four-job gate; main was red on 4-6 Aug *because* that gate works.
+  The stale caveat has been replaced in `CLAUDE.md` with an accurate description.
+- **The gate was rebuilt on 7 Aug** so that a silent stoppage cannot recur and so it stops costing 20 minutes a push.
+  - `paths-ignore` is **off the trigger**. A run a path filter suppresses reports no check at all, which is indistinguishable from a run GitHub silently dropped, and it makes the workflow unusable as a required check because branch protection waits forever for a status that never comes. Filtering moved into per-job conditions, where a skipped job still reports success.
+  - A new always-run `ci` job aggregates every other job's verdict. **This is the check `main` should require.**
+  - A red `main` now opens (or comments on) a `ci-red` issue, so the 4-6 Aug situation - main broken for three days with nobody told - raises an alarm.
+  - The suite runs across **8 `pytest-split` shards**, each on its own throwaway Postgres and uvicorn. A full run went from **20m39s to 4m49s**; a push touching neither tree finishes green in under a minute.
+  - The `pull_request` trigger is gone: every branch is pushed to this repo, so it only duplicated the push run.
+- **Still open, and the one thing a human must do:** `main` has **no branch protection and no rulesets at all** (verified 7 Aug).
+  Until the `ci` check is required on `main`, all of the above is advisory.
+  Apply it only *after* the rebuilt workflow is merged to `main`, or `main` deadlocks waiting for a check that does not exist there yet.
+- One gate hole remains, on **#292**: `mypy` covers only `core config`; every other app is untyped as far as CI is concerned.
+  (The other half of #292 is closed: the `frontend` job now runs vitest. Those 850 tests had in fact *never* been runnable in CI - they read `navigator.onLine`, a global that only exists from Node 21, and the job asked for Node 20. CI now runs Node 22.)
 - **#192 - The generated API client is about a thousand lines out of date.** Regenerate, diff-review, and add a CI drift check so it cannot silently rot again.
 
 ### 0.7 Declared-standard polish

@@ -1,51 +1,170 @@
 name: CI
 
-# The verification spine (review §"build sequence" step 2): run the kernel
-# anti-cheat suites + the API regression suites against a REAL PostgreSQL service
-# on every push / PR. The kernel invariants are meaningless on SQLite, so this
-# wires the gate the constitution requires (ADR-0005) instead of it being green
-# only inside the build container.
+# The verification spine (review §"build sequence" step 2): the kernel anti-cheat
+# suites + the API regression suites against a REAL PostgreSQL service. The kernel
+# invariants are meaningless on SQLite, so this wires the gate the constitution
+# requires (ADR-0005) instead of it being green only inside the build container.
 #
-# Jobs run in parallel:
-#   lint          — ruff + mypy + import-linter (~60 s, fast failure signal)
-#   backend-kernel — migrate + pytest core/tests (~3 min, no seeding needed)
-#   backend-live   — migrate + seed + uvicorn + pytest tests/ (~12 min)
-#   frontend       — yarn install + tsc + vitest (~3 min)
+# ---------------------------------------------------------------------------
+# Why the trigger looks like this (#301)
+# ---------------------------------------------------------------------------
+# On 6 Aug 2026 a push to `main` carrying eight changed `.py` files started no
+# run at all, and main sat unverified with nothing saying so. The cause was a
+# GitHub-side outage (critical Actions incident, 6 Aug 15:22 UTC - 7 Aug 02:04
+# UTC) during which webhook delivery was throttled to ~15%: "many events such as
+# pushes and pull requests are not triggering workflow runs", and the dropped
+# events "cannot be replayed automatically". Nothing in this file caused it.
+#
+# But it exposed the real defect: **nothing was checking that a run had
+# happened.** Two changes close that hole for good.
+#
+#   1. No `paths-ignore` on the trigger. A run suppressed by a trigger-level
+#      path filter produces *no check at all* - not green, not red, not skipped.
+#      That is indistinguishable from a run GitHub silently dropped, and it makes
+#      the workflow unusable as a required check, because branch protection would
+#      wait forever for a status that never arrives. GitHub says so outright:
+#      do not use path filtering to skip a workflow that is required to pass.
+#      So the workflow now ALWAYS starts, and the skipping moved one level down
+#      into per-job `if:` conditions, where a skipped job still reports success
+#      and the `ci` gate below still speaks. A docs-only push now finishes green
+#      in well under a minute instead of vanishing.
+#
+#   2. No `pull_request` trigger. Every branch here is pushed to this repo, so
+#      the push run already covers the PR's head commit; carrying both meant two
+#      identical full-length runs for every PR.
+#
+# `workflow_dispatch` stays, as the manual way to re-run the gate against any ref
+# - which is exactly what you need when GitHub drops an event again.
+#
+# ---------------------------------------------------------------------------
+# Why it is fast
+# ---------------------------------------------------------------------------
+# The suite used to run as one 19-minute serial pytest, which set the wall clock
+# for the whole run. This repository is public, so runner minutes are free and
+# unmetered and the only real cost is the human waiting. That makes the correct
+# trade obvious: fan out wide rather than economise. Three levers, in order of
+# how much they buy:
+#
+#   * shard the backend suite across a matrix, each shard on its own throwaway
+#     Postgres and its own uvicorn, so shards cannot interfere with each other;
+#   * skip whole job families when their tree did not change (`changes` below);
+#   * cancel superseded runs on a branch, so a rapid series of pushes queues one
+#     run rather than N.
 
-# `workflow_dispatch` is not a convenience. A push whose tip is a *merge* commit
-# does not trigger this workflow at all while `paths-ignore` is set — the filter
-# sees no changed files on the merge and skips the run — so merging a branch into
-# main can leave main unverified with nothing saying so. Until that is fixed
-# properly (#292), this is how you run the gate against main by hand.
 on:
-  workflow_dispatch:
   push:
     branches: ["**"]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
-      - "**.txt"
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
-      - "**.txt"
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's answer worthless, so
+# stop paying for it. `main` is exempt: every commit on the release branch gets
+# its own verdict, even when two land close together.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
+  DJANGO_SECRET_KEY: ci-secret-not-for-production
+  DJANGO_DEBUG: "1"
+  DJANGO_ALLOWED_HOSTS: "*"
+  EMERGENT_LLM_KEY: "ci-placeholder"
+  GEMINI_MODEL: "gemini-2.5-flash"
+  JWT_COOKIE_SECURE: "0"
 
 jobs:
+  # What changed, decided once and read by every job below. Deliberately plain
+  # git rather than a third-party action: the whole decision is two `git diff`
+  # invocations, and a required gate should not depend on somebody else's
+  # release cadence.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect which trees changed
+        id: filter
+        env:
+          # `before` is the previous tip of this branch, or all-zeroes on the
+          # first push of a new branch.
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          # On a feature branch the comparison base is the merge-base with the
+          # default branch, NOT the previous push. Comparing against the previous
+          # push would be a correctness bug: a branch whose first commit edits
+          # the backend and whose second only edits docs would skip the backend
+          # jobs on that second push, and the branch would report green having
+          # never tested its own backend change. Judging the whole branch against
+          # `main` cannot do that.
+          #
+          # On the default branch itself there is no merge-base to use, so the
+          # comparison is the push's own two-dot range. Anything unresolvable -
+          # a brand-new branch, a force-push whose `before` no longer exists, a
+          # manual dispatch - falls back to running everything. Erring towards a
+          # full run is the only safe direction here.
+          base=""
+          if [ "${GITHUB_REF_NAME}" = "${DEFAULT_BRANCH}" ]; then
+            if [ -n "${BEFORE}" ] && [ "${BEFORE}" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              base="${BEFORE}"
+            fi
+          else
+            base="$(git merge-base "origin/${DEFAULT_BRANCH}" HEAD 2>/dev/null || true)"
+          fi
+
+          if [ -z "${base}" ]; then
+            echo "no usable comparison base; running everything"
+            changed="__ALL__"
+          else
+            changed="$(git diff --name-only "${base}" "${GITHUB_SHA}")"
+            echo "comparing ${base}..${GITHUB_SHA}"
+          fi
+          echo "--- changed files ---"
+          echo "${changed}"
+          echo "---------------------"
+
+          matches() {
+            [ "${changed}" = "__ALL__" ] && return 0
+            echo "${changed}" | grep -Eq "$1"
+          }
+
+          # Two things belong in `backend` that are not under app/backend:
+          #
+          #   * this workflow file - editing the gate must re-prove the gate;
+          #   * the client's PT sample files, which two regression modules read
+          #     straight off disk (test_iteration11_pt_posting_regression and
+          #     test_refactor_regression open docs/data-from-kdps/.../PT FILE/).
+          #     They are test fixtures that happen to live under docs/, so a
+          #     naive "docs never affect code" rule would let a fixture edit
+          #     break the suite silently.
+          backend=false
+          frontend=false
+          matches '^(app/backend/|docs/data-from-kdps/Q&A-req-recieved/|\.github/workflows/ci\.yml$)' && backend=true
+          matches '^(app/frontend/|\.github/workflows/ci\.yml$)' && frontend=true
+
+          echo "backend=${backend}"  | tee -a "$GITHUB_OUTPUT"
+          echo "frontend=${frontend}" | tee -a "$GITHUB_OUTPUT"
+
   lint:
+    name: lint
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app/backend
-
-    env:
-      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
-      DJANGO_SECRET_KEY: ci-secret-not-for-production
-      DJANGO_DEBUG: "1"
-      DJANGO_ALLOWED_HOSTS: "*"
-      EMERGENT_LLM_KEY: "ci-placeholder"
-      GEMINI_MODEL: "gemini-2.5-flash"
-      JWT_COOKIE_SECURE: "0"
 
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +191,9 @@ jobs:
         run: uv run lint-imports
 
   backend-kernel:
+    name: backend-kernel
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,15 +213,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
-    env:
-      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
-      DJANGO_SECRET_KEY: ci-secret-not-for-production
-      DJANGO_DEBUG: "1"
-      DJANGO_ALLOWED_HOSTS: "*"
-      EMERGENT_LLM_KEY: "ci-placeholder"
-      GEMINI_MODEL: "gemini-2.5-flash"
-      JWT_COOKIE_SECURE: "0"
 
     steps:
       - uses: actions/checkout@v4
@@ -109,6 +222,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "app/backend/uv.lock"
+          # Restore only, never save. Ten jobs in this workflow install the
+          # same dependencies from the same lockfile, so they would all race
+          # to write one identical cache key at teardown - which is exactly
+          # what reddened the first sharded run: shard 3 passed all 250 of
+          # its tests in 3m15s, then `Post Install uv` hung for five minutes
+          # on the contended save and failed the job. `lint` owns the save
+          # (it is the fastest job and always runs alongside these); everyone
+          # else reads what it wrote.
+          save-cache: false
 
       - name: Sync dependencies
         run: uv sync
@@ -116,11 +238,35 @@ jobs:
       - name: Migrate
         run: uv run python manage.py migrate --noinput
 
+      # Both of these are in the local `npm run ci` gate but were missing from
+      # the cloud one, so a model edited without a migration, or a migration
+      # that no longer describes the database, could reach main green.
+      - name: Migrations match the models
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Database matches the migrations
+        run: uv run python manage.py check_db_drift
+
       - name: Kernel anti-cheat suites (append-only, FSM, idempotency, money, vouchers)
         run: uv run pytest core/tests -q
 
-  backend-live:
+  # The long pole, split N ways. Each shard is a complete, isolated environment -
+  # its own Postgres, its own seed, its own uvicorn - so a shard can never see
+  # rows another shard wrote. `pytest-split` slices the suite into contiguous
+  # chunks of roughly equal measured duration (`.test_durations`), which keeps
+  # collection order intact inside a chunk; an item-interleaving split would
+  # reorder these stateful black-box suites.
+  backend-suite:
+    name: backend-suite (${{ matrix.shard }}/8)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      # One shard failing must not hide the other five. Minutes are free here;
+      # a complete picture on the first run is worth more than an early exit.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     defaults:
       run:
         working-directory: app/backend
@@ -141,17 +287,8 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
-      DJANGO_SECRET_KEY: ci-secret-not-for-production
-      DJANGO_DEBUG: "1"
-      DJANGO_ALLOWED_HOSTS: "*"
       SEED_DEMO: "1"
-      EMERGENT_LLM_KEY: "ci-placeholder"
-      GEMINI_MODEL: "gemini-2.5-flash"
-      # The black-box regression suite talks to the API over plain http on
-      # localhost, so the JWT auth cookies must not be Secure (a Secure cookie is
-      # never sent back over http, which would 401 every cookie-authed request).
-      JWT_COOKIE_SECURE: "0"
+      REACT_APP_BACKEND_URL: http://localhost:8001
 
     steps:
       - uses: actions/checkout@v4
@@ -167,6 +304,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "app/backend/uv.lock"
+          # Restore only, never save. Ten jobs in this workflow install the
+          # same dependencies from the same lockfile, so they would all race
+          # to write one identical cache key at teardown - which is exactly
+          # what reddened the first sharded run: shard 3 passed all 250 of
+          # its tests in 3m15s, then `Post Install uv` hung for five minutes
+          # on the contended save and failed the job. `lint` owns the save
+          # (it is the fastest job and always runs alongside these); everyone
+          # else reads what it wrote.
+          save-cache: false
 
       - name: Sync dependencies
         run: uv sync
@@ -183,6 +329,9 @@ jobs:
       - name: Seed outbound demo stock (on-hand for RTV / stock-on-hand suites)
         run: uv run python manage.py seed_outbound_demo
 
+      # Every shard boots a server, because the live black-box modules can land
+      # in any chunk. Booting one costs six seconds; working out which shard
+      # needs one would cost far more in fragility.
       - name: Boot ASGI server for API regression suites
         run: |
           uv run uvicorn server:app --host 0.0.0.0 --port 8001 &
@@ -192,11 +341,12 @@ jobs:
           done
 
       - name: API regression suites (auth, RBAC, inbound, PT, ledgers, security)
-        env:
-          REACT_APP_BACKEND_URL: http://localhost:8001
-        run: uv run pytest tests -q
+        run: uv run pytest tests -q --splits 8 --group ${{ matrix.shard }}
 
   frontend:
+    name: frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -206,9 +356,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22, not 20. Nothing else in the repo pins a version, and the till
+      # suites are written against the Node developers actually run: `navigator`
+      # only became a global in Node 21, and `src/till/numbering.ts` reads
+      # `navigator.onLine`. On Node 20 that is a ReferenceError and six till
+      # tests die; on 22 they pass, which is how 850 green tests locally could
+      # never once have been green here. Node 20 is also out of support.
+      #
+      # Worth knowing, and not fixed here: under vitest's default `node`
+      # environment `navigator.onLine` is *undefined* even on 22, so the bill's
+      # origin stamp always takes the "offline" branch in tests and the online
+      # branch is untested. That is a frontend-test-environment gap, not a CI
+      # one.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "yarn"
           cache-dependency-path: app/frontend/yarn.lock
 
@@ -217,3 +379,73 @@ jobs:
 
       - name: Type-check & build
         run: yarn build
+
+      # 850 unit tests across 58 files that cloud CI had never once run (#292):
+      # `yarn build` only type-checks. Eight seconds of work that was being
+      # thrown away.
+      - name: Unit tests (vitest)
+        run: yarn vitest run
+
+  # The single required status check on `main`.
+  #
+  # It exists because the jobs above are conditional, and a conditional job
+  # cannot be a required check: on a docs-only push it never runs, reports
+  # nothing, and branch protection blocks the merge forever. This one runs on
+  # every push without exception, so `main` can require exactly one check and
+  # that check is always answered. `skipped` counts as a pass - that is the
+  # whole point - while `failure` and `cancelled` do not.
+  ci:
+    name: ci
+    if: always()
+    needs: [changes, lint, backend-kernel, backend-suite, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verdict
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "job results: ${RESULTS}"
+          verdict=0
+          for result in ${RESULTS}; do
+            case "${result}" in
+              success|skipped) ;;
+              *) echo "::error::a gated job reported '${result}'"; verdict=1 ;;
+            esac
+          done
+          exit "${verdict}"
+
+  # "A red main notifies somebody" - the last acceptance criterion of #301, and
+  # the one that actually cost something: main was broken from 4 to 7 August
+  # with nobody told. GitHub's own failed-workflow email is a per-person
+  # notification preference that cannot be seen or audited from inside the
+  # repository, so the alarm is raised where this project already looks - an
+  # issue in the tracker. A still-open alarm is commented on rather than
+  # duplicated, so a main that stays red is one thread and not a pile.
+  red-main:
+    name: red-main
+    needs: ci
+    if: always() && needs.ci.result == 'failure' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Raise or update the alarm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-red \
+            --repo "$GITHUB_REPOSITORY" \
+            --color B60205 \
+            --description "main is failing CI; raised automatically by the CI workflow" \
+            --force
+          body="$(printf '`main` is red.\n\n- commit: %s\n- run: %s\n\nEvery "CI green" claim on a branch cut from main is unreliable until this closes.' "$GITHUB_SHA" "$RUN_URL")"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label ci-red --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "CI is red on main" --label ci-red --body "$body"
+          fi
