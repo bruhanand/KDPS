@@ -11,12 +11,11 @@ Hermetic (`db` fixture), so it runs in CI's `pytest tests` step.
 
 from __future__ import annotations
 
-from django.db.models import Q
-
 from accounts.models import User
 from inbound.views import _booking_touches_stores
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
+from vendors.scoping import booking_at_stores
 from vendors.serializers import BookingSerializer
 
 
@@ -77,7 +76,12 @@ def test_scope_sees_booking_when_any_line_lands_at_their_store(db):
 
 
 def test_pending_query_filter_matches_touching_bookings_only(db):
-    """Mirror the PendingBookingsView store filter: any-line-in-scope, distinct."""
+    """Mirror the PendingBookingsView store filter: any-line-in-scope, distinct.
+
+    `booking_at_stores` (`vendors.scoping`, #234) is the one copy of this
+    predicate now — the list, detail, pending-queue and search endpoints all
+    filter through it.
+    """
     _, deo, bkr, hzb, vendor, brand, season = _fixtures()
     mine = _booking(vendor, brand, season, default_store=deo)
     BookingLine.objects.create(booking=mine, style_code="S1", booked_qty=5)  # inherits DEO
@@ -87,9 +91,7 @@ def test_pending_query_filter_matches_touching_bookings_only(db):
     BookingLine.objects.create(booking=theirs, store=bkr, style_code="S3", booked_qty=2)  # BKR only
 
     ids = [deo.id]
-    qs = Booking.objects.filter(
-        Q(lines__store_id__in=ids) | Q(lines__store__isnull=True, destination_store_id__in=ids)
-    ).distinct()
+    qs = Booking.objects.filter(booking_at_stores(ids)).distinct()
     assert mine in qs  # has a line inheriting the DEO default
     assert theirs not in qs  # HZB default + BKR line, nothing at DEO
 
