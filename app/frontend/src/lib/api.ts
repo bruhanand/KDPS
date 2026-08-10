@@ -103,6 +103,19 @@ export const authApi = {
 };
 
 export type ApiSchemas = components["schemas"];
+
+/** A generated schema as the server actually *answers* it.
+ *
+ * Most of these components are one DRF serializer doing both directions, so a
+ * field carrying a model default is optional *to send* - and `openapi-typescript`
+ * can only render that as `?`, on the read shape as well as the write one. A
+ * screen reading a list would then have to null-check a field the server writes
+ * out every single time. What is optional there is the caller's obligation to
+ * supply it, never the server's to answer, so a read shape says `ApiRead<…>` and
+ * the field names, the enums and anything newly added still come straight from
+ * the schema. A field that is *genuinely* nullable stays nullable: `Required<>`
+ * removes `?`, not `| null`. */
+export type ApiRead<T> = Required<T>;
 type ApiPath = keyof paths;
 type PathWithoutPrefix<P extends ApiPath> = P extends `/api${infer Rest}` ? Rest : P;
 type ApiRelativePath = PathWithoutPrefix<ApiPath>;

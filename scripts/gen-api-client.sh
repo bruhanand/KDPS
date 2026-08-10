@@ -42,14 +42,15 @@ say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31merror\033[0m %s\n' "$*" >&2; exit 1; }
 
 CHECK=0
+[ "$#" -le 1 ] || fail "too many arguments (expected --check or nothing)"
 case "${1:-}" in
   --check) CHECK=1 ;;
   "")      ;;
   *)       fail "unknown argument '$1' (expected --check or nothing)" ;;
 esac
 
-command -v uv >/dev/null 2>&1 || fail "uv is not installed — see README.md"
-[ -x "${GENERATOR}" ] || fail "openapi-typescript is missing — run: npm --prefix app/frontend install"
+command -v uv >/dev/null 2>&1 || fail "uv is not installed - see README.md"
+[ -x "${GENERATOR}" ] || fail "openapi-typescript is missing - run: yarn --cwd app/frontend install --frozen-lockfile"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
@@ -57,19 +58,27 @@ trap 'rm -rf "${WORK}"' EXIT
 # Never connected to; settings.py only requires the variable to exist.
 export DATABASE_URL="${DATABASE_URL:-postgres://schema:schema@127.0.0.1:1/schema-generation-only}"
 
-say "Describing the backend (drf-spectacular)…"
-# The generator is chatty about serializers it cannot introspect (~530 lines of
-# "unable to guess serializer" for plain APIViews). That is a real weakness in
-# the API's self-description and is tracked separately; it is not this script's
-# business to fail on it, so the log is kept out of the way unless it is asked
-# for or the command actually dies.
+say "Describing the backend (drf-spectacular)..."
+# drf-spectacular exits 0 while emitting a *degraded* schema: it cannot introspect
+# a plain APIView, so it records that the endpoint exists and nothing about what it
+# answers. Today that is 134 of 222 operations (#303), which is why this script
+# cannot simply fail on a non-empty log - it would never pass.
+#
+# But the count is printed on every run, green ones included, because the number
+# going UP is the same failure this whole script exists to stop, one endpoint at a
+# time: an endpoint that silently stops describing itself leaves the generated file
+# still byte-identical to the new, smaller schema, so the gate stays green while
+# `tsc` quietly loses the safety net for that screen. Nothing else would say so.
 if ! (cd "${BACKEND}" && uv run python manage.py spectacular --file "${WORK}/schema.yaml") \
      >"${WORK}/spectacular.log" 2>&1; then
   cat "${WORK}/spectacular.log" >&2
   fail "the backend could not describe itself"
 fi
+described="$(grep -c 'operationId:' "${WORK}/schema.yaml" || true)"
+silent="$(grep -c 'No response body' "${WORK}/schema.yaml" || true)"
+say "${silent} of ${described} operations do not describe what they answer (#303)."
 
-say "Generating TypeScript (openapi-typescript)…"
+say "Generating TypeScript (openapi-typescript)..."
 "${GENERATOR}" "${WORK}/schema.yaml" --output "${WORK}/api-schema.ts" >/dev/null
 
 if [ "${CHECK}" -eq 1 ]; then
@@ -85,7 +94,7 @@ if [ "${CHECK}" -eq 1 ]; then
 error The generated API client is stale.
 
   app/frontend/src/lib/api-schema.ts no longer matches what the backend
-  describes. It is generated, never hand-edited — regenerate and commit it
+  describes. It is generated, never hand-edited - regenerate and commit it
   alongside the backend change that moved it:
 
       npm run api:client

@@ -160,8 +160,7 @@ jobs:
           # generator itself, which is neither. Editing the gate must re-prove
           # the gate, same rule this workflow file already follows.
           apiclient=false
-          [ "${backend}" = "true" ] || [ "${frontend}" = "true" ] && apiclient=true
-          matches '^(scripts/gen-api-client\.sh$|package\.json$)' && apiclient=true
+          matches '^(app/backend/|app/frontend/|scripts/gen-api-client\.sh$|package\.json$|\.github/workflows/ci\.yml$)' && apiclient=true
 
           echo "backend=${backend}"  | tee -a "$GITHUB_OUTPUT"
           echo "frontend=${frontend}" | tee -a "$GITHUB_OUTPUT"
@@ -357,21 +356,14 @@ jobs:
       - name: API regression suites (auth, RBAC, inbound, PT, ledgers, security)
         run: uv run pytest tests -q --splits 8 --group ${{ matrix.shard }}
 
-  # The generated API client is not stale (ADR-0001/0002, gated by ADR-0005).
+  # The generated API client is not stale (ADR-0005's "client-in-sync" check,
+  # finally wired - #192). `scripts/gen-api-client.sh` is where the reasoning
+  # lives; this job just runs it on a clean checkout and refuses a difference.
   #
-  # `app/frontend/src/lib/api-schema.ts` is written by a generator, and the whole
-  # reason it is generated is that `tsc` should fail the moment a screen and the
-  # API stop agreeing. It only can while the file describes the *current*
-  # backend. Nothing was checking that, and it fell about a thousand lines behind
-  # (#192) - so screens hand-wrote the shapes they expected, and the safety net
-  # was quietly gone.
-  #
-  # It watches both trees. A backend change moves the schema; a frontend change
-  # could hand-edit the file the header tells you not to touch. Either way this
-  # job regenerates from scratch and refuses a difference.
-  #
-  # No Postgres service: `manage.py spectacular` reads the URL conf and the
-  # serializers, never a row.
+  # It watches both trees, because either can cause the drift: a backend change
+  # moves the schema, and a frontend change could hand-edit the file whose header
+  # says not to. No Postgres service - the generator reads the URL conf and the
+  # serializers, never a row - so this is the cheapest job in the workflow.
   api-client:
     name: api-client
     needs: changes

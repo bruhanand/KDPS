@@ -4,6 +4,7 @@ import { Printer, Search } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { api, apiErrorMessage } from "../../lib/api";
+import type { ApiRead, ApiSchemas } from "../../lib/api";
 import { withQuery } from "../../lib/query";
 import { Money, formatDateTime } from "../../lib/format";
 import { browserPrintAdapter } from "../../till/print";
@@ -30,17 +31,12 @@ import "./CustomerSearch.css";
 // therefore needs the line - and says so plainly when there is none, rather than
 // answering "no bills found" for a question it never got to ask.
 
-/** One row of the result list. */
-interface SaleRow {
-  id: number;
-  doc_number: string;
-  store_code: string;
-  billed_at: string;
-  customer_name: string;
-  customer_mobile: string;
-  net_paise: number;
-  lines_summary: string;
-}
+/** One row of the result list, exactly as `SaleListCreateView` publishes it
+ *  (`responses=SaleRowSerializer(many=True)`) - taken from the generated client
+ *  rather than copied by hand (#192). The hand copy said `doc_number: string`;
+ *  the serializer has always been able to answer null, and the screen below now
+ *  has to say so instead of printing the word "null" into a URL. */
+type SaleRow = ApiRead<ApiSchemas["SaleRow"]>;
 
 /** The three keys the contract takes, as the counter would say them. */
 const KEYS = [
@@ -108,6 +104,13 @@ export default function CustomerSearchPage() {
   async function openBill(row: SaleRow) {
     setError("");
     setPrintProblem("");
+    // A bill is fetched *by its number*, so a row without one has nothing to
+    // fetch. Before #192 the hand-written row shape swore there was always a
+    // number, and this asked the server for `/sell/sales/null`.
+    if (!row.doc_number) {
+      setError("That bill has no number yet, so there is nothing to print.");
+      return;
+    }
     if (open?.doc_number === row.doc_number) {
       setOpen(null);
       return;
@@ -221,8 +224,8 @@ export default function CustomerSearchPage() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.doc_number} data-testid={`find-row-${row.id}`}>
-                  <td className="mono">{row.doc_number}</td>
+                <tr key={row.id} data-testid={`find-row-${row.id}`}>
+                  <td className="mono">{row.doc_number || "not numbered"}</td>
                   <td>{formatDateTime(row.billed_at)}</td>
                   <td>
                     {row.customer_name || "—"}
