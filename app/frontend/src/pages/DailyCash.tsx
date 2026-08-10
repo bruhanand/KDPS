@@ -26,7 +26,6 @@ interface DailyEntry {
   kind: string;
   account: string;
   amount: number;
-  amount_rupees: string;
   description: string;
   mode: string;
   vendor_name?: string | null;
@@ -129,7 +128,7 @@ export function DailyCashPage() {
                       <td>{ACCOUNT_LABEL[e.account] ?? e.account}</td>
                       <td>{e.description}{e.vendor_name ? ` · ${e.vendor_name}` : ""}</td>
                       <td className="num mono" style={{ fontWeight: 700, color: e.amount >= 0 ? "var(--green)" : "var(--red)" }}>
-                        {e.amount_rupees}
+                        <Money paise={e.amount} />
                       </td>
                     </tr>
                   ))}

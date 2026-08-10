@@ -52,7 +52,6 @@ interface SettlementRow {
   store_code: string;
   store_name: string;
   amount_paise: number;
-  amount_rupees: string;
   description: string;
   reference: string;
   mode: string;
@@ -322,7 +321,7 @@ export function PartnerDuesPage() {
                                           <td>{h.mode || "—"}</td>
                                           <td>{h.description}{h.reference ? ` · ${h.reference}` : ""}</td>
                                           <td className="num mono" style={{ fontWeight: 700, color: h.kind === "reversal" ? "var(--rust)" : "inherit" }}>
-                                            {h.amount_rupees}
+                                            <Money paise={h.amount_paise} />
                                           </td>
                                           <td>{h.kind !== "reversal" && (
                                             <div style={{ display: "flex", gap: 6 }}>
