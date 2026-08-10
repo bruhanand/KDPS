@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, IndianRupee, Layers, PackageCheck, ScrollText } from "lucide-react";
 
 import { api } from "../lib/api";
+import { Money } from "../lib/format";
 import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -23,7 +24,7 @@ interface EntryT {
   season: string;
   item: string;
   qty: number;
-  value_rupees: string;
+  amount: number;
   source_file: string;
   booking_number: string;
 }
@@ -31,7 +32,7 @@ interface EntryT {
 interface SummaryT {
   entries: number;
   net_qty: number;
-  net_value_rupees: string;
+  net_value_paise: number;
   distinct_skus: number;
   distinct_documents: number;
 }
@@ -73,7 +74,7 @@ export default function StockLedger() {
     () => [
       { icon: ScrollText, label: "Ledger entries", value: summary?.entries ?? 0 },
       { icon: Boxes, label: "Net units on hand", value: summary?.net_qty ?? 0 },
-      { icon: IndianRupee, label: "Net stock value (₹)", value: summary?.net_value_rupees ?? "0.00" },
+      { icon: IndianRupee, label: "Net stock value (₹)", value: <Money paise={summary?.net_value_paise ?? 0} /> },
       { icon: Layers, label: "Distinct SKUs", value: summary?.distinct_skus ?? 0 },
     ],
     [summary],
@@ -161,7 +162,7 @@ export default function StockLedger() {
                   <td>{e.item}</td>
                   <td>{e.season}</td>
                   <td className="num" style={{ color: e.qty < 0 ? "var(--red)" : "inherit", fontWeight: 700 }}>{e.qty}</td>
-                  <td className="num mono">{e.value_rupees}</td>
+                  <td className="num mono"><Money paise={e.amount} /></td>
                   <td>{e.booking_number || "—"}</td>
                 </tr>
               ))}

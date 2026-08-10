@@ -6,7 +6,7 @@ import { fmtApprovalWhen } from "../components/approval";
 import type { ApprovalT } from "../components/approval";
 import { SearchBox } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
-import { formatRupeeAmount } from "../lib/format";
+import { Money } from "../lib/format";
 import { withQuery } from "../lib/query";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -27,12 +27,12 @@ interface RowT {
   sku_code: string;
   net_qty: number;
   skus: number;
-  net_value_rupees: string;
+  net_value_paise: number;
 }
 
 interface OnHandT {
   group_by: Group;
-  summary: { units_on_hand: number; value_rupees: string; lines: number; displayed?: number; truncated?: boolean };
+  summary: { units_on_hand: number; value_paise: number; lines: number; displayed?: number; truncated?: boolean };
   rows: RowT[];
 }
 
@@ -47,13 +47,13 @@ interface QuarRowT {
   season: string;
   brand: string;
   qty: number;
-  value_rupees: string;
+  value_paise: number;
   marked_by: string | null;
   marked_at: string | null;
 }
 
 interface QuarT {
-  summary: { units_quarantined: number; value_rupees: string; lines: number };
+  summary: { units_quarantined: number; value_paise: number; lines: number };
   rows: QuarRowT[];
 }
 
@@ -248,12 +248,12 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
   const cards = isQuar
     ? [
         { icon: ShieldAlert, label: "Units quarantined", value: quar?.summary.units_quarantined ?? 0 },
-        { icon: IndianRupee, label: "Quarantine value", value: formatRupeeAmount(quar?.summary.value_rupees ?? "0") },
+        { icon: IndianRupee, label: "Quarantine value", value: <Money paise={quar?.summary.value_paise ?? 0} /> },
         { icon: Layers, label: "Quarantine lines", value: quar?.summary.lines ?? 0 },
       ]
     : [
         { icon: Boxes, label: "Units on hand", value: data?.summary.units_on_hand ?? 0 },
-        { icon: IndianRupee, label: "Stock value", value: formatRupeeAmount(data?.summary.value_rupees ?? "0") },
+        { icon: IndianRupee, label: "Stock value", value: <Money paise={data?.summary.value_paise ?? 0} /> },
         { icon: Layers, label: group === "store" ? "Stores" : group === "brand" ? "Brands" : "SKU lines", value: data?.summary.lines ?? 0 },
       ];
 
@@ -451,7 +451,7 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
                     <td className="mono">{r.sku_code}</td><td>{r.brand}</td><td>{r.design}</td>
                     <td>{r.color}</td><td>{r.size}</td><td>{r.season}</td><td>{r.store_code}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{r.qty}</td>
-                    <td className="num mono">{formatRupeeAmount(r.value_rupees)}</td>
+                    <td className="num mono"><Money paise={r.value_paise} /></td>
                     <td>{r.marked_by ?? "—"}</td>
                     <td>{r.marked_at ? new Date(r.marked_at).toLocaleString("en-IN") : "—"}</td>
                   </tr>
@@ -504,7 +504,7 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
                   {group === "brand" && (<><td><b>{r.brand}</b></td><td>{r.store_code}</td><td className="num">{r.skus}</td></>)}
                   {group === "store" && (<><td className="mono">{r.store_code}</td><td>{r.store_name}</td><td className="num">{r.skus}</td></>)}
                   <td className="num" style={{ fontWeight: 700 }}>{r.net_qty}</td>
-                  <td className="num mono">{formatRupeeAmount(r.net_value_rupees)}</td>
+                  <td className="num mono"><Money paise={r.net_value_paise} /></td>
                   {group === "sku" && (
                     <td>
                       <button
