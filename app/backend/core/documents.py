@@ -5,6 +5,9 @@ NOT any business document itself. It owns three things and nothing more:
 
 1. **The docstatus FSM** — `draft → submitted → cancelled`, one `post()` per doc.
    Cancel is a *reversing transition*, never a delete; a posted doc is immutable.
+   The reversing half lives in `core.reversal`: `cancel()` mirrors what the
+   document posted and walks the status in one transaction, and a document class
+   that has not declared what it reverses refuses to cancel (#220).
 2. **The naming series** — the Tally join key `{FY}/{store}/{type}/{seq}` (e.g.
    `26-27/DEO/SAL/74`), allocated gap-free and collision-free under parallel
    insert. `doc_type` is in the key because the counter is scoped per
@@ -27,6 +30,8 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from django.db import connection, models, transaction
+
+from core.reversal import declare_reversal, reverse_value_legs, run_declared_reversal
 
 #: One shared trigger function for every document table.
 TRIGGER_FUNCTION = "kdps_document_fsm"
@@ -478,18 +483,45 @@ class Document(models.Model):
             self._save_transition(["series", "doc_number", "docstatus", "updated_at"])
             return minted
 
-    def cancel(self) -> None:
+    def reverse(self, actor: Any = None) -> Any:
+        """Undo everything this document posted — the reversing half of `cancel()`.
+
+        Looked up rather than defaulted, because what a cancel owes is a property
+        of what the document *did*: a bill owes its stock back and its collections
+        un-taken, a PT owes the vendor bill it raised. A type that has declared
+        nothing refuses to cancel rather than walking to `cancelled` over postings
+        nobody reversed (#220); `core.reversal` holds the register, the declaring
+        idiom, and why refusing is the conservative answer here.
+
+        Whatever it returns is handed back by `cancel()`, so a caller that needs a
+        summary of what was undone gets one without a second query.
+        """
+        return run_declared_reversal(self, actor)
+
+    def cancel(self, actor: Any = None) -> Any:
         """`submitted → cancelled`: a reversing transition, never a delete.
 
-        The row stays; the ledger reversal it triggers is K7's job.
+        The row stays and every posting it made is mirrored, both inside one
+        transaction: a cancel that reversed the ledger and then failed to move the
+        status would be a document that had given its money back twice.
+
+        `actor` is who is cancelling. It rides onto the reversal legs as evidence
+        (Rule 10), and on the paths where the posting floor demands a named
+        head-office person — a reversal that restores what a brand is owed — it is
+        required rather than decorative.
+
+        Returns whatever this document's `reverse()` returned.
         """
         if self.docstatus != DocStatus.SUBMITTED:
             raise DocumentTransitionError(
                 f"only a submitted document can be cancelled; this is "
                 f"{self.get_docstatus_display()}"
             )
-        self.docstatus = DocStatus.CANCELLED
-        self._save_transition(["docstatus", "updated_at"])
+        with transaction.atomic():
+            reversed_ = self.reverse(actor)
+            self.docstatus = DocStatus.CANCELLED
+            self._save_transition(["docstatus", "updated_at"])
+            return reversed_
 
     def _save_transition(self, fields: list[str]) -> None:
         self._in_transition = True
@@ -705,3 +737,11 @@ class DocumentProbe(Document):
         return MintedNumber(
             series=accepted.series, doc_number=accepted.doc_number, accepted=accepted
         )
+
+
+# The probe moves no stock and keeps no subledger, so its whole footprint is
+# whatever it posted to the value GL — the plain mirror, and nothing else.
+# Declared at import rather than in an `AppConfig.ready()` because this document
+# and its reversal are both kernel, with no service layer in between to cycle
+# against.
+declare_reversal(DocumentProbe._meta.label_lower, reverse_value_legs)

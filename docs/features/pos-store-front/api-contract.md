@@ -767,3 +767,17 @@ Expiry (policy data): a periodic job posts Dr CREDIT_NOTE_LIABILITY · Cr SUSPEN
 ### Cancellation
 
 A submitted Sale/Return cancels only by the kernel's reversing transition (correct-by-reversal, period-locked); no edit path exists.
+
+What that transition does, since #220 (it previously walked the status and nothing else):
+
+- posts the negated mirror of every value leg the document wrote, through `post_entries`, filed under the *same* doc number with memo `Reversal of <doc>` - the original legs are never edited (append-only by DB trigger);
+- appends the mirror of every stock leg, same `kind` (kind is what places a leg in a bucket), at the cost frozen on the original leg;
+- reverses the cash-ledger receipts behind its tenders and the vendor-subledger SOR/consignment accrual, so both control-account ties in Books Health still hold;
+- voids the credit note it issued, if that note has **no live redemption**;
+- closes any `sell_deferredcosting` row its lines are waiting in, so no later PT sweeps a cost onto a cancelled bill.
+
+All of it inside the transition's own transaction. The returnable quantity on the original line is freed at the same moment (correct - the piece is back with the customer); that is only safe *because* the note is voided with it, or one piece could produce two live notes.
+
+**Refused, pending a ruling:** cancelling a document whose credit note has already been partly spent. Open on #291, same ground as the CA-gated no-reposting rule (#290 item 5).
+
+A document type that has not declared what cancelling it undoes refuses to cancel outright rather than reversing nothing (`core.reversal`). GRN and the outbound family are in that state today.

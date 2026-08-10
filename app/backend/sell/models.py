@@ -273,7 +273,21 @@ class CreditNote(Document):
 
     @property
     def spent_paise(self) -> int:
-        return int(self.redemptions.aggregate(total=models.Sum("amount_paise"))["total"] or 0)
+        """What has been spent off this note, on bills that still stand.
+
+        A redemption against a bill that has since been cancelled did not happen:
+        the cancel mirrored that bill's `Dr CREDIT_NOTE_LIABILITY` leg, so the
+        books have already handed the money back to the note, and counting the
+        redemption as well would show a note as spent while the ledger carried the
+        liability for it. Same rule, same reason, as the returned-quantity ceiling
+        in `sell.services.refunds`.
+        """
+        return int(
+            self.redemptions.exclude(sale__docstatus=DocStatus.CANCELLED).aggregate(
+                total=models.Sum("amount_paise")
+            )["total"]
+            or 0
+        )
 
     @property
     def remaining_paise(self) -> int:
@@ -300,7 +314,18 @@ class CreditNote(Document):
         return rows.annotate(
             **{
                 cls.BALANCE: models.F("value_paise")
-                - Coalesce(models.Sum("redemptions__amount_paise"), models.Value(0))
+                - Coalesce(
+                    models.Sum(
+                        "redemptions__amount_paise",
+                        # The cancelled-bill rule from `spent_paise`, spelled the
+                        # only other place the balance is worked out. A note whose
+                        # only spend was on a cancelled bill is open again, and
+                        # both readers have to say so or the list and the row
+                        # disagree.
+                        filter=~models.Q(redemptions__sale__docstatus=DocStatus.CANCELLED),
+                    ),
+                    models.Value(0),
+                )
             }
         )
 
@@ -998,6 +1023,13 @@ class DeferredCosting(TimeStampedModel):
         # than deleted, because the queue is the record that a bill's cost was
         # dealt with - and "given back" is one of the ways it can be.
         RETURNED = "returned", "Given back before it could be priced"
+        # #220. The bill itself was cancelled, so there is no cost to post and
+        # never will be - and a row left waiting would be released by the next PT
+        # that priced the cohort, posting a cost event and taking a piece off a
+        # shelf for a bill the books say never happened. Left as a row for the
+        # same reason `returned` is: the queue is the record of how a bill's cost
+        # was dealt with, and "the bill went away" is one of the ways.
+        CANCELLED = "cancelled", "The bill was cancelled"
 
     class Reason(models.TextChoices):
         """What the books are actually waiting for.
@@ -1038,7 +1070,7 @@ class DeferredCosting(TimeStampedModel):
     barcode = models.CharField(max_length=64, db_index=True)
     season = models.CharField(max_length=120, blank=True, default="")
     qty = models.IntegerField()
-    status = models.CharField(max_length=8, choices=Status.choices, default=Status.WAITING)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.WAITING)
     reason = models.CharField(max_length=16, choices=Reason.choices, default=Reason.UNPRICED)
     posted_doc_number = models.CharField(max_length=128, blank=True, default="")
 
