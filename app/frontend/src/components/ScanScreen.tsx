@@ -123,6 +123,14 @@ function total(counts: Record<string, number>): number {
   return Object.values(counts).reduce((a, b) => a + b, 0);
 }
 
+/** Appends `found` unless its barcode is already a line. Two scans of the same
+ *  new barcode race their lookups, but both resolve into this functional
+ *  update, and React applies them one after another — so the second call
+ *  always sees the first one's result and skips the append (#168). */
+export function addLineIfAbsent(lines: ScanTarget[], found: ScanTarget): ScanTarget[] {
+  return lines.some((l) => l.barcode === found.barcode) ? lines : [...lines, found];
+}
+
 export function ScanScreen({
   mode,
   docLabel,
@@ -195,7 +203,7 @@ export function ScanScreen({
           const found = await lookup(code);
           if (found) {
             line = found;
-            setLines((ls) => [...ls, found]);
+            setLines((ls) => addLineIfAbsent(ls, found));
           }
         } catch {
           line = undefined;
