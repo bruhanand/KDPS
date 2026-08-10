@@ -181,6 +181,9 @@ function TrialBalancePanel({ canSeeMoney }: { canSeeMoney: boolean }) {
   const [h, setH] = useState<Health | null>(null);
   const [denied, setDenied] = useState(false);
   useEffect(() => {
+    // A capability that regains money access after an earlier failure must get
+    // a clean retry, not stay hidden behind a stale denial.
+    setDenied(false);
     loadBooksHealth(canSeeMoney, setH, () => setDenied(true));
   }, [canSeeMoney]);
   if (!canSeeMoney || denied) return null;
