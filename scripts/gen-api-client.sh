@@ -61,7 +61,7 @@ export DATABASE_URL="${DATABASE_URL:-postgres://schema:schema@127.0.0.1:1/schema
 say "Describing the backend (drf-spectacular)..."
 # drf-spectacular exits 0 while emitting a *degraded* schema: it cannot introspect
 # a plain APIView, so it records that the endpoint exists and nothing about what it
-# answers. Today that is 134 of 222 operations (#303), which is why this script
+# answers. Today that is 133 of 224 operations (#303), which is why this script
 # cannot simply fail on a non-empty log - it would never pass.
 #
 # But the count is printed on every run, green ones included, because the number
@@ -74,8 +74,10 @@ if ! (cd "${BACKEND}" && uv run python manage.py spectacular --file "${WORK}/sch
   cat "${WORK}/spectacular.log" >&2
   fail "the backend could not describe itself"
 fi
+# Only a `200` counts. A `204` saying "No response body" is describing an empty
+# answer correctly, and counting it would make adding one look like a regression.
 described="$(grep -c 'operationId:' "${WORK}/schema.yaml" || true)"
-silent="$(grep -c 'No response body' "${WORK}/schema.yaml" || true)"
+silent="$(grep -A1 "^        '200':" "${WORK}/schema.yaml" | grep -c 'No response body' || true)"
 say "${silent} of ${described} operations do not describe what they answer (#303)."
 
 say "Generating TypeScript (openapi-typescript)..."

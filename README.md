@@ -217,7 +217,7 @@ Both cloud CI and the local gate refuse a difference.
 That gate is the point: without it the file drifted about a thousand lines behind the backend, screens hand-wrote the shapes they expected, and the safety net was gone while everything still looked green (#192).
 
 It is not yet a *complete* net, and the command says so on every run.
-`drf-spectacular` cannot work out what a plain `APIView` answers, so 134 of the 224 published operations describe only that they exist - screens still hand-write those shapes, and nothing can check them (#303).
+`drf-spectacular` cannot work out what a plain `APIView` answers, so 133 of the 224 published operations describe only that they exist - screens still hand-write those shapes, and nothing can check them (#303).
 
 **Two gates, one shape.** The cloud CI (`.github/workflows/ci.yml`) covers what the local gate covers: ruff (format + check), `mypy .`, import-linter, `makemigrations --check`, the schema-drift check, the kernel suites, the API regression suites sharded eight ways on real Postgres, the API-client drift check, and the frontend build + vitest.
 The one thing it cannot reproduce is *your* database: its Postgres is built fresh from the migration graph every run, so `check_db_drift` there is trivially green and only the local run answers whether your own workspace has drifted.

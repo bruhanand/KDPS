@@ -114,7 +114,11 @@ export type ApiSchemas = components["schemas"];
  * supply it, never the server's to answer, so a read shape says `ApiRead<…>` and
  * the field names, the enums and anything newly added still come straight from
  * the schema. A field that is *genuinely* nullable stays nullable: `Required<>`
- * removes `?`, not `| null`. */
+ * removes `?`, not `| null`.
+ *
+ * Top level only, deliberately. A nested object keeps its own `?`, which is
+ * right: the argument above is about one serializer's own fields, and a nested
+ * component is a different serializer with its own answer. */
 export type ApiRead<T> = Required<T>;
 type ApiPath = keyof paths;
 type PathWithoutPrefix<P extends ApiPath> = P extends `/api${infer Rest}` ? Rest : P;

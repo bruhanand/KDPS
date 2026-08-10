@@ -108,7 +108,7 @@ export default function CustomerSearchPage() {
     // fetch. Before #192 the hand-written row shape swore there was always a
     // number, and this asked the server for `/sell/sales/null`.
     if (!row.doc_number) {
-      setError("That bill has no number yet, so there is nothing to print.");
+      setError("That bill has no number yet, so it cannot be opened.");
       return;
     }
     if (open?.doc_number === row.doc_number) {
