@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 
 import { api, apiErrorMessage, typedApi } from "../lib/api";
-import type { ApiSchemas } from "../lib/api";
+import type { ApiRead, ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { CommercialBadge, StatusChip, formatINR, paiseToRupees, rupeesToPaise } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
@@ -84,20 +84,13 @@ function Feedback({ error, ok }: { error: string; ok: string }) {
 
 // ---------------------------------------------------------------- Stores
 
-interface Store {
-  id: number;
-  code: string;
-  name: string;
-  store_type: string;
-  city: string;
-  state_name: string;
-  gstin: number;
-  gstin_number: string;
-  is_active: boolean;
-  is_partner: boolean;
-}
-
-interface GstinOpt { id: number; gstin: string; state_name: string; state_code: string; legal_entity_name: string; legal_entity: number; is_active: boolean; }
+// The masters read-shapes come from the generated client, never from a hand copy
+// (#192). A hand-written twin agrees with the backend only until somebody changes
+// the backend, and then it agrees with nothing and says so to nobody - which is
+// how `store_type: string` here sat opposite a two-value enum there. Taking them
+// from `ApiSchemas` makes the next divergence a build failure. `ApiRead<>` is the
+// one adjustment; `lib/api.ts` says why.
+type Store = ApiRead<ApiSchemas["Store"]>;
 
 const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", gstin: 0, is_active: true, is_partner: false };
 
@@ -105,7 +98,7 @@ export function StoresPage() {
   const canEdit = useSteward();
   const [q, setQ] = useState("");
   const { data, loading, reload } = useList<Store>("/masters/stores", { q });
-  const { data: gstins } = useList<GstinOpt>("/masters/gstins");
+  const { data: gstins } = useList<Gstin>("/masters/gstins");
   const [form, setForm] = useState(blankStore);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -455,11 +448,7 @@ export function StoreTargetsPage() {
 
 // ---------------------------------------------------------------- Brands
 
-interface Brand {
-  id: number; code: string; name: string; ownership: string; return_terms: string;
-  commercial_label: string; return_window_days: number; return_cap_percent: string;
-  takes_returns: boolean; cap_applies: boolean; is_active: boolean;
-}
+type Brand = ApiRead<ApiSchemas["Brand"]>;
 
 // The two numbers a brand negotiates on returns (#75): how long the window is
 // and, for a Correction brand, what share of what they delivered may go back.
@@ -573,7 +562,7 @@ export function BrandsPage() {
 
 // ---------------------------------------------------------------- Seasons
 
-interface Season { id: number; code: string; name: string; status: string; sort_order: number; }
+type Season = ApiRead<ApiSchemas["Season"]>;
 
 const blankSeason = { id: 0, code: "", name: "", status: "open", sort_order: 0 };
 
@@ -648,7 +637,7 @@ export function SeasonsPage() {
 
 // ---------------------------------------------------------------- GSTINs
 
-interface Gstin { id: number; gstin: string; state_name: string; state_code: string; legal_entity: number; legal_entity_name: string; is_active: boolean; }
+type Gstin = ApiRead<ApiSchemas["Gstin"]>;
 interface EntityOpt { id: number; code: string; name: string; }
 
 const blankGstin = { id: 0, gstin: "", state_code: "", state_name: "", legal_entity: 0, is_active: true };
@@ -871,7 +860,7 @@ export function VendorsPage() {
 // ---------------------------------------------------------- Users & Roles
 
 type AdminRole = ApiSchemas["AdminRole"];
-interface BrandMini { id: number; code: string; name: string }
+type BrandMini = ApiSchemas["BrandMini"];
 // Brand assignment and the `brand` scope (#88) are newer than the checked-in
 // generated schema, which is regenerated on its own cadence — widen locally
 // rather than hand-edit a generated file.

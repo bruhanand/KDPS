@@ -192,15 +192,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_actor_policies_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_actor_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_actor_policies_partial_update"];
         trace?: never;
     };
@@ -211,10 +229,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_approval_policies_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_approval_policies_create"];
         delete?: never;
         options?: never;
@@ -229,15 +259,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_approval_policies_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_approval_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_approval_policies_partial_update"];
         trace?: never;
     };
@@ -264,10 +312,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_roles_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_roles_create"];
         delete?: never;
         options?: never;
@@ -314,15 +374,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_roles_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_roles_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_roles_partial_update"];
         trace?: never;
     };
@@ -333,10 +411,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_users_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_users_create"];
         delete?: never;
         options?: never;
@@ -351,15 +441,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_users_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_users_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_users_partial_update"];
         trace?: never;
     };
@@ -521,6 +629,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bookings/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Send a drafted booking for the Owner's signature (D11 §3).
+         *
+         *     The maker's last act on their own commitment. Approval places it - see
+         *     `vendors.approval` - so there is no second step for anybody to forget, and no
+         *     path from draft to booked that does not pass a second person.
+         */
+        post: operations["bookings_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bookings/draft": {
         parameters: {
             query?: never;
@@ -552,6 +683,100 @@ export interface paths {
             cookie?: never;
         };
         get: operations["files_download_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finledger/bank/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Upload a bank statement (`money: manage`) — parsed and auto-matched in
+         *     one shot (`finledger.reconciliation`) — or list past uploads
+         *     (`money: view`, same rung as reading the cash ledger these lines offset).
+         */
+        get: operations["finledger_bank_imports_retrieve"];
+        put?: never;
+        /**
+         * @description Upload a bank statement (`money: manage`) — parsed and auto-matched in
+         *     one shot (`finledger.reconciliation`) — or list past uploads
+         *     (`money: view`, same rung as reading the cash ledger these lines offset).
+         */
+        post: operations["finledger_bank_imports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finledger/bank/imports/{import_id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description A batch's rows, optionally narrowed to one status — the review queue
+         *     Accounts works through after an upload.
+         */
+        get: operations["finledger_bank_imports_lines_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finledger/bank/lines/{id}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accounts' say on one line once the matcher's own guess isn't good
+         *     enough on its own: link it to a specific `CashLedgerEntry` (from the
+         *     cached `candidates` or picked by id another way), unlink a wrong
+         *     auto-match, or mark it `ignored` (a bank charge/interest row with no
+         *     ledger counterpart at all).
+         */
+        post: operations["finledger_bank_lines_match_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finledger/cash/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description A day's money in vs out, split by account (Cash/Bank/Card/UPI) — the
+         *     dashboard Accounts asked for directly (`KDPS Daily Work Survey - Accounts
+         *     Team.pdf`): a same-day read of what moved, rather than only finding out at
+         *     month-end DSR reconciliation. Reads the same `CashLedgerEntry` rows the
+         *     Cash Ledger (#106) already lists; this just slices them to one day and
+         *     splits the signed `amount` into in/out instead of netting it into one
+         *     running balance.
+         */
+        get: operations["finledger_cash_daily_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1370,6 +1595,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/offers/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Send a draft offer for countersignature (D11 §7).
+         *
+         *     The author's last act on their own rule. What comes back is the offer as it
+         *     now stands, so the screen can say "waiting for the Owner" without asking a
+         *     second question. The decision publishes it - see `offers.approval`.
+         *
+         *     This replaces `_approval_stamp`, which recorded whoever wrote "approved" onto
+         *     a draft as its approver - the half of D5 Q9 that was deferred, and a gate that
+         *     the author could clear alone.
+         */
+        post: operations["offers_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/eoss/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET`/`PUT` the markdown ladder and the sell-through target curve.
+         *
+         *     `PUT` replaces a brand's whole ladder (or the whole default curve) in one
+         *     call - a step numbered out of order left behind by a partial edit is worse
+         *     than asking the screen to send the complete list every time.
+         */
+        get: operations["offers_eoss_config_retrieve"];
+        /**
+         * @description `GET`/`PUT` the markdown ladder and the sell-through target curve.
+         *
+         *     `PUT` replaces a brand's whole ladder (or the whole default curve) in one
+         *     call - a step numbered out of order left behind by a partial edit is worse
+         *     than asking the screen to send the complete list every time.
+         */
+        put: operations["offers_eoss_config_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/eoss/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET` the current plan. `POST` recomputes it for a season. */
+        get: operations["offers_eoss_recommendations_retrieve"];
+        put?: never;
+        /** @description `GET` the current plan. `POST` recomputes it for a season. */
+        post: operations["offers_eoss_recommendations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/eoss/recommendations/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Approve (spins up the live `Offer`) or reject one recommendation. */
+        post: operations["offers_eoss_recommendations_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/price-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The price list: search, and read what a ticket is — or was. */
+        get: operations["offers_price_list_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/price-list/{barcode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One barcode, with the whole trail behind its ticket. */
+        get: operations["offers_price_list_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/offers/price-list/{barcode}/reprice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Move a ticket, on the record.
+         *
+         *     Two refusals, and both are the point of the screen: a re-ticket without a
+         *     reason is the thing nobody can explain next month, and a ticket below landed
+         *     cost is a loss booked by typing.
+         */
+        post: operations["offers_price_list_reprice_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/outbound/adjustments": {
         parameters: {
             query?: never;
@@ -1619,6 +1993,103 @@ export interface paths {
          *     stock view — damage is caught everywhere. store_staff is read-only.
          */
         post: operations["outbound_mark_damaged_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/partner-billing-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The one partner-billing dial: informational-only, or also a receivable
+         *     at Purchase Price. Read at `money: view`, changed at `money: manage` —
+         *     see `CanManageBillingPolicy`.
+         */
+        get: operations["outbound_partner_billing_policy_retrieve"];
+        /**
+         * @description The one partner-billing dial: informational-only, or also a receivable
+         *     at Purchase Price. Read at `money: view`, changed at `money: manage` —
+         *     see `CanManageBillingPolicy`.
+         */
+        put: operations["outbound_partner_billing_policy_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/partner-dues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What each partner store owes, summed off the figure every transfer to
+         *     it already carries (`partner_billing_value_paise`) — a read-only report
+         *     over data that exists regardless of `BillingPolicy.mode`, so it means the
+         *     same thing whether or not that figure ever reached the ledger. A dispatch
+         *     still in DRAFT owes nothing yet: this only counts SUBMITTED transfers,
+         *     the same rung `posting._bill_partner_store` only ever sets the figure at.
+         *
+         *     Net Outstanding offsets that billed total against `PartnerLedgerEntry` —
+         *     what Accounts has recorded as received (`PartnerSettlementsView`). There
+         *     is no BILL kind on that ledger to double-count: the billed side stays this
+         *     view's own aggregation, exactly as before settlements existed.
+         */
+        get: operations["outbound_partner_dues_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/partner-settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Record a payment against a partner store's dues (`money: manage`), or
+         *     list its settlement history (`money: view`) — the other half of
+         *     `PartnerDuesView`'s Total Owed, offset there rather than double-kept here.
+         */
+        get: operations["outbound_partner_settlements_retrieve"];
+        put?: never;
+        /**
+         * @description Record a payment against a partner store's dues (`money: manage`), or
+         *     list its settlement history (`money: view`) — the other half of
+         *     `PartnerDuesView`'s Total Owed, offset there rather than double-kept here.
+         */
+        post: operations["outbound_partner_settlements_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/partner-settlements/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["outbound_partner_settlements_reverse_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2793,6 +3264,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sell/discounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sell_discounts_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sell/flags": {
         parameters: {
             query?: never;
@@ -3567,6 +4054,7 @@ export interface components {
         };
         /**
          * @description * `draft` - Draft
+         *     * `submitted` - Sent for approval
          *     * `booked` - Booked
          *     * `partially_received` - Partially received
          *     * `received` - Received
@@ -3574,7 +4062,7 @@ export interface components {
          *     * `cancelled` - Cancelled
          * @enum {string}
          */
-        BookingStatusEnum: "draft" | "booked" | "partially_received" | "received" | "closed" | "cancelled";
+        BookingStatusEnum: "draft" | "submitted" | "booked" | "partially_received" | "received" | "closed" | "cancelled";
         Brand: {
             readonly id: number;
             code: string;
@@ -4139,6 +4627,8 @@ export interface components {
             readonly state_name?: string;
             readonly state_code?: string;
             is_active?: boolean;
+            /** @description A franchisee/partner store rather than a KDPS-owned one. Stock transferred here is billed to the partner at Purchase Price — see `outbound.BillingPolicy` for whether that also posts to the ledger. */
+            is_partner?: boolean;
         };
         PatchedVendor: {
             readonly id?: number;
@@ -4251,10 +4741,11 @@ export interface components {
          *     * `seasonal_swap` - Seasonal swap
          *     * `free_floor_space` - Free floor space
          *     * `customer_waiting` - Customer waiting
+         *     * `warehouse_allocation` - Warehouse allocation
          *     * `other` - Other
          * @enum {string}
          */
-        Reason783Enum: "sister_store_request" | "slow_mover" | "seasonal_swap" | "free_floor_space" | "customer_waiting" | "other";
+        Reason6d3Enum: "sister_store_request" | "slow_mover" | "seasonal_swap" | "free_floor_space" | "customer_waiting" | "warehouse_allocation" | "other";
         /** @description One short / extra / damaged outcome, as recorded at receive (#71). */
         ReceiptException: {
             readonly id: number;
@@ -4614,6 +5105,8 @@ export interface components {
              */
             net_paise?: number;
             readonly lines_summary: string;
+            readonly pieces: number;
+            readonly salespeople: string[];
         };
         SaleTenderRead: {
             mode: components["schemas"]["SaleTenderReadModeEnum"];
@@ -4995,6 +5488,8 @@ export interface components {
             readonly state_name: string;
             readonly state_code: string;
             is_active?: boolean;
+            /** @description A franchisee/partner store rather than a KDPS-owned one. Stock transferred here is billed to the partner at Purchase Price — see `outbound.BillingPolicy` for whether that also posts to the ledger. */
+            is_partner?: boolean;
         };
         StoreMini: {
             id: number;
@@ -5062,7 +5557,7 @@ export interface components {
             destination_store: number;
             readonly destination_store_code: string;
             readonly destination_store_name: string;
-            reason?: components["schemas"]["Reason783Enum"] | components["schemas"]["BlankEnum"];
+            reason?: components["schemas"]["Reason6d3Enum"] | components["schemas"]["BlankEnum"];
             transport_mode?: components["schemas"]["TransportModeEnum"] | components["schemas"]["BlankEnum"];
             /** @description Bus number / courier AWB / vehicle plate */
             transport_ref?: string;
@@ -5122,6 +5617,11 @@ export interface components {
             readonly lines: components["schemas"]["StoreTransferLine"][];
             readonly receipt: components["schemas"]["TransferReceipt"];
             readonly gap_closure: components["schemas"]["GapClosureRead"];
+            /**
+             * Format: int64
+             * @description Set at dispatch, only when the destination is a partner store: qty dispatched × the books' Purchase Price. Always computed for the record; whether it also posts a receivable is `BillingPolicy.current()`.
+             */
+            partner_billing_value_paise?: number | null;
         };
         /**
          * @description Creates a draft transfer. ``lines`` (the plan) is optional — a
@@ -5131,7 +5631,7 @@ export interface components {
             source_store: number;
             destination_store: number;
             transfer_type?: components["schemas"]["TransferTypeEnum"];
-            reason?: components["schemas"]["Reason783Enum"] | components["schemas"]["BlankEnum"];
+            reason?: components["schemas"]["Reason6d3Enum"] | components["schemas"]["BlankEnum"];
             transport_mode?: components["schemas"]["TransportModeEnum"] | components["schemas"]["BlankEnum"];
             /** @description Bus number / courier AWB / vehicle plate */
             transport_ref?: string;
@@ -6276,6 +6776,26 @@ export interface operations {
             };
         };
     };
+    bookings_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bookings_draft_create: {
         parameters: {
             query?: never;
@@ -6301,6 +6821,100 @@ export interface operations {
             path: {
                 id: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_bank_imports_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_bank_imports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_bank_imports_lines_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_bank_lines_match_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_cash_daily_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -7513,6 +8127,176 @@ export interface operations {
             };
         };
     };
+    offers_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_eoss_config_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_eoss_config_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_eoss_recommendations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_eoss_recommendations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_eoss_recommendations_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_price_list_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_price_list_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                barcode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offers_price_list_reprice_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                barcode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     outbound_adjustments_list: {
         parameters: {
             query?: never;
@@ -7805,6 +8589,116 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MarkDamagedInput"];
                 };
+            };
+        };
+    };
+    outbound_partner_billing_policy_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_partner_billing_policy_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_partner_dues_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_partner_settlements_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_partner_settlements_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_partner_settlements_reverse_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9117,6 +10011,24 @@ export interface operations {
             };
         };
     };
+    sell_discounts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     sell_flags_retrieve: {
         parameters: {
             query?: never;
@@ -9292,6 +10204,8 @@ export interface operations {
                 mobile?: string;
                 /** @description Customer name contains */
                 name?: string;
+                /** @description Return the N (1-10) most-recent store-scoped bills, newest-first. Mutually exclusive with mobile/name/doc. */
+                recent?: number;
             };
             header?: never;
             path?: never;
