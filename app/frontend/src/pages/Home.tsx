@@ -165,13 +165,25 @@ interface Health {
   voucher_count: number;
 }
 
-function TrialBalancePanel() {
+/** Fetches Books Health only when the caller can see money — the same
+ *  predicate that decides whether the card renders — so a role without money
+ *  read never fires the request just to eat the 403 it would get back (#236). */
+export function loadBooksHealth(
+  canSeeMoney: boolean,
+  onLoaded: (h: Health) => void,
+  onDenied: () => void,
+): void {
+  if (!canSeeMoney) return;
+  api.get("/finledger/health").then((r) => onLoaded(r.data)).catch(() => onDenied());
+}
+
+function TrialBalancePanel({ canSeeMoney }: { canSeeMoney: boolean }) {
   const [h, setH] = useState<Health | null>(null);
   const [denied, setDenied] = useState(false);
   useEffect(() => {
-    api.get("/finledger/health").then((r) => setH(r.data)).catch(() => setDenied(true));
-  }, []);
-  if (denied) return null;
+    loadBooksHealth(canSeeMoney, setH, () => setDenied(true));
+  }, [canSeeMoney]);
+  if (!canSeeMoney || denied) return null;
   const balanced = h?.balanced ?? true;
   return (
     <div className="card panel" data-testid="trial-balance-panel">
@@ -584,7 +596,7 @@ export function Home() {
           {renderDashboardCards()}
           <div className="home-cols">
             <div className="home-stack">
-              <TrialBalancePanel />
+              <TrialBalancePanel canSeeMoney={canSeeMoney} />
               <CollectionsBand />
             </div>
             <div className="home-stack">
