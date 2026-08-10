@@ -13,10 +13,12 @@
     "dev:stop": "./scripts/stop-stack.sh",
     "dev:where": "./scripts/dev.sh --where",
     "setup": "cd app/backend && uv sync && cd ../.. && npm --prefix app/frontend install",
-    "ci": "npm run ci:backend && npm run ci:frontend",
+    "api:client": "./scripts/gen-api-client.sh",
+    "ci": "npm run ci:backend && npm run ci:api-client && npm run ci:frontend",
     "ci:backend": "cd app/backend && uv run ruff format --check . && uv run ruff check . && uv run mypy . && uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check_db_drift && uv run lint-imports && uv run pytest",
+    "ci:api-client": "./scripts/gen-api-client.sh --check",
     "ci:frontend": "npm --prefix app/frontend run ci",
-    "ci:fast": "npm run ci:backend:fast && npm run ci:frontend",
+    "ci:fast": "npm run ci:backend:fast && npm run ci:api-client && npm run ci:frontend",
     "ci:backend:fast": "cd app/backend && uv run mypy . && uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check_db_drift && uv run lint-imports && uv run pytest"
   },
   "devDependencies": {

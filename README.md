@@ -183,7 +183,7 @@ createdb kdps_dev
 ## 3 · Run the gate
 
 ```bash
-npm run ci        # ruff · mypy (strict) · migration check · schema-drift check · import-linter · pytest · tsc
+npm run ci        # ruff · mypy (strict) · migration check · schema-drift check · import-linter · pytest · API-client drift · tsc
 ```
 
 The **schema-drift check** compares the database against the migration graph and
@@ -199,6 +199,23 @@ checkout (`npm run dev`, or `./scripts/dev.sh --api`) and run the gate beside it
 
 All green = the build is sound. `npm run ci` is the **local acceptance gate for every slice**.
 
-**One gate, run in two places (#292).** The cloud CI (`.github/workflows/ci.yml`) runs the same checks as local `npm run ci` - ruff format and check, `mypy .`, import-linter, the migration and drift checks, pytest, and the frontend build and unit tests. A green cloud run means what a green local run means; it is not a lighter subset, and the older note here saying otherwise was simply wrong.
+## 4 · Regenerate the API client
 
-Where they differ, the cloud is the *stronger* of the two. It boots a real server, so the ~57 live-API suites described above actually run there, where a bare local `npm run ci` skips them. Keep the two definitions in step: `mypy .` is spelled out in **four** places - `package.json` (twice), the workflow's `lint` job, and `.pre-commit-config.yaml` - and if they ever drift, pre-commit passing tells you nothing about CI. Deploy steps + seeded logins: `DEPLOY.md`.
+The PWA does not describe the API by hand.
+`drf-spectacular` turns Django into an OpenAPI document and `openapi-typescript` turns that into `app/frontend/src/lib/api-schema.ts`, which is what makes `tsc` fail when a screen and the API stop agreeing (ADR-0001 / ADR-0002).
+
+```bash
+npm run api:client        # rewrite app/frontend/src/lib/api-schema.ts
+npm run ci:api-client     # fail if the committed file is stale (runs inside npm run ci)
+```
+
+**Change a serializer, a view or a URL, and run `npm run api:client` in the same commit.**
+That file is generated, never hand-edited.
+It needs no database and no running server: the generator reads the URL conf and the serializers, never a row, so it works on a cold checkout.
+
+Both cloud CI and the local gate refuse a difference.
+That gate is the point: without it the file drifted about a thousand lines behind the backend, screens hand-wrote the shapes they expected, and the safety net was gone while everything still looked green (#192).
+
+**Two gates, one shape.** The cloud CI (`.github/workflows/ci.yml`) covers what the local gate covers: ruff (format + check), `mypy .`, import-linter, `makemigrations --check`, the schema-drift check, the kernel suites, the API regression suites sharded eight ways on real Postgres, the API-client drift check, and the frontend build + vitest.
+The one thing it cannot reproduce is *your* database: its Postgres is built fresh from the migration graph every run, so `check_db_drift` there is trivially green and only the local run answers whether your own workspace has drifted.
+Deploy steps + seeded logins: `DEPLOY.md`.
