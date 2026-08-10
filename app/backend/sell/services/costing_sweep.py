@@ -43,6 +43,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from core.documents import DocStatus
 from sell.models import ContinuityFlag, DeferredCosting, SaleLine, SellPolicy
 from sell.services.movements import post_stock_move
 from sell.services.postings import (
@@ -62,8 +63,17 @@ def _waiting() -> Any:
     line is also waiting reads its cost off that line (`plan_from_original`, Rule
     3), so the sale has to be released before the piece coming back against it -
     and on one bill the sale line is always the earlier row.
+
+    A cancelled bill's rows are not the sweep's to release (#220). Cancelling
+    closes them as it goes, and this is the standing guard behind that: releasing
+    one would post a cost event and take a piece off a shelf for a bill the books
+    already say never happened, days after anybody was looking.
     """
-    return DeferredCosting.objects.filter(status=DeferredCosting.Status.WAITING).order_by("id")
+    return (
+        DeferredCosting.objects.filter(status=DeferredCosting.Status.WAITING)
+        .exclude(sale_line__sale__docstatus=DocStatus.CANCELLED)
+        .order_by("id")
+    )
 
 
 @dataclass(frozen=True)

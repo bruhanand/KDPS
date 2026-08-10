@@ -102,6 +102,18 @@ class StockLedgerEntry(LedgerEntry):
         return f"{self.doc_number} · {self.sku_code} × {self.qty}"
 
 
+#: Which bucket a ledger kind belongs to. Stated once, here, because three places
+#: need the same answer and had been deriving it separately: the rebuild command
+#: (which recomputes every projection from the legs), the reversal helper (which
+#: has to fold a mirrored leg back into the bucket the original moved), and
+#: anything later that walks the ledger without knowing what wrote it. A kind
+#: missing from both sets is an at-location leg and moves `StockOnHand`.
+TRANSIT_KINDS = frozenset({StockLedgerEntry.Kind.TRANSIT_IN, StockLedgerEntry.Kind.TRANSIT_OUT})
+QUARANTINE_KINDS = frozenset(
+    {StockLedgerEntry.Kind.QUARANTINE_IN, StockLedgerEntry.Kind.QUARANTINE_OUT}
+)
+
+
 class StockOnHand(models.Model):
     """Materialised net stock position per (store × barcode) - a fast, indexed
     projection of the append-only ledger, maintained INSIDE each post/reverse

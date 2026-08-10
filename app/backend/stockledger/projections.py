@@ -18,7 +18,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand, merch_dims
+from stockledger.models import (
+    QUARANTINE_KINDS,
+    TRANSIT_KINDS,
+    QuarantineStock,
+    StockLedgerEntry,
+    StockOnHand,
+    merch_dims,
+)
+
+
+class UnreversibleMovement(Exception):
+    """A leg this module cannot mirror back into the bucket it came out of.
+
+    Only the in-transit kinds reach it. A transit leg's bucket is keyed by the
+    *transfer*, not by a store, and the transfer family writes and unwinds it
+    itself (`outbound.posting`) - so a generic mirror here would append a leg the
+    in-transit projection never saw. Refusing is the point: the alternative is a
+    cancel that looks complete and leaves stock in a bucket nobody is counting.
+    """
 
 
 class ZeroValueMovement(Exception):
@@ -169,3 +187,56 @@ def post_quarantine_movement(
     else:
         bucket.save()
     return entry
+
+
+def reverse_movements(*, doc_number: str, posted_by: Any = None) -> list[StockLedgerEntry]:
+    """Mirror every stock leg a document wrote, back into the bucket it came from.
+
+    The stock half of a document's cancel (#220). The ledger is append-only by DB
+    trigger, so the pieces come back the only way they can: a new leg of the same
+    kind with the sign turned round, folded into the same projection the original
+    moved. Same kind rather than a `…_reversal` kind of its own, because kind is
+    what says *which bucket* - `rebuild_stock_on_hand` places a leg by its kind and
+    sums the quantities - so a mirror that renamed itself would rebuild into a
+    bucket the original never touched.
+
+    The unit cost is read back off the original leg rather than re-derived, which
+    is the same argument that freezes cost on a sale line: a cohort re-priced
+    between the sale and its cancel would otherwise put the pieces back at
+    today's cost and strand the difference for ever, with the trial balance still
+    at nought.
+
+    Written under the document's own number, so the reversal reads as that
+    document being undone rather than as a movement of its own.
+    """
+    originals = list(StockLedgerEntry.objects.filter(doc_number=doc_number).order_by("id"))
+    unreversible = sorted({e.kind for e in originals} & TRANSIT_KINDS)
+    if unreversible:
+        raise UnreversibleMovement(
+            f"{doc_number} moved stock in transit ({', '.join(unreversible)}), which is "
+            "the transfer family's own bucket to unwind, not this cascade's."
+        )
+    mirrors = []
+    for original in originals:
+        if not original.qty:
+            continue
+        mover = (
+            post_quarantine_movement if original.kind in QUARANTINE_KINDS else post_on_hand_movement
+        )
+        mirrors.append(
+            mover(
+                store=original.store,
+                gstin=original.gstin,
+                sku_code=original.sku_code,
+                source=original,
+                qty=-original.qty,
+                # `amount` is `qty × unit_cost` by construction, so this divides
+                # exactly; both are negated together, which leaves the rate positive.
+                unit_cost_paise=int(original.amount or 0) // original.qty,
+                kind=original.kind,
+                doc_number=original.doc_number,
+                line_no=original.line_no,
+                posted_by=posted_by,
+            )
+        )
+    return mirrors

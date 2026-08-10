@@ -398,6 +398,78 @@ def post_sale_collection(
 
 
 @transaction.atomic
+def reverse_sale_collections(doc_number: str, user: Any) -> int:
+    """Un-take every collection a bill's tenders wrote. Returns how many.
+
+    The subledger half of cancelling a bill (#220). The value GL's cash, card and
+    UPI legs are mirrored by the kernel reversal; these rows are the detail behind
+    them, and the books-health tie is checked **per control account**
+    (`finledger.health`), so leaving them standing would report the store's drawer
+    as holding money the general ledger had already given back.
+
+    The mirror keeps the bill's own number for the reason the receipt does: it is
+    not an event of its own, and the cash summary and the D4 three-way audit both
+    want to get from a row back to the bill behind it. `reverses` is what says
+    which row is the undoing, and what would refuse a second one.
+    """
+    count = 0
+    for receipt in CashLedgerEntry.objects.filter(
+        doc_number=doc_number, kind=CashLedgerEntry.Kind.RECEIPT
+    ):
+        if CashLedgerEntry.objects.filter(reverses=receipt).exists():
+            continue  # already reversed — never double-reverse
+        CashLedgerEntry.objects.create(
+            account=receipt.account,
+            amount=-receipt.amount,
+            kind=CashLedgerEntry.Kind.REVERSAL,
+            doc_number=receipt.doc_number,
+            description=f"Reversal of {receipt.doc_number}",
+            mode=receipt.mode,
+            vendor=receipt.vendor,
+            reverses=receipt,
+            posted_by=_user(user),
+        )
+        count += 1
+    return count
+
+
+@transaction.atomic
+def reverse_sale_sor_liability(reference: str, user: Any) -> int:
+    """Un-accrue what a bill said we owed a brand. Returns how many rows.
+
+    The other subledger a bill writes into. The GL payable is mirrored by the
+    kernel reversal, and the vendor subledger sum must equal that control account
+    (F1) - so this is not detail that can be skipped, it is half of an equality
+    the Books Health screen checks on every load.
+
+    `kind` follows the sign the way `post_sale_sor_liability` sets it, so a mirror
+    of an accrual reads as a reversal and a mirror of an exchange's give-back reads
+    as the bill it re-raises.
+    """
+    if not reference:  # an empty reference would match every unreferenced row
+        return 0
+    count = 0
+    for entry in VendorLedgerEntry.objects.filter(reference=reference).exclude(
+        kind=VendorLedgerEntry.Kind.PAYMENT
+    ):
+        if VendorLedgerEntry.objects.filter(reverses=entry).exists():
+            continue  # already reversed — never double-reverse
+        amount = -entry.amount
+        VendorLedgerEntry.objects.create(
+            vendor=entry.vendor,
+            amount=amount,
+            kind=(VendorLedgerEntry.Kind.BILL if amount > 0 else VendorLedgerEntry.Kind.REVERSAL),
+            doc_number=_allocate(VENDOR_DOC),
+            description=f"Reversal of {entry.doc_number}",
+            reference=reference,
+            reverses=entry,
+            posted_by=_user(user),
+        )
+        count += 1
+    return count
+
+
+@transaction.atomic
 def reverse_pt_vendor_bills(pt: Any, user: Any) -> int:
     """Reverse the live auto-bills raised for a PT file (called on PT reversal)."""
     count = 0

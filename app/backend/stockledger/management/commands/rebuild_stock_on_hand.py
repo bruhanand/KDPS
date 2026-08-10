@@ -29,15 +29,14 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from stockledger.models import (
+    QUARANTINE_KINDS,
+    TRANSIT_KINDS,
     InTransitStock,
     QuarantineStock,
     StockLedgerEntry,
     StockOnHand,
     merch_dims,
 )
-
-TRANSIT_KINDS = {StockLedgerEntry.Kind.TRANSIT_IN, StockLedgerEntry.Kind.TRANSIT_OUT}
-QUARANTINE_KINDS = {StockLedgerEntry.Kind.QUARANTINE_IN, StockLedgerEntry.Kind.QUARANTINE_OUT}
 
 
 class Command(BaseCommand):

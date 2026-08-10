@@ -463,11 +463,26 @@ def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, 
     return True
 
 
-@transaction.atomic
 def reverse_pt_inward(pt: Any, user: Any) -> dict[str, Any]:
+    """Reverse-post a PT file: the API's "Reverse posting", and what it always did.
+
+    Now one line, because the work moved to where the kernel looks for it. `cancel()`
+    is the reversing transition (#220): it asks the document what its postings were
+    and undoes them, then walks the status — both inside one transaction. `PtFile`
+    answers with `reverse_pt_postings` below, so a bare `pt.cancel()` typed at a
+    shell does exactly what this button does, which was the whole point.
+    """
+    return pt.cancel(user)
+
+
+def reverse_pt_postings(pt: Any, user: Any) -> dict[str, Any]:
     """Append the negative mirror of every live inward row + value voucher + vendor
-    bill, then `cancel()` the file (reversal-as-cancel — a posted fact is frozen, the
-    correction is a new append, never an edit)."""
+    bill (reversal-as-cancel — a posted fact is frozen, the correction is a new
+    append, never an edit).
+
+    The status flip is *not* here: this is the `reverse()` half of `PtFile`'s
+    cancel, and `Document.cancel()` owns walking the FSM and the transaction that
+    makes the two atomic."""
     originals = list(
         StockLedgerEntry.objects.filter(
             pt_file=pt,
@@ -513,5 +528,4 @@ def reverse_pt_inward(pt: Any, user: Any) -> dict[str, Any]:
     if pt.booking_id:
         _reconcile(pt.booking, originals, sign=-1)
     vendor_reversed = reverse_pt_vendor_bills(pt, user)
-    pt.cancel()  # SUBMITTED → CANCELLED; the file is frozen forever
     return {"doc_number": number, "entries": len(reversals), "vendor_reversed": vendor_reversed}
