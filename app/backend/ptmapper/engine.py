@@ -60,7 +60,7 @@ class ResolvedFields:
     color: str | None
     size: str | None
     season: str | None
-    taxonomy: dict
+    taxonomy: dict[str, Any]
 
 
 class UnsupportedFormat(Exception):
@@ -330,11 +330,11 @@ def fit_code_candidates(raw: Any) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- reading
-def _read_xlsx(content: bytes) -> list[tuple[str, list[list]]]:
+def _read_xlsx(content: bytes) -> list[tuple[str, list[list[Any]]]]:
     wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    out: list[tuple[str, list[list]]] = []
+    out: list[tuple[str, list[list[Any]]]] = []
     for ws in wb.worksheets:
-        rows: list[list] = []
+        rows: list[list[Any]] = []
         for i, r in enumerate(ws.iter_rows(values_only=True)):
             rows.append(list(r))
             if i >= MAX_ROWS:
@@ -344,7 +344,7 @@ def _read_xlsx(content: bytes) -> list[tuple[str, list[list]]]:
     return out
 
 
-def _read_csv(content: bytes) -> list[tuple[str, list[list]]]:
+def _read_csv(content: bytes) -> list[tuple[str, list[list[Any]]]]:
     text = None
     for enc in ("utf-8-sig", "utf-8", "latin-1"):
         try:
@@ -358,16 +358,16 @@ def _read_csv(content: bytes) -> list[tuple[str, list[list]]]:
     return [("csv", rows)]
 
 
-def _read_xls(content: bytes) -> list[tuple[str, list[list]]]:
+def _read_xls(content: bytes) -> list[tuple[str, list[list[Any]]]]:
     """Legacy OLE2 .xls via xlrd; Excel serial dates → datetime."""
     import xlrd
 
     book = xlrd.open_workbook(file_contents=content)
-    out: list[tuple[str, list[list]]] = []
+    out: list[tuple[str, list[list[Any]]]] = []
     for sh in book.sheets():
-        rows: list[list] = []
+        rows: list[list[Any]] = []
         for i in range(min(sh.nrows, MAX_ROWS + 1)):
-            row: list = []
+            row: list[Any] = []
             for j in range(sh.ncols):
                 cell = sh.cell(i, j)
                 v = cell.value
@@ -382,14 +382,14 @@ def _read_xls(content: bytes) -> list[tuple[str, list[list]]]:
     return out
 
 
-def _read_xlsb(content: bytes) -> list[tuple[str, list[list]]]:
+def _read_xlsb(content: bytes) -> list[tuple[str, list[list[Any]]]]:
     """Binary .xlsb (e.g. Madura SAP export) via pyxlsb."""
     from pyxlsb import open_workbook as open_xlsb
 
-    out: list[tuple[str, list[list]]] = []
+    out: list[tuple[str, list[list[Any]]]] = []
     with open_xlsb(io.BytesIO(content)) as wb:
         for name in wb.sheets:
-            rows: list[list] = []
+            rows: list[list[Any]] = []
             with wb.get_sheet(name) as sheet:
                 for i, row in enumerate(sheet.rows()):
                     rows.append([c.v for c in row])
@@ -399,7 +399,9 @@ def _read_xlsb(content: bytes) -> list[tuple[str, list[list]]]:
     return out
 
 
-def read_sheets(content: bytes, filename: str, content_type: str) -> list[tuple[str, list[list]]]:
+def read_sheets(
+    content: bytes, filename: str, content_type: str
+) -> list[tuple[str, list[list[Any]]]]:
     name = (filename or "").lower()
     is_zip = content[:4] == b"PK\x03\x04"  # xlsx / xlsb are both ZIP containers
     is_ole = content[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # legacy OLE2 .xls
@@ -425,7 +427,7 @@ def read_sheets(content: bytes, filename: str, content_type: str) -> list[tuple[
 
 
 # ----------------------------------------------------------------------------- detection
-def score_header(row: list) -> float:
+def score_header(row: list[Any]) -> float:
     s = 0.0
     for c in row:
         cv = raw_str(c).lower()
@@ -438,7 +440,7 @@ def score_header(row: list) -> float:
     return s
 
 
-def detect_header(rows: list[list]) -> int:
+def detect_header(rows: list[list[Any]]) -> int:
     best_i, best = 0, -1.0
     for i in range(min(25, len(rows))):  # printed-invoice item tables can start deep
         sc = score_header(rows[i])
@@ -447,11 +449,13 @@ def detect_header(rows: list[list]) -> int:
     return best_i
 
 
-def _has_data(rows: list[list]) -> bool:
+def _has_data(rows: list[list[Any]]) -> bool:
     return any(any(raw_str(c) for c in r) for r in rows[:30])
 
 
-def choose_sheet(sheets: list[tuple[str, list[list]]]) -> tuple[str, list[list]]:
+def choose_sheet(
+    sheets: list[tuple[str, list[list[Any]]]],
+) -> tuple[str, list[list[Any]]]:
     # Prefer a sheet whose name matches a profile's sheet_contains token.
     for p in PROFILES:
         sc = p["match"].get("sheet_contains")
@@ -472,14 +476,14 @@ def choose_sheet(sheets: list[tuple[str, list[list]]]) -> tuple[str, list[list]]
     return best or sheets[0]
 
 
-def profile_by_code(code: str) -> dict:
+def profile_by_code(code: str) -> dict[str, Any]:
     for p in PROFILES:
         if p["code"] == code:
             return p
     return GENERIC_PROFILE
 
 
-def identify_profile(filename: str, header_set: set[str], sheet_name: str) -> dict:
+def identify_profile(filename: str, header_set: set[str], sheet_name: str) -> dict[str, Any]:
     up = (filename or "").upper()
     for kw, code in FILENAME_HINTS.items():
         if kw in up:
@@ -502,7 +506,7 @@ def identify_profile(filename: str, header_set: set[str], sheet_name: str) -> di
     return GENERIC_PROFILE
 
 
-def build_records(rows: list[list], header_idx: int) -> list[dict[str, Any]]:
+def build_records(rows: list[list[Any]], header_idx: int) -> list[dict[str, Any]]:
     headers = [norm(c) for c in rows[header_idx]]
     records: list[dict[str, Any]] = []
     blanks_in_a_row = 0
@@ -545,9 +549,12 @@ class Resolver:
             it.item: (it.sub_category, it.type) for it in ItemTaxonomy.objects.all()
         }
         self.rules = list(TaxonomyRule.objects.all())  # ordered -priority
-        self.misses: dict[tuple[str, str], dict] = {}
+        # keyed by "dimension|raw" (a single string, not the (dimension, raw) pair the
+        # name suggests — see the setdefault below); values are heterogeneous
+        # (str/int/list) review-queue records.
+        self.misses: dict[str, dict[str, Any]] = {}
 
-    def _miss(self, dimension: str, raw: str, ctx: dict | None = None) -> None:
+    def _miss(self, dimension: str, raw: str, ctx: dict[str, Any] | None = None) -> None:
         raw = raw.strip()[:300]
         if not raw:
             return
@@ -568,8 +575,8 @@ class Resolver:
                 rec["brands"].append(sb)
 
     def _resolve(
-        self, dimension: str, candidate: Any, ctx: dict | None = None, brand: str = ""
-    ) -> tuple:
+        self, dimension: str, candidate: Any, ctx: dict[str, Any] | None = None, brand: str = ""
+    ) -> tuple[str | None, str]:
         """Layered resolve → ``(value, source)``. Order: normalise → direct Master hit
         ('direct', high confidence) → brand-scoped alias → global alias ('alias', a
         review-able judgement) → '' (a miss, recorded for the queue). A brand-scoped
@@ -590,22 +597,26 @@ class Resolver:
         self._miss(dimension, str(candidate), ctx)
         return None, ""
 
-    def brand(self, raw_value: str, ctx=None) -> tuple:
+    def brand(self, raw_value: str, ctx: dict[str, Any] | None = None) -> tuple[str | None, str]:
         return self._resolve("brand", raw_value, ctx)  # the brand dimension is global-only
 
-    def color(self, raw_value: str, ctx=None, brand: str = "") -> tuple:
+    def color(
+        self, raw_value: str, ctx: dict[str, Any] | None = None, brand: str = ""
+    ) -> tuple[str | None, str]:
         return self._resolve("color", normalize_color(raw_value), ctx, brand)
 
-    def size(self, raw_value: Any, ctx=None, brand: str = "") -> tuple:
+    def size(
+        self, raw_value: Any, ctx: dict[str, Any] | None = None, brand: str = ""
+    ) -> tuple[str | None, str]:
         return self._resolve("size", normalize_size(raw_value), ctx, brand)
 
     def fit(
         self,
         raw_value: str,
-        ctx=None,
+        ctx: dict[str, Any] | None = None,
         candidates: list[str] | None = None,
         brand: str = "",
-    ) -> tuple:
+    ) -> tuple[str | None, str]:
         if not candidates:
             return self._resolve("fit", raw_value, ctx, brand)
         # Coded fit column: try each candidate silently (brand-scoped alias before
@@ -634,7 +645,7 @@ class Resolver:
         source_key, so it stays a global ("") lookup row."""
         return self.lookups.get(("brand_gender", ""), {}).get(norm(brand), "")
 
-    def gender(self, raw_value: str) -> tuple:
+    def gender(self, raw_value: str) -> tuple[str, str]:
         key = norm(raw_value)
         if not key:
             return "", ""
@@ -646,13 +657,13 @@ class Resolver:
             return hit, "alias"
         return "", ""
 
-    def season_from_date(self, d: date):
+    def season_from_date(self, d: date) -> str | None:
         label = season_label(d)
         if label in self.controlled.get("season", set()):
             return label
         return None
 
-    def season_from_code(self, code: str, brand: str = ""):
+    def season_from_code(self, code: str, brand: str = "") -> str | None:
         """Resolve an explicit brand season code via the lookup table only (brand-scoped
         alias before global). Returns None (without recording a miss) when unknown — the
         caller decides whether to fall back to the invoice date before logging a miss."""
@@ -665,7 +676,7 @@ class Resolver:
                 return hit
         return self.lookups.get(("season", ""), {}).get(key)
 
-    def taxonomy(self, desc: str, ctx=None) -> dict:
+    def taxonomy(self, desc: str, ctx: dict[str, Any] | None = None) -> dict[str, Any]:
         # Whole-word/phrase match for every pattern ("PANT" hits "TRACK PANT" but never
         # "PANTIE"/"LAPTOP"). A glued substring match is allowed ONLY inside an SAP
         # "finished-goods" token (Madura packs the item into 'FGTROUSER'/'FGKJEANS'); this
@@ -693,7 +704,7 @@ class Resolver:
 
 
 # ----------------------------------------------------------------------------- mapping
-def _pick(rec: dict, role: str, profile: dict) -> Any:
+def _pick(rec: dict[str, Any], role: str, profile: dict[str, Any]) -> Any:
     override = profile.get("overrides", {}).get(role)
     if override:
         if isinstance(override, list):
@@ -705,7 +716,7 @@ def _pick(rec: dict, role: str, profile: dict) -> Any:
     return None
 
 
-def _build_desc(rec: dict, profile: dict) -> str:
+def _build_desc(rec: dict[str, Any], profile: dict[str, Any]) -> str:
     cols = profile.get("overrides", {}).get("DESC_SRC") or ALIASES["DESC_SRC"]
     parts = []
     for c in cols:
@@ -715,13 +726,13 @@ def _build_desc(rec: dict, profile: dict) -> str:
     return " ".join(parts)
 
 
-def _getter(rec: dict, profile: dict) -> Callable[[str], Any]:
+def _getter(rec: dict[str, Any], profile: dict[str, Any]) -> Callable[[str], Any]:
     return lambda role: _pick(rec, role, profile)
 
 
 def _extract_base_fields(
-    rec: dict,
-    profile: dict,
+    rec: dict[str, Any],
+    profile: dict[str, Any],
     g: Callable[[str], Any],
     brand_default: str,
 ) -> BaseMappedFields:
@@ -739,7 +750,9 @@ def _has_mappable_payload(base: BaseMappedFields) -> bool:
     return bool((base.barcode or base.design) and (base.qty is not None or base.mrp is not None))
 
 
-def _map_prices(rec: dict, profile: dict, g, qty: float | None) -> tuple:
+def _map_prices(
+    rec: dict[str, Any], profile: dict[str, Any], g: Callable[[str], Any], qty: float | None
+) -> tuple[float | None, float | None, float | None]:
     """(P RATE, BASIC, INPUT TAX). BASIC may be derived per-unit from taxable amount."""
     prate = money(g("PRATE_SRC"))
     if profile.get("flags", {}).get("basic_from_taxable_per_unit"):
@@ -750,14 +763,20 @@ def _map_prices(rec: dict, profile: dict, g, qty: float | None) -> tuple:
     return prate, basic, num(g("TAX_SRC"))
 
 
-def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields:
+def _price_fields(
+    rec: dict[str, Any], profile: dict[str, Any], g: Callable[[str], Any], qty: float | None
+) -> PriceFields:
     prate, basic, input_tax = _map_prices(rec, profile, g, qty)
     return PriceFields(prate=prate, basic=basic, input_tax=input_tax)
 
 
 def _map_season(
-    resolver: Resolver, g, ctx: dict, ctx_date: date | None = None, brand: str = ""
-) -> tuple:
+    resolver: Resolver,
+    g: Callable[[str], Any],
+    ctx: dict[str, Any],
+    ctx_date: date | None = None,
+    brand: str = "",
+) -> tuple[str | None, str]:
     """SEASON → ``(value, source)``. The explicit season code wins ('alias') — a season
     is a NAME, never a date; the invoice date is the fallback ('derived'), then the
     operator-supplied invoice date from upload context ('derived'). A single miss is
@@ -785,12 +804,12 @@ def _map_season(
 def _map_taxonomy(
     resolver: Resolver,
     desc: str,
-    g,
-    ctx: dict,
-    prov: dict,
-    profile: dict | None = None,
+    g: Callable[[str], Any],
+    ctx: dict[str, Any],
+    prov: dict[str, str],
+    profile: dict[str, Any] | None = None,
     brand: str | None = None,
-) -> dict:
+) -> dict[str, str]:
     """The 5-axis merchandising grid (+ ITEM-suggested sub/type) for one row, recording
     each axis's provenance in ``prov``.
 
@@ -852,7 +871,7 @@ def _map_taxonomy(
 _COLOR_CODE_PREFIX = re.compile(r"^\s*\d+\s*-\s*")
 
 
-def _color_src(g: Callable[[str], Any], profile: dict) -> str:
+def _color_src(g: Callable[[str], Any], profile: dict[str, Any]) -> str:
     """COLOR source value, with a leading numeric code prefix stripped for archetypes
     that encode colour as '<code>-<NAME>' (Ginesys CATEGORY3, e.g. '16-BLUE' → 'BLUE').
     Plain colour names and unflagged profiles pass through unchanged; an unresolved
@@ -867,12 +886,12 @@ def _resolve_fields(
     resolver: Resolver,
     g: Callable[[str], Any],
     base: BaseMappedFields,
-    profile: dict,
-    prov: dict,
+    profile: dict[str, Any],
+    prov: dict[str, str],
     ctx_brand: str = "",
     ctx_date: date | None = None,
 ) -> ResolvedFields:
-    ctx = {"brand": base.raw_brand, "desc": base.desc}
+    ctx: dict[str, Any] = {"brand": base.raw_brand, "desc": base.desc}
     brand_v, brand_s = resolver.brand(base.raw_brand, ctx)
     if not brand_v and ctx_brand:
         # Operator context at upload — the structural fix for brand-less files
@@ -912,7 +931,7 @@ def _build_kdps_row(
     prices: PriceFields,
     resolved: ResolvedFields,
     g: Callable[[str], Any],
-) -> dict:
+) -> dict[str, Any]:
     tx = resolved.taxonomy
     input_tax = prices.input_tax if prices.input_tax is not None else ""
     return {
@@ -941,11 +960,13 @@ def _build_kdps_row(
     }
 
 
-def _blank_controlled_columns(row: dict) -> list:
+def _blank_controlled_columns(row: dict[str, Any]) -> list[str]:
     return [column for column in CONTROLLED if not row[column]]
 
 
-def _raw_sources(base: BaseMappedFields, g: Callable[[str], Any], profile: dict) -> dict:
+def _raw_sources(
+    base: BaseMappedFields, g: Callable[[str], Any], profile: dict[str, Any]
+) -> dict[str, str]:
     """The raw source value behind each controlled column (what map_record read),
     stored per row so an editor can bulk-apply a fix to 'every row with this raw
     value' and a future 'learn this edit' can seed a Lookup from it."""
@@ -965,13 +986,13 @@ def _raw_sources(base: BaseMappedFields, g: Callable[[str], Any], profile: dict)
 
 
 def map_record(
-    rec: dict,
-    profile: dict,
+    rec: dict[str, Any],
+    profile: dict[str, Any],
     resolver: Resolver,
     brand_default: str,
     ctx_brand: str = "",
     ctx_date: date | None = None,
-) -> tuple[dict, list, dict, dict] | None:
+) -> tuple[dict[str, Any], list[str], dict[str, str], dict[str, str]] | None:
     g = _getter(rec, profile)
     base = _extract_base_fields(rec, profile, g, brand_default)
     if not _has_mappable_payload(base):
@@ -984,8 +1005,8 @@ def map_record(
 
 
 def run_mapping(
-    content: bytes, filename: str, content_type: str, context: dict | None = None
-) -> dict:
+    content: bytes, filename: str, content_type: str, context: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Map a brand file into KDPS rows + review misses. Pure read (no DB writes).
 
     ``context`` is optional operator input from upload time — ``{"brand": <Master
@@ -1014,7 +1035,7 @@ def run_mapping(
 
     resolver = Resolver()
     records = build_records(rows, header_idx)
-    kdps_rows: list[dict] = []
+    kdps_rows: list[dict[str, Any]] = []
     line_no = 0
     blank_cells = 0
     low_confidence_cells = 0

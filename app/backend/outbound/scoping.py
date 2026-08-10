@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Q
+from django.db.models import Model, Q, QuerySet
 
 from masters.scoping import scope_by_store_predicate
 
@@ -36,7 +36,7 @@ def transfer_at_stores(store_ids: list[int]) -> Q:
     return Q(source_store_id__in=store_ids) | Q(destination_store_id__in=store_ids)
 
 
-def scope_transfers(qs: Any, user: Any) -> Any:
+def scope_transfers[M: Model](qs: QuerySet[M], user: Any) -> QuerySet[M]:
     """Restrict a transfer queryset to the caller's own end of the move.
 
     Only the *shape* of the match is ours; the rule is `masters.scoping`'s, so a
@@ -45,7 +45,8 @@ def scope_transfers(qs: Any, user: Any) -> Any:
     row is theirs, and "stores are the wrong question" must never resolve to "so
     show every store" (ADR-0003). #110 replaces that interim with cross-by-brand.
     """
-    return scope_by_store_predicate(qs, user, transfer_at_stores)
+    scoped: QuerySet[M] = scope_by_store_predicate(qs, user, transfer_at_stores)
+    return scoped
 
 
 def stock_request_at_stores(store_ids: list[int]) -> Q:
@@ -55,6 +56,7 @@ def stock_request_at_stores(store_ids: list[int]) -> Q:
     return Q(requesting_store_id__in=store_ids) | Q(fulfilling_store_id__in=store_ids)
 
 
-def scope_stock_requests(qs: Any, user: Any) -> Any:
+def scope_stock_requests[M: Model](qs: QuerySet[M], user: Any) -> QuerySet[M]:
     """`scope_transfers`'s rule, for a stock request's two ends."""
-    return scope_by_store_predicate(qs, user, stock_request_at_stores)
+    scoped: QuerySet[M] = scope_by_store_predicate(qs, user, stock_request_at_stores)
+    return scoped

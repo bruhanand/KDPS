@@ -62,12 +62,12 @@ class ScopeException:
 def _field_names(payload: Any) -> set[str]:
     """Every dict key anywhere in a JSON-shaped value."""
     if isinstance(payload, dict):
-        names = set(payload)
+        names: set[str] = set(payload)
         for value in payload.values():
             names |= _field_names(value)
         return names
     if isinstance(payload, (list, tuple)):
-        names: set[str] = set()
+        names = set()
         for item in payload:
             names |= _field_names(item)
         return names

@@ -12,6 +12,7 @@ to have anything to trigger on.
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.db import connection
@@ -76,7 +77,7 @@ STYLES = [
 class Command(BaseCommand):
     help = "Seed a demo AW25 stock position for the EOSS planning screen."
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         if not Season.objects.filter(code=SEASON_CODE).exists():
             self.stderr.write(f"No season {SEASON_CODE} — run seed_foundation first.")
             return

@@ -19,7 +19,7 @@ is how a store person ends up reading another store's history.
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from django.utils import timezone
 from rest_framework import generics, status
@@ -28,6 +28,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import User
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
 from core.dates import bad_since, parse_day
@@ -98,13 +99,15 @@ class AlertSeenView(APIView):
     permission_classes = [IsAuthenticated, require_section("home", CAP_VIEW)]
 
     def get(self, request: Request) -> Response:
-        row = AlertSeen.objects.filter(user=request.user).first()
+        # IsAuthenticated above guarantees a real user, never AnonymousUser.
+        user = cast(User, request.user)
+        row = AlertSeen.objects.filter(user=user).first()
         return Response({"seen_at": row.seen_at if row else None})
 
     def post(self, request: Request) -> Response:
         # Idempotent by design - the tab is opened a dozen times a day, and each
         # opening simply moves the one row forward.
-        row, _ = AlertSeen.objects.update_or_create(
-            user=request.user, defaults={"seen_at": timezone.now()}
-        )
+        # IsAuthenticated above guarantees a real user, never AnonymousUser.
+        user = cast(User, request.user)
+        row, _ = AlertSeen.objects.update_or_create(user=user, defaults={"seen_at": timezone.now()})
         return Response({"seen_at": row.seen_at})

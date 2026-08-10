@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 from django.db import transaction
+from django.db.models import Model
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -52,8 +53,13 @@ from vendors.models import Vendor
 # Maker-checker read shape (#70)
 # ---------------------------------------------------------------------------
 
+#: The document a read shape is *of* — every maker-checker family shares the base
+#: below and names its own model, so the shape stays one class without losing
+#: which document each subclass serialises.
+_ApprovedT = TypeVar("_ApprovedT", bound=Model)
 
-class ApprovedDocumentSerializer(serializers.ModelSerializer):
+
+class ApprovedDocumentSerializer(serializers.ModelSerializer[_ApprovedT]):
     """Base read shape for a document that needs a second person.
 
     Every such document answers the same three questions on its own page, for
@@ -146,7 +152,7 @@ def _create_with_approval(
 # ---------------------------------------------------------------------------
 
 
-class StoreTransferLineSerializer(serializers.ModelSerializer):
+class StoreTransferLineSerializer(serializers.ModelSerializer[StoreTransferLine]):
     """Read shape. Quantities are scan-derived: ``qty_planned`` is the plan,
     ``qty_dispatched``/``qty_received`` are what was scanned, ``qty_resolved``
     is what a posted gap closure accounted for, and ``qty_in_transit`` is derived
@@ -182,7 +188,7 @@ class StoreTransferLineSerializer(serializers.ModelSerializer):
         ]
 
 
-class ReceiptExceptionSerializer(serializers.ModelSerializer):
+class ReceiptExceptionSerializer(serializers.ModelSerializer[TransferReceiptException]):
     """One short / extra / damaged outcome, as recorded at receive (#71)."""
 
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
@@ -208,7 +214,7 @@ class ReceiptExceptionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class TransferReceiptSerializer(serializers.ModelSerializer):
+class TransferReceiptSerializer(serializers.ModelSerializer[TransferReceipt]):
     exceptions = ReceiptExceptionSerializer(many=True, read_only=True)
     received_by_name = serializers.SerializerMethodField()
 
@@ -229,7 +235,7 @@ class TransferReceiptSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "receipt_date"]
 
 
-class GapClosureLineSerializer(serializers.ModelSerializer):
+class GapClosureLineSerializer(serializers.ModelSerializer[TransferGapClosureLine]):
     class Meta:
         model = TransferGapClosureLine
         fields = [
@@ -248,7 +254,7 @@ class GapClosureLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class GapClosureReadSerializer(ApprovedDocumentSerializer):
+class GapClosureReadSerializer(ApprovedDocumentSerializer[TransferGapClosure]):
     """A gap closure and everything a reviewer needs to judge it — which
     transfer, which pieces, whose reason, and who signed it off."""
 
@@ -288,7 +294,7 @@ class GapClosureReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class GapClosureInputSerializer(serializers.Serializer):
+class GapClosureInputSerializer(serializers.Serializer[dict[str, Any]]):
     """Raising a closure: a reason and (optionally) a sentence. Nothing else —
     the lines are read off the transfer's in-transit remainder, so the person
     closing the gap cannot quietly change how much went missing."""
@@ -297,7 +303,7 @@ class GapClosureInputSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
 
 
-class TransferPTSerializer(serializers.ModelSerializer):
+class TransferPTSerializer(serializers.ModelSerializer[TransferPT]):
     """The transfer's PT as the print screen needs it (#72).
 
     Read-only throughout: the rows are a frozen copy of what the scanned lines
@@ -344,7 +350,7 @@ class TransferPTSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class StoreTransferReadSerializer(ApprovedDocumentSerializer):
+class StoreTransferReadSerializer(ApprovedDocumentSerializer[StoreTransfer]):
     lines = StoreTransferLineSerializer(many=True, read_only=True)
     receipt = TransferReceiptSerializer(read_only=True)
     gap_closure = GapClosureReadSerializer(read_only=True)
@@ -451,7 +457,7 @@ class StoreTransferReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class StoreTransferPlanLineSerializer(serializers.ModelSerializer):
+class StoreTransferPlanLineSerializer(serializers.ModelSerializer[StoreTransferLine]):
     """Write shape for a draft's *plan* line. Only the plan quantity is
     accepted — dispatched/received quantities come from scanning, never typing
     (#68). Dims and cost are enriched from the source stock at dispatch."""
@@ -463,7 +469,7 @@ class StoreTransferPlanLineSerializer(serializers.ModelSerializer):
         fields = ["sku_code", "qty_planned"]
 
 
-class BillingPolicySerializer(serializers.ModelSerializer):
+class BillingPolicySerializer(serializers.ModelSerializer[BillingPolicy]):
     """The one partner-billing dial, read and written whole — mirrors
     `sell.SellPolicyView`'s shape (#271's pattern, applied here)."""
 
@@ -478,7 +484,7 @@ class BillingPolicySerializer(serializers.ModelSerializer):
         fields = ["mode", "mode_label", "set_by_name", "updated_at"]
 
 
-class StoreTransferWriteSerializer(serializers.ModelSerializer):
+class StoreTransferWriteSerializer(serializers.ModelSerializer[StoreTransfer]):
     """Creates a draft transfer. ``lines`` (the plan) is optional — a
     store→store transfer builds its lines by scanning at dispatch."""
 
@@ -499,7 +505,7 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
             "lines",
         ]
 
-    def validate(self, data):
+    def validate(self, data: Any) -> Any:
         src = data.get("source_store")
         dst = data.get("destination_store")
         if src and dst and src == dst:
@@ -517,7 +523,7 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
             )
         return data
 
-    def create(self, validated_data):
+    def create(self, validated_data: Any) -> StoreTransfer:
         """Create the draft and put it straight in the Operations Head's inbox.
 
         One transaction, at creation time, exactly as the other maker-checker
@@ -544,7 +550,7 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         return transfer
 
 
-class ScanLineSerializer(serializers.Serializer):
+class ScanLineSerializer(serializers.Serializer[dict[str, Any]]):
     """One scanned (barcode × count) pair from the scan screen."""
 
     barcode = serializers.CharField(max_length=64)
@@ -559,7 +565,7 @@ def _totals(scans: list[dict[str, Any]] | None) -> dict[str, int]:
     return totals
 
 
-class TransferScanInputSerializer(serializers.Serializer):
+class TransferScanInputSerializer(serializers.Serializer[dict[str, Any]]):
     """For dispatch: the scanned lines are the only quantities."""
 
     scans = ScanLineSerializer(many=True, allow_empty=False)
@@ -568,7 +574,7 @@ class TransferScanInputSerializer(serializers.Serializer):
         return _totals(self.validated_data["scans"])
 
 
-class TransferReceiveInputSerializer(serializers.Serializer):
+class TransferReceiveInputSerializer(serializers.Serializer[dict[str, Any]]):
     """Receiving, with the three exceptions the carton actually produces (#71).
 
     ``scans`` are the pieces that arrived intact, ``damaged`` the ones that
@@ -609,7 +615,7 @@ class TransferReceiveInputSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 
-class MarkDamagedLineSerializer(serializers.ModelSerializer):
+class MarkDamagedLineSerializer(serializers.ModelSerializer[MarkDamagedLine]):
     class Meta:
         model = MarkDamagedLine
         fields = [
@@ -628,7 +634,7 @@ class MarkDamagedLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class MarkDamagedReadSerializer(ApprovedDocumentSerializer):
+class MarkDamagedReadSerializer(ApprovedDocumentSerializer[MarkDamaged]):
     """A damage report and where it has got to (#138).
 
     The maker-checker half — who reported it, who confirmed it, the live
@@ -679,7 +685,7 @@ class MarkDamagedReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class MarkDamagedInputSerializer(serializers.Serializer):
+class MarkDamagedInputSerializer(serializers.Serializer[dict[str, Any]]):
     """The global mark-damaged action: a store + scanned pieces (+ optional
     note). Quantities are scanned, dims/cost enriched from the store's stock —
     never typed."""
@@ -700,7 +706,7 @@ class MarkDamagedInputSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 
-class ReturnToVendorLineSerializer(serializers.ModelSerializer):
+class ReturnToVendorLineSerializer(serializers.ModelSerializer[ReturnToVendorLine]):
     """Read-only, whole. A return line is built by the server from the scanned
     barcode and the pool row it matched (#75): the source bucket decides which
     ledger the posting drains, and the unit cost comes from the books, never from
@@ -725,7 +731,7 @@ class ReturnToVendorLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ReturnToVendorReadSerializer(ApprovedDocumentSerializer):
+class ReturnToVendorReadSerializer(ApprovedDocumentSerializer[ReturnToVendor]):
     lines = ReturnToVendorLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -760,7 +766,8 @@ class ReturnToVendorReadSerializer(ApprovedDocumentSerializer):
         claim has none, and neither does a brand with no negotiated window."""
         if obj.return_window_date is None:
             return None
-        return (obj.return_window_date - timezone.localdate()).days
+        days: int = (obj.return_window_date - timezone.localdate()).days
+        return days
 
     class Meta:
         model = ReturnToVendor
@@ -802,7 +809,7 @@ class ReturnToVendorReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class ReturnToBrandCreateSerializer(serializers.Serializer):
+class ReturnToBrandCreateSerializer(serializers.Serializer[dict[str, Any]]):
     """The scan payload behind a new return (#75).
 
     Barcodes and quantities, and nothing else that decides money. Which bucket
@@ -828,7 +835,7 @@ class ReturnToBrandCreateSerializer(serializers.Serializer):
         return totals
 
 
-class CreditNoteSerializer(serializers.ModelSerializer):
+class CreditNoteSerializer(serializers.ModelSerializer[ReturnCreditNote]):
     """Recording the brand's acknowledgement against a posted return.
 
     Status, not money: the payable already moved when the return posted. Written
@@ -852,7 +859,7 @@ class CreditNoteSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
-class StockAdjustmentLineSerializer(serializers.ModelSerializer):
+class StockAdjustmentLineSerializer(serializers.ModelSerializer[StockAdjustmentLine]):
     """``unit_cost_paise`` is read-only: a money posting reads its cost from the
     books, never from the payload (#103) — same rule as a transfer line.
 
@@ -887,7 +894,7 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "book_qty", "adj_qty", "unit_cost_paise", "reason"]
 
 
-class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
+class StockAdjustmentReadSerializer(ApprovedDocumentSerializer[StockAdjustment]):
     lines = StockAdjustmentLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -915,7 +922,7 @@ class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
+class StockAdjustmentWriteSerializer(serializers.ModelSerializer[StockAdjustment]):
     """``approved_by`` is not accepted: the approver is stamped by whoever
     clears the approvals inbox, and can never be the maker (#70)."""
 
@@ -925,22 +932,23 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
         model = StockAdjustment
         fields = ["store", "reason", "notes", "lines"]
 
-    def validate(self, data):
+    def validate(self, data: Any) -> Any:
         if not data.get("lines"):
             raise serializers.ValidationError("At least one line is required.")
         return data
 
-    def create(self, validated_data):
+    def create(self, validated_data: Any) -> StockAdjustment:
         validated_data["lines"] = _against_the_book(
             validated_data["store"].id, validated_data["lines"]
         )
-        return _create_with_approval(
+        adjustment: StockAdjustment = _create_with_approval(
             StockAdjustment,
             StockAdjustmentLine,
             "adjustment",
             validated_data,
             self.context.get("request"),
         )
+        return adjustment
 
 
 def _against_the_book(store_id: int, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -968,7 +976,7 @@ def _against_the_book(store_id: int, lines: list[dict[str, Any]]) -> list[dict[s
 # ---------------------------------------------------------------------------
 
 
-class WriteOffLineSerializer(serializers.ModelSerializer):
+class WriteOffLineSerializer(serializers.ModelSerializer[WriteOffLine]):
     """``unit_cost_paise`` is read-only: a money posting reads its cost from the
     books, never from the payload (#103) — same rule as a transfer line."""
 
@@ -990,7 +998,7 @@ class WriteOffLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "unit_cost_paise"]
 
 
-class WriteOffReadSerializer(ApprovedDocumentSerializer):
+class WriteOffReadSerializer(ApprovedDocumentSerializer[WriteOff]):
     lines = WriteOffLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -1017,7 +1025,7 @@ class WriteOffReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class WriteOffWriteSerializer(serializers.ModelSerializer):
+class WriteOffWriteSerializer(serializers.ModelSerializer[WriteOff]):
     """``approved_by`` is not accepted: the approver is stamped by whoever
     clears the approvals inbox, and can never be the maker (#70)."""
 
@@ -1027,15 +1035,16 @@ class WriteOffWriteSerializer(serializers.ModelSerializer):
         model = WriteOff
         fields = ["store", "reason", "lines"]
 
-    def validate(self, data):
+    def validate(self, data: Any) -> Any:
         if not data.get("lines"):
             raise serializers.ValidationError("At least one line is required.")
         return data
 
-    def create(self, validated_data):
-        return _create_with_approval(
+    def create(self, validated_data: Any) -> WriteOff:
+        writeoff: WriteOff = _create_with_approval(
             WriteOff, WriteOffLine, "writeoff", validated_data, self.context.get("request")
         )
+        return writeoff
 
 
 # ---------------------------------------------------------------------------
@@ -1043,7 +1052,7 @@ class WriteOffWriteSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
-class VFlipLineSerializer(serializers.ModelSerializer):
+class VFlipLineSerializer(serializers.ModelSerializer[VFlipLine]):
     """``unit_cost_paise`` is read-only: a money posting reads its cost from the
     books, never from the payload (#103) — same rule as a transfer line."""
 
@@ -1065,7 +1074,7 @@ class VFlipLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "unit_cost_paise"]
 
 
-class VFlipReadSerializer(ApprovedDocumentSerializer):
+class VFlipReadSerializer(ApprovedDocumentSerializer[VFlip]):
     """V-flip's own approver column is ``authorized_by``; it still answers the
     common "approved by whom" question through ``approved_by_name``."""
 
@@ -1098,7 +1107,7 @@ class VFlipReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class VFlipWriteSerializer(serializers.ModelSerializer):
+class VFlipWriteSerializer(serializers.ModelSerializer[VFlip]):
     """``authorized_by`` is not accepted: the authoriser is stamped by whoever
     clears the approvals inbox, and can never be the maker (#70)."""
 
@@ -1108,15 +1117,16 @@ class VFlipWriteSerializer(serializers.ModelSerializer):
         model = VFlip
         fields = ["store", "original_brand", "season", "lines"]
 
-    def validate(self, data):
+    def validate(self, data: Any) -> Any:
         if not data.get("lines"):
             raise serializers.ValidationError("At least one line is required.")
         return data
 
-    def create(self, validated_data):
-        return _create_with_approval(
+    def create(self, validated_data: Any) -> VFlip:
+        vflip: VFlip = _create_with_approval(
             VFlip, VFlipLine, "vflip", validated_data, self.context.get("request")
         )
+        return vflip
 
 
 # ---------------------------------------------------------------------------
@@ -1124,7 +1134,7 @@ class VFlipWriteSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 
-class CountSessionLineSerializer(serializers.ModelSerializer):
+class CountSessionLineSerializer(serializers.ModelSerializer[CountSessionLine]):
     """One barcode on one session. ``book_qty`` is null while the session is
     open — that null *is* the blindness, and it is the model's state rather than
     a field this serializer hides."""
@@ -1147,7 +1157,7 @@ class CountSessionLineSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class CountSessionReadSerializer(serializers.ModelSerializer):
+class CountSessionReadSerializer(serializers.ModelSerializer[CountSession]):
     lines = CountSessionLineSerializer(many=True, read_only=True)
     scope_label = serializers.CharField(read_only=True)
     counted_by_name = serializers.SerializerMethodField()
@@ -1177,7 +1187,7 @@ class CountSessionReadSerializer(serializers.ModelSerializer):
         return sum(line.counted_qty for line in obj.lines.all())
 
 
-class StocktakeReadSerializer(serializers.ModelSerializer):
+class StocktakeReadSerializer(serializers.ModelSerializer[Stocktake]):
     sessions = CountSessionReadSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -1214,14 +1224,14 @@ class StocktakeReadSerializer(serializers.ModelSerializer):
         return obj.adjustment.docstatus if obj.adjustment else None
 
 
-class StocktakeCreateSerializer(serializers.Serializer):
+class StocktakeCreateSerializer(serializers.Serializer[dict[str, Any]]):
     """Opening a count: which location, and an optional word about why."""
 
     store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all())
     note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
 
 
-class CountSessionCreateSerializer(serializers.Serializer):
+class CountSessionCreateSerializer(serializers.Serializer[dict[str, Any]]):
     """One counter's pass: how much of the location they are taking on."""
 
     scope = serializers.ChoiceField(choices=CountScope.choices)
@@ -1230,7 +1240,7 @@ class CountSessionCreateSerializer(serializers.Serializer):
     )
 
 
-class CountScanInputSerializer(serializers.Serializer):
+class CountScanInputSerializer(serializers.Serializer[dict[str, Any]]):
     """Scanned pieces, additive. Nothing comes back but what was scanned."""
 
     scans = ScanLineSerializer(many=True, allow_empty=False)
@@ -1239,7 +1249,7 @@ class CountScanInputSerializer(serializers.Serializer):
         return _totals(self.validated_data["scans"])
 
 
-class ApplyVarianceInputSerializer(serializers.Serializer):
+class ApplyVarianceInputSerializer(serializers.Serializer[dict[str, Any]]):
     """Which moved lines the person has looked at and still wants applied.
 
     Confirmation is per barcode rather than a blanket "yes": the whole rule is
@@ -1252,7 +1262,7 @@ class ApplyVarianceInputSerializer(serializers.Serializer):
     )
 
 
-class RecountInputSerializer(serializers.Serializer):
+class RecountInputSerializer(serializers.Serializer[dict[str, Any]]):
     """A second person's count of one piece, and why it is out (#78).
 
     Three fields and no fourth. There is deliberately no cost and no variance
@@ -1271,7 +1281,7 @@ class RecountInputSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 
-class StockRequestLineReadSerializer(serializers.ModelSerializer):
+class StockRequestLineReadSerializer(serializers.ModelSerializer[StockRequestLine]):
     qty_fulfilled = serializers.IntegerField(read_only=True)
     qty_committed = serializers.IntegerField(read_only=True)
 
@@ -1293,7 +1303,7 @@ class StockRequestLineReadSerializer(serializers.ModelSerializer):
         ]
 
 
-class StockRequestLineWriteSerializer(serializers.ModelSerializer):
+class StockRequestLineWriteSerializer(serializers.ModelSerializer[StockRequestLine]):
     """Dims come straight off the cross-location search that built this line —
     there is no local stock to re-derive them from, unlike a transfer's plan:
     the whole point of a request is asking for stock the requesting store does
@@ -1306,7 +1316,7 @@ class StockRequestLineWriteSerializer(serializers.ModelSerializer):
         fields = ["sku_code", "design", "color", "size", "brand", "season", "item", "hsn", "qty"]
 
 
-class FulfillingTransferSummarySerializer(serializers.ModelSerializer):
+class FulfillingTransferSummarySerializer(serializers.ModelSerializer[StoreTransfer]):
     """What a request's page shows about each transfer answering it — enough to
     link through, not the whole transfer."""
 
@@ -1326,7 +1336,7 @@ class FulfillingTransferSummarySerializer(serializers.ModelSerializer):
         ]
 
 
-class StockRequestReadSerializer(ApprovedDocumentSerializer):
+class StockRequestReadSerializer(ApprovedDocumentSerializer[StockRequest]):
     lines = StockRequestLineReadSerializer(many=True, read_only=True)
     requesting_store_code = serializers.CharField(source="requesting_store.code", read_only=True)
     requesting_store_name = serializers.CharField(source="requesting_store.name", read_only=True)
@@ -1349,7 +1359,8 @@ class StockRequestReadSerializer(ApprovedDocumentSerializer):
         approval = self._approval(obj)
         if approval is None or approval.status != ApprovalStatus.REJECTED:
             return ""
-        return approval.reason
+        reason: str = approval.reason
+        return reason
 
     class Meta:
         model = StockRequest
@@ -1382,7 +1393,7 @@ class StockRequestReadSerializer(ApprovedDocumentSerializer):
         ]
 
 
-class StockRequestWriteSerializer(serializers.ModelSerializer):
+class StockRequestWriteSerializer(serializers.ModelSerializer[StockRequest]):
     """Raises the ask and puts it straight in the asking store's inbox — born
     waiting, same as a transfer (#137) and every other maker-checker family: a
     maker cannot forget to ask.
@@ -1408,7 +1419,7 @@ class StockRequestWriteSerializer(serializers.ModelSerializer):
             "lines",
         ]
 
-    def validate(self, data):
+    def validate(self, data: Any) -> Any:
         if not data.get("lines"):
             raise serializers.ValidationError("At least one line is required.")
         if data.get("requesting_store") and data.get("fulfilling_store"):
@@ -1416,7 +1427,7 @@ class StockRequestWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Requesting and fulfilling store must differ.")
         return data
 
-    def create(self, validated_data):
+    def create(self, validated_data: Any) -> StockRequest:
         lines_data = validated_data.pop("lines")
         request = self.context.get("request")
         user = getattr(request, "user", None)
@@ -1429,21 +1440,21 @@ class StockRequestWriteSerializer(serializers.ModelSerializer):
         return doc
 
 
-class StockRequestFulfilLineInputSerializer(serializers.Serializer):
+class StockRequestFulfilLineInputSerializer(serializers.Serializer[dict[str, Any]]):
     """How much of one request line this pass is committing to send."""
 
     line_id = serializers.IntegerField()
     qty = serializers.IntegerField(min_value=1)
 
 
-class StockRequestFulfilInputSerializer(serializers.Serializer):
+class StockRequestFulfilInputSerializer(serializers.Serializer[dict[str, Any]]):
     """Which lines, and how much of each, the fulfilling store is sending now —
     may cover less than the full ask (a partial fulfilment)."""
 
     lines = StockRequestFulfilLineInputSerializer(many=True, allow_empty=False)
 
 
-class StockRequestCloseInputSerializer(serializers.Serializer):
+class StockRequestCloseInputSerializer(serializers.Serializer[dict[str, Any]]):
     """The fulfilling store saying no more is coming."""
 
     note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")

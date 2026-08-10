@@ -11,6 +11,7 @@ So a serializer failure here is always `VALIDATION` / 400, and never anything el
 from __future__ import annotations
 
 import re
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -27,13 +28,13 @@ from sell.models import (
 )
 
 
-class _CustomerWriteSerializer(serializers.Serializer):
+class _CustomerWriteSerializer(serializers.Serializer[dict[str, Any]]):
     name = serializers.CharField(max_length=120, allow_blank=True, required=False, default="")
     mobile = serializers.CharField(max_length=15, allow_blank=True, required=False, default="")
     gstin = serializers.CharField(max_length=15, allow_blank=True, required=False, default="")
 
 
-class _LineWriteSerializer(serializers.Serializer):
+class _LineWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """One line, whether it is being sold or given back inside an exchange."""
 
     line_no = serializers.IntegerField(min_value=1)
@@ -50,7 +51,7 @@ class _LineWriteSerializer(serializers.Serializer):
     net_paise = serializers.IntegerField(min_value=0, required=False)
     refund_paise = serializers.IntegerField(min_value=0, required=False)
     gst_rate = serializers.DecimalField(
-        max_digits=5, decimal_places=2, min_value=0, required=False, default=0
+        max_digits=5, decimal_places=2, min_value=0, required=False, default=Decimal(0)
     )
     gst_paise = serializers.IntegerField(min_value=0, required=False, default=0)
     salesman = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -95,18 +96,18 @@ class _LineWriteSerializer(serializers.Serializer):
         return attrs
 
 
-class _OriginalRefSerializer(serializers.Serializer):
+class _OriginalRefSerializer(serializers.Serializer[dict[str, Any]]):
     store = serializers.CharField(max_length=16, required=False, allow_blank=True, default="")
     fy = serializers.CharField(max_length=7)
     till_seq = serializers.IntegerField(min_value=1)
 
 
-class _ExchangeWriteSerializer(serializers.Serializer):
+class _ExchangeWriteSerializer(serializers.Serializer[dict[str, Any]]):
     original = _OriginalRefSerializer()
     lines = serializers.ListField(child=_LineWriteSerializer(), allow_empty=False)
 
 
-class _TenderWriteSerializer(serializers.Serializer):
+class _TenderWriteSerializer(serializers.Serializer[dict[str, Any]]):
     mode = serializers.ChoiceField(
         choices=(SaleTender.Mode.CASH, SaleTender.Mode.CARD, SaleTender.Mode.UPI)
     )
@@ -141,7 +142,7 @@ class _TenderWriteSerializer(serializers.Serializer):
         return attrs
 
 
-class _TotalsWriteSerializer(serializers.Serializer):
+class _TotalsWriteSerializer(serializers.Serializer[dict[str, Any]]):
     gross_paise = serializers.IntegerField(min_value=0)
     discount_paise = serializers.IntegerField(min_value=0)
     #: Parsed as an integer here; the accept pipeline refuses a negative total as
@@ -167,7 +168,7 @@ class _TotalsWriteSerializer(serializers.Serializer):
 OVERRIDE_KINDS = ("late_return",)
 
 
-class SellPolicyWriteSerializer(serializers.Serializer):
+class SellPolicyWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """The two policy dials are sent together, as one HO decision."""
 
     manual_discount_cap_percent = serializers.CharField()
@@ -191,7 +192,7 @@ class SellPolicyWriteSerializer(serializers.Serializer):
         return attrs
 
 
-class _OverrideWriteSerializer(serializers.Serializer):
+class _OverrideWriteSerializer(serializers.Serializer[dict[str, Any]]):
     user_id = serializers.IntegerField()
     kind = serializers.ChoiceField(
         choices=OVERRIDE_KINDS, allow_blank=True, required=False, default=""
@@ -203,7 +204,7 @@ class _OverrideWriteSerializer(serializers.Serializer):
     at = serializers.DateTimeField(required=False, allow_null=True, default=None)
 
 
-class SaleWriteSerializer(serializers.Serializer):
+class SaleWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """One bill, as the till's queue replays it."""
 
     idempotency_uuid = serializers.UUIDField()
@@ -246,7 +247,7 @@ class SaleWriteSerializer(serializers.Serializer):
         return attrs
 
 
-class _HeldBillWriteSerializer(serializers.Serializer):
+class _HeldBillWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """One parked cart, as the till mirrors it up (contract, step 3).
 
     `payload` is checked for being an object and for nothing else. It is the
@@ -256,7 +257,11 @@ class _HeldBillWriteSerializer(serializers.Serializer):
     """
 
     held_uuid = serializers.UUIDField()
-    label = serializers.CharField(
+    # `label` is also the name of DRF's own form-label attribute on `Field`, so the
+    # declaration reads as an override of it. It is not one: `SerializerMetaclass`
+    # lifts every declared field off the class, and the wire contract calls this
+    # field `label`, so the clash is in the stubs' view of the class body only.
+    label = serializers.CharField(  # type: ignore[assignment]
         max_length=120, allow_blank=True, required=False, default="", trim_whitespace=False
     )
     held_at = serializers.DateTimeField()
@@ -268,7 +273,7 @@ class _HeldBillWriteSerializer(serializers.Serializer):
     payload = serializers.DictField(required=False, default=dict)
 
 
-class HeldBillsWriteSerializer(serializers.Serializer):
+class HeldBillsWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """The counter's whole list, which is the only thing it ever sends.
 
     `held` is required rather than defaulted to empty: "I have nothing parked" is
@@ -285,7 +290,7 @@ class HeldBillsWriteSerializer(serializers.Serializer):
         return rows
 
 
-class RegisterHandoverWriteSerializer(serializers.Serializer):
+class RegisterHandoverWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """The one thing a handover asks for: why (#189).
 
     Required, non-blank, and that is the whole of the validation. The reason is
@@ -309,7 +314,7 @@ class RegisterHandoverWriteSerializer(serializers.Serializer):
 # --- read shapes -------------------------------------------------
 
 
-class SaleAcceptedSerializer(serializers.Serializer):
+class SaleAcceptedSerializer(serializers.Serializer[dict[str, Any]]):
     """The replay-safe acknowledgement returned when the queue lands a bill."""
 
     doc_number = serializers.CharField()
@@ -581,10 +586,11 @@ class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):
         single reading of the clock (Rule 11 - the deadline is data, and so is the
         day it is measured against).
         """
-        return (obj.due_on - self.context["today"]).days
+        today: date = self.context["today"]
+        return (obj.due_on - today).days
 
 
-class IrnQueueWriteSerializer(serializers.Serializer):
+class IrnQueueWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """What head office writes back after a run on the portal.
 
     Only the two terminal answers: a row goes to `generated` with the reference
@@ -646,13 +652,17 @@ class ContinuityFlagRowSerializer(serializers.ModelSerializer[ContinuityFlag]):
         ]
 
     def get_doc_number(self, obj: ContinuityFlag) -> str:
-        return obj.sale.doc_number or "" if obj.sale_id else ""
+        # `sale_id` is what says whether there is a bill at all; that it also
+        # settles `obj.sale` being non-null is the step mypy cannot take by
+        # itself, so the fetch is bound to a name it can narrow.
+        sale = obj.sale if obj.sale_id else None
+        return (sale.doc_number or "") if sale is not None else ""
 
     def get_resolved_by_name(self, obj: ContinuityFlag) -> str:
         return display_name(obj.resolved_by)
 
 
-class ContinuityFlagWriteSerializer(serializers.Serializer):
+class ContinuityFlagWriteSerializer(serializers.Serializer[dict[str, Any]]):
     """Clearing one exception, which is a statement about a person's attention.
 
     Two answers and no way back to `open`. **Resolved** means the thing was dealt

@@ -92,7 +92,7 @@ def financial_year(d: date) -> str:
     return f"{start % 100:02d}-{(start + 1) % 100:02d}"
 
 
-def rupees_to_paise(value) -> int:
+def rupees_to_paise(value: object) -> int:
     """Tolerant rupee→paise (accepts str/Decimal/number; never lets float into money)."""
     if value in (None, ""):
         return 0
@@ -116,14 +116,14 @@ def _user(user: Any) -> Any:
 # --- GL bridge (F1: one balanced book of record) --------------------------
 
 
-def _post_gl(doc_type: str, doc_number: str, legs, user) -> None:
+def _post_gl(doc_type: str, doc_number: str, legs: list[Leg], user: Any) -> None:
     """Post one balanced GL voucher for a finledger event. Vendor/cash are HO-level,
     so no store/gstin dims. Balanced-or-fail via the single kernel posting engine."""
     ref = PostingRef(doc_type=doc_type, doc_number=doc_number, posted_by=_user(user))
     post_entries(ref, legs, posted_by=_user(user))
 
 
-def _reverse_gl(orig_doc_number: str, rev_doc_number: str, doc_type: str, user) -> None:
+def _reverse_gl(orig_doc_number: str, rev_doc_number: str, doc_type: str, user: Any) -> None:
     """Append the negated mirror of a finledger event's GL voucher, if it had one.
 
     A PT auto-bill has no GL leg on its VEND number (the PT path books the payable
@@ -153,13 +153,13 @@ def _reverse_gl(orig_doc_number: str, rev_doc_number: str, doc_type: str, user) 
 
 @transaction.atomic
 def post_vendor_bill(
-    vendor,
+    vendor: Any,
     amount_paise: int,
     description: str,
-    user,
+    user: Any,
     *,
-    pt_file=None,
-    booking=None,
+    pt_file: Any = None,
+    booking: Any = None,
     reference: str = "",
     gl: bool = True,
 ) -> VendorLedgerEntry:
@@ -203,10 +203,10 @@ def post_vendor_bill(
 
 @transaction.atomic
 def post_vendor_payment(
-    vendor,
+    vendor: Any,
     amount_paise: int,
     description: str,
-    user,
+    user: Any,
     *,
     mode: str = "",
     account: str = "CASH",
@@ -264,7 +264,7 @@ def post_vendor_payment(
 
 
 @transaction.atomic
-def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
+def reverse_vendor_entry(entry: VendorLedgerEntry, user: Any) -> VendorLedgerEntry:
     """Append a negative mirror; also reverse a paired cash-out if one exists, and
     append the negated GL mirror of the entry's value voucher.
 
@@ -307,7 +307,9 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
     return rev
 
 
-def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedgerEntry | None:
+def post_pt_vendor_bill(
+    pt: Any, booking: Any, total_value_paise: int, user: Any
+) -> VendorLedgerEntry | None:
     """Auto vendor liability when a PT file is posted against a booking — but ONLY
     for KDPS-owned goods (Outright / Correction). Brand-owned models never raise a
     payable from the PT: SOR accrues liability on the *Sale*, Consignment never does
@@ -396,7 +398,7 @@ def post_sale_collection(
 
 
 @transaction.atomic
-def reverse_pt_vendor_bills(pt, user) -> int:
+def reverse_pt_vendor_bills(pt: Any, user: Any) -> int:
     """Reverse the live auto-bills raised for a PT file (called on PT reversal)."""
     count = 0
     for entry in VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.BILL):
@@ -412,10 +414,10 @@ def reverse_pt_vendor_bills(pt, user) -> int:
 
 @transaction.atomic
 def post_partner_settlement(
-    store,
+    store: Any,
     amount_paise: int,
     description: str,
-    user,
+    user: Any,
     *,
     mode: str = "",
     account: str = "CASH",
@@ -485,7 +487,7 @@ def post_partner_settlement(
 
 
 @transaction.atomic
-def reverse_partner_settlement(entry: PartnerLedgerEntry, user) -> PartnerLedgerEntry:
+def reverse_partner_settlement(entry: PartnerLedgerEntry, user: Any) -> PartnerLedgerEntry:
     """Append a negative mirror; also reverse a paired cash-in if one exists, and
     append the negated GL mirror of the entry's value voucher (if any)."""
     if entry.kind == PartnerLedgerEntry.Kind.REVERSAL:
@@ -530,7 +532,7 @@ def post_cash_movement(
     direction: str,
     amount_paise: int,
     description: str,
-    user,
+    user: Any,
     *,
     account: str = "CASH",
     mode: str = "",
@@ -565,7 +567,7 @@ def post_cash_movement(
 
 
 @transaction.atomic
-def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
+def reverse_cash_entry(entry: CashLedgerEntry, user: Any) -> CashLedgerEntry:
     if entry.kind == CashLedgerEntry.Kind.REVERSAL:
         raise AlreadyReversedError("a reversal cannot itself be reversed")
     if CashLedgerEntry.objects.filter(reverses=entry).exists():

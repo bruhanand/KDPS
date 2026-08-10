@@ -22,6 +22,7 @@ the receipt: counting it would refuse the next legitimate return as
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from django.db.models import IntegerField, OuterRef, QuerySet, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
@@ -81,7 +82,9 @@ def with_returned(lines: QuerySet[SaleLine]) -> QuerySet[SaleLine]:
     refusal authoritative.
     """
 
-    def _off(model: type[SaleLine] | type[ReturnLine], cancelled: str, amount: str) -> QuerySet:
+    def _off(
+        model: type[SaleLine] | type[ReturnLine], cancelled: str, amount: str
+    ) -> QuerySet[Any, dict[str, Any]]:
         return (
             model.objects.filter(original_line=OuterRef("pk"))
             .exclude(**{cancelled: DocStatus.CANCELLED})
@@ -101,7 +104,7 @@ def with_returned(lines: QuerySet[SaleLine]) -> QuerySet[SaleLine]:
     )
 
 
-def _summed(rows: QuerySet, column: str) -> Coalesce:
+def _summed(rows: QuerySet[Any, dict[str, Any]], column: str) -> Coalesce:
     """One column of a per-original-line aggregate, as nought where there is none."""
     return Coalesce(Subquery(rows.values(column), output_field=IntegerField()), Value(0))
 

@@ -19,7 +19,10 @@ from approvals.models import Approval, ApprovalPolicy, ApprovalRoute, ApprovalSt
 
 
 @admin.register(ApprovalRoute)
-class ApprovalRouteAdmin(admin.ModelAdmin):
+# `ModelAdmin` is generic to django-stubs but not subscriptable at runtime here
+# (same gap as `core.money.MoneyField`'s base) - subscripting it crashes Django's
+# admin autodiscover, so the generic arg is left off rather than "fixed".
+class ApprovalRouteAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Read-only here, deliberately.
 
     The chain is data (Rule 12) and is meant to be retuned — but the steps of a
@@ -43,7 +46,8 @@ class ApprovalRouteAdmin(admin.ModelAdmin):
 
 
 @admin.register(ApprovalStepDecision)
-class ApprovalStepDecisionAdmin(admin.ModelAdmin):
+# See the type-ignore note on `ApprovalRouteAdmin` above.
+class ApprovalStepDecisionAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Read-only for the same reason ``Approval`` is: it is the audit trail."""
 
     list_display = ("approval", "step_order", "step_label", "decided_by", "short_circuited")
@@ -60,7 +64,8 @@ class ApprovalStepDecisionAdmin(admin.ModelAdmin):
 
 
 @admin.register(ApprovalPolicy)
-class ApprovalPolicyAdmin(admin.ModelAdmin):
+# See the type-ignore note on `ApprovalRouteAdmin` above.
+class ApprovalPolicyAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("kind", "tolerance_paise", "band_paise", "band_roles", "escalated_roles")
     readonly_fields = ("created_at", "updated_at")
 
@@ -75,7 +80,8 @@ class ApprovalPolicyAdmin(admin.ModelAdmin):
 
 
 @admin.register(Approval)
-class ApprovalAdmin(admin.ModelAdmin):
+# See the type-ignore note on `ApprovalRouteAdmin` above.
+class ApprovalAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("kind_label", "title", "status", "made_by", "decided_by", "created_at")
     list_filter = ("kind", "status")
     search_fields = ("title",)

@@ -106,7 +106,9 @@ def require_section(
 
         def has_permission(self, request: Request, view: Any) -> bool:
             writing = write_minimum is not None and request.method not in SAFE_METHODS
-            needed = write_minimum if writing else minimum
+            needed = minimum
+            if writing and write_minimum is not None:
+                needed = write_minimum
             allowed = user_can(request.user, section, needed)
             # A caller who holds the read rung and was refused the write one is
             # told which of the two they failed, rather than "no access to

@@ -102,7 +102,7 @@ def _sales(user: Any) -> QuerySet[Sale]:
     forget the scope: a store person sees their own counter's bills and nobody
     else's.
     """
-    return scope_by_store(
+    rows: QuerySet[Sale] = scope_by_store(
         # `irn_queue_item` is joined rather than left to the serializer: the read
         # shape names it (#187), and a reverse one-to-one nobody joined is a
         # query per bill on a list of fifty.
@@ -124,6 +124,7 @@ def _sales(user: Any) -> QuerySet[Sale]:
         user,
         "store_id",
     )
+    return rows
 
 
 def till_store(request: Request) -> tuple[Store | None, Response]:
@@ -405,7 +406,8 @@ def _irn_rows(user: Any) -> QuerySet[IrnQueueItem]:
     Ordering is `IrnQueueItem.Meta` - due date, then id. It is the model's, not
     this function's, because "the oldest deadline first" is what the queue *is*.
     """
-    return scope_by_store(_irn_queue(), user, "sale__store_id")
+    rows: QuerySet[IrnQueueItem] = scope_by_store(_irn_queue(), user, "sale__store_id")
+    return rows
 
 
 def _irn_row_to_act_on(user: Any) -> QuerySet[IrnQueueItem]:
@@ -417,7 +419,8 @@ def _irn_row_to_act_on(user: Any) -> QuerySet[IrnQueueItem]:
     would find every other shop's row answering "no such bill", which is the
     switcher silently stripping a right an administrator granted.
     """
-    return scope_by_entitlement(_irn_queue(), user, "sale__store_id")
+    rows: QuerySet[IrnQueueItem] = scope_by_entitlement(_irn_queue(), user, "sale__store_id")
+    return rows
 
 
 class IrnQueueView(APIView):
@@ -550,9 +553,10 @@ def _flags(user: Any) -> QuerySet[ContinuityFlag]:
     narrows the list exactly as every other document list does. Head office
     scoped to the network sees the network until it picks a shop.
     """
-    return scope_by_store(
+    rows: QuerySet[ContinuityFlag] = scope_by_store(
         ContinuityFlag.objects.select_related("store", "sale", "resolved_by"), user, "store_id"
     )
+    return rows
 
 
 def _flag_to_act_on(user: Any) -> QuerySet[ContinuityFlag]:
@@ -564,9 +568,10 @@ def _flag_to_act_on(user: Any) -> QuerySet[ContinuityFlag]:
     "no such flag", which is the switcher silently stripping a right an
     administrator granted.
     """
-    return scope_by_entitlement(
+    rows: QuerySet[ContinuityFlag] = scope_by_entitlement(
         ContinuityFlag.objects.select_related("store", "sale"), user, "store_id"
     )
+    return rows
 
 
 class StoreFlagsView(APIView):

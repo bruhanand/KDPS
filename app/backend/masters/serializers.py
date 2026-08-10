@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from rest_framework import serializers
 
 from masters.models import Brand, Gstin, LegalEntity, Season, Store, StoreTarget
 
 
-class LegalEntitySerializer(serializers.ModelSerializer):
+class LegalEntitySerializer(serializers.ModelSerializer[LegalEntity]):
     class Meta:
         model = LegalEntity
         fields = ["id", "code", "name", "pan", "is_active"]
 
 
-class GstinSerializer(serializers.ModelSerializer):
+class GstinSerializer(serializers.ModelSerializer[Gstin]):
     legal_entity_name = serializers.CharField(source="legal_entity.name", read_only=True)
 
     class Meta:
@@ -29,7 +30,7 @@ class GstinSerializer(serializers.ModelSerializer):
         ]
 
 
-class StoreSerializer(serializers.ModelSerializer):
+class StoreSerializer(serializers.ModelSerializer[Store]):
     state_name = serializers.CharField(source="gstin.state_name", read_only=True)
     state_code = serializers.CharField(source="gstin.state_code", read_only=True)
     gstin_number = serializers.CharField(source="gstin.gstin", read_only=True)
@@ -51,7 +52,7 @@ class StoreSerializer(serializers.ModelSerializer):
         ]
 
 
-class LocationSerializer(serializers.ModelSerializer):
+class LocationSerializer(serializers.ModelSerializer[Store]):
     """A place in the network, as a picker needs to name it (#147).
 
     Deliberately thinner than `StoreSerializer`: identity, and the registration
@@ -73,7 +74,7 @@ class LocationSerializer(serializers.ModelSerializer):
         fields = ["id", "code", "name", "store_type", "gstin", "state_code", "state_name"]
 
 
-class StoreTargetSerializer(serializers.ModelSerializer):
+class StoreTargetSerializer(serializers.ModelSerializer[StoreTarget]):
     """One cell of the target grid: which store, which month, how many paise.
 
     `store` is the store *code* both ways round - the code is what HO says out
@@ -82,14 +83,16 @@ class StoreTargetSerializer(serializers.ModelSerializer):
     way to be wrong.
     """
 
-    store = serializers.SlugRelatedField(slug_field="code", read_only=True)
+    store: serializers.SlugRelatedField[Store] = serializers.SlugRelatedField(
+        slug_field="code", read_only=True
+    )
 
     class Meta:
         model = StoreTarget
         fields = ["store", "month", "target_paise"]
 
 
-class StoreTargetWriteSerializer(serializers.Serializer):
+class StoreTargetWriteSerializer(serializers.Serializer[Any]):
     """What a PUT is allowed to say. Deliberately not a `ModelSerializer`:
 
     * `store` is validated as a *name* here and resolved against the caller's
@@ -116,13 +119,13 @@ class StoreTargetWriteSerializer(serializers.Serializer):
         return value
 
 
-class SeasonSerializer(serializers.ModelSerializer):
+class SeasonSerializer(serializers.ModelSerializer[Season]):
     class Meta:
         model = Season
         fields = ["id", "code", "name", "status", "sort_order"]
 
 
-class BrandSerializer(serializers.ModelSerializer):
+class BrandSerializer(serializers.ModelSerializer[Brand]):
     commercial_label = serializers.CharField(read_only=True)
     #: Derived, so the return screen never re-implements the two-axis rules.
     takes_returns = serializers.BooleanField(read_only=True)

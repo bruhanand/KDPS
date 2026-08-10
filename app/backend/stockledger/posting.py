@@ -28,6 +28,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from django.db import transaction
 
@@ -64,7 +65,7 @@ def financial_year(d: date) -> str:
     return f"{start % 100:02d}-{(start + 1) % 100:02d}"
 
 
-def _decimal(value) -> Decimal | None:
+def _decimal(value: object) -> Decimal | None:
     """Strict rupee cell → Decimal (None if blank). Raises on garbage — no silent 0.
 
     `inf`/`nan` parse cleanly into a Decimal but poison every comparison and gross-up
@@ -82,7 +83,7 @@ def _rupees_to_paise(amount: Decimal) -> int:
     return int((amount * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
-def _unit_cost_paise(data: dict, line_no: int) -> int:
+def _unit_cost_paise(data: dict[str, Any], line_no: int) -> int:
     """Unit cost in paise = P RATE (the locked cost), falling back to BASIC only if
     P RATE is absent. Enforces P RATE ≤ MRP. Raises PtPostingError on a bad cost."""
     try:
@@ -101,7 +102,7 @@ def _unit_cost_paise(data: dict, line_no: int) -> int:
     return _rupees_to_paise(cost)
 
 
-def _row_qty(data: dict, line_no: int) -> int:
+def _row_qty(data: dict[str, Any], line_no: int) -> int:
     """Quantity from NAG, falling back to QTY. A blank cell means "no quantity here"
     and yields 0 - the caller skips such a row and counts it.
 
@@ -140,7 +141,7 @@ def _row_qty(data: dict, line_no: int) -> int:
     return 0
 
 
-def _norm(s) -> str:
+def _norm(s: object) -> str:
     return " ".join(str(s or "").split()).upper()
 
 
@@ -152,7 +153,13 @@ def _allocate_number(store_code: str) -> str:
 
 
 def _stock_entry_from_pt_row(
-    row, store: Store, number: str, unit_paise: int, qty: int, user, booking=None
+    row: Any,
+    store: Store,
+    number: str,
+    unit_paise: int,
+    qty: int,
+    user: Any,
+    booking: Any = None,
 ) -> StockLedgerEntry:
     data = row.data
     return StockLedgerEntry(
@@ -178,7 +185,7 @@ def _stock_entry_from_pt_row(
 
 
 def _build_inward_entries(
-    pt, store: Store, number: str, user, booking=None
+    pt: Any, store: Store, number: str, user: Any, booking: Any = None
 ) -> tuple[list[StockLedgerEntry], int]:
     """Value every positive-qty row at P RATE; raise (blocking the whole post) if any
     row has an unreadable quantity, an unreadable/missing cost, or P RATE > MRP - every
@@ -214,11 +221,13 @@ def _build_inward_entries(
     return entries, skipped
 
 
-def _model_label(booking) -> str:
+def _model_label(booking: Any) -> str:
     return booking.brand.commercial_label if booking is not None else "Direct receipt"
 
 
-def _post_value_gl(pt, store: Store, number: str, booking, total_value_paise: int, user) -> bool:
+def _post_value_gl(
+    pt: Any, store: Store, number: str, booking: Any, total_value_paise: int, user: Any
+) -> bool:
     """Post the balanced value voucher for this inward, branching by commercial model."""
     if total_value_paise <= 0:
         return False
@@ -252,7 +261,7 @@ def _post_value_gl(pt, store: Store, number: str, booking, total_value_paise: in
     return True
 
 
-def _reconcile(booking, entries: list[StockLedgerEntry], sign: int) -> int:
+def _reconcile(booking: Any, entries: list[StockLedgerEntry], sign: int) -> int:
     """Bump (+1) or un-bump (−1) booking line `inwarded_qty` by matched PT qty.
 
     Driven by the stock rows themselves, never by re-reading the PT file: what the
@@ -278,7 +287,7 @@ def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
     """Fold signed stock deltas into the materialised `StockOnHand` projection,
     inside the caller's posting transaction. Inward adds; a reversal subtracts.
     Descriptive dimensions are refreshed from the latest real inward row."""
-    by_key: dict[tuple[int, str], dict] = {}
+    by_key: dict[tuple[int, str], dict[str, Any]] = {}
     for e in entries:
         agg = by_key.setdefault(
             (e.store_id, e.sku_code), {"dq": 0, "dv": 0, "any": e, "inward": None}
@@ -314,7 +323,7 @@ def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
         obj.save()
 
 
-def _register_identity(pt, number: str, user=None) -> None:
+def _register_identity(pt: Any, number: str, user: Any = None) -> None:
     """Upsert the SKU master + the (barcode, season) cohort for every valued row,
     persisting the locked per-unit cost (the queryable identity spine, ADR Phase F).
     Quantities and costs were already validated by `_build_inward_entries`, so every
@@ -375,7 +384,7 @@ def _register_identity(pt, number: str, user=None) -> None:
 
 
 @transaction.atomic
-def post_pt_inward(pt, user, booking=None) -> dict:
+def post_pt_inward(pt: Any, user: Any, booking: Any = None) -> dict[str, Any]:
     """Post a *sent* PT file: mint its inward voucher via the Document FSM, then write
     the stock-ledger + value-GL entries and lock the file (SUBMITTED).
 
@@ -423,7 +432,7 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     }
 
 
-def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, user) -> bool:
+def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, user: Any) -> bool:
     """Append the negated mirror of the original value voucher (balanced reversal)."""
     source = list(GLEntry.objects.filter(doc_number=original_number))
     if not source:
@@ -455,7 +464,7 @@ def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, 
 
 
 @transaction.atomic
-def reverse_pt_inward(pt, user) -> dict:
+def reverse_pt_inward(pt: Any, user: Any) -> dict[str, Any]:
     """Append the negative mirror of every live inward row + value voucher + vendor
     bill, then `cancel()` the file (reversal-as-cancel — a posted fact is frozen, the
     correction is a new append, never an edit)."""

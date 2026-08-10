@@ -16,7 +16,7 @@ sees is the separate record-scope axis, and #101's work.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 from rest_framework import generics, status
@@ -25,6 +25,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import User
 from accounts.permissions import require_section
 from accounts.sections import CAP_APPROVE, CAP_OPERATE, CAP_VIEW
 from approvals.services import AlreadyPendingError, ApprovalError
@@ -89,7 +90,7 @@ def _allocate_booking_number(season: Season) -> str:
     return number
 
 
-class VendorListCreateView(generics.ListCreateAPIView):
+class VendorListCreateView(generics.ListCreateAPIView[Vendor]):
     """The vendor master. Reads stay open (every booking form needs the list);
     writes are the master-data steward's, the same gate stores, brands, seasons
     and GSTINs have carried since D8.
@@ -112,7 +113,7 @@ class VendorListCreateView(generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), VENDOR_SEARCH_FIELDS)
 
 
-class VendorDetailView(generics.RetrieveUpdateAPIView):
+class VendorDetailView(generics.RetrieveUpdateAPIView[Vendor]):
     """Correct a vendor, or retire one. Never deleted — bookings and payables
     point at it (masters are referenced by append-only rows)."""
 
@@ -166,7 +167,7 @@ BOOKING_SEARCH_FIELDS = (
 )
 
 
-class BookingListCreateView(generics.ListCreateAPIView):
+class BookingListCreateView(generics.ListCreateAPIView[Booking]):
     permission_classes = [IsAuthenticated, CanReadOrPlaceBooking]
     serializer_class = BookingSerializer
 
@@ -212,7 +213,9 @@ class BookingListCreateView(generics.ListCreateAPIView):
             ownership=brand.ownership,
             return_terms=brand.return_terms,
             source_file_id=data.get("source_file_id"),
-            created_by=request.user,
+            # IsAuthenticated (via CanReadOrPlaceBooking) guarantees a real
+            # user, never AnonymousUser.
+            created_by=cast(User, request.user),
         )
         est = 0
         # A booking can span several stores: each line may name its own destination
@@ -248,7 +251,7 @@ class BookingListCreateView(generics.ListCreateAPIView):
         return Response(BookingSerializer(booking).data, status=status.HTTP_201_CREATED)
 
 
-class BookingDetailView(generics.RetrieveAPIView):
+class BookingDetailView(generics.RetrieveAPIView[Booking]):
     permission_classes = [IsAuthenticated, CanReadBooking]
     serializer_class = BookingSerializer
     queryset = Booking.objects.select_related(

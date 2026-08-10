@@ -99,7 +99,7 @@ class InvoiceDraftView(APIView):
         return Response(result)
 
 
-def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | None]:
+def _resolve_receiving_store(data: dict[str, Any], user: Any) -> tuple[Any, Response | None]:
     """Validate the target store + fail-closed scope check. Returns (store, error)."""
     store_id = data.get("store_id") or data.get("store")
     if not store_id:
@@ -117,7 +117,7 @@ def _ensure_grn_series(store: Store) -> None:
     )
 
 
-def _resolve_kind(data: dict, store: Store) -> tuple[Any, Response | None]:
+def _resolve_kind(data: dict[str, Any], store: Store) -> tuple[Any, Response | None]:
     """Validate the branded/non-branded discriminator + its fail-closed location rule:
     non-branded goods are received only at a warehouse (any warehouse — no hardcode)."""
     kind = data.get("kind", Grn.Kind.BRANDED)
@@ -130,7 +130,7 @@ def _resolve_kind(data: dict, store: Store) -> tuple[Any, Response | None]:
     return kind, None
 
 
-def _build_grn(data: dict, store: Any, booking: Any, kind: str, user: Any) -> Grn:
+def _build_grn(data: dict[str, Any], store: Any, booking: Any, kind: str, user: Any) -> Grn:
     """Create the GRN as a DRAFT (no number yet); `post()` mints it after lines land."""
     received_at = (
         Grn.ReceivedAt.WAREHOUSE
@@ -152,13 +152,13 @@ def _build_grn(data: dict, store: Any, booking: Any, kind: str, user: Any) -> Gr
     )
 
 
-def _grn_quantities(raw: dict) -> tuple[int, int]:
+def _grn_quantities(raw: dict[str, Any]) -> tuple[int, int]:
     return _safe_int(raw.get("received_qty") or raw.get("quantity")), _safe_int(
         raw.get("damaged_qty")
     )
 
 
-def _booking_line_from_payload(raw: dict, booking: Any) -> BookingLine | None:
+def _booking_line_from_payload(raw: dict[str, Any], booking: Any) -> BookingLine | None:
     """Resolve the referenced booking line — only ever within *this* GRN's booking,
     so a payload can never link/mutate another booking's line."""
     bl_id = raw.get("booking_line_id") or raw.get("booking_line")
@@ -167,11 +167,11 @@ def _booking_line_from_payload(raw: dict, booking: Any) -> BookingLine | None:
     return BookingLine.objects.filter(pk=bl_id, booking=booking).first()
 
 
-def _line_is_variance(raw: dict, booking_line: BookingLine | None, booking: Any) -> bool:
+def _line_is_variance(raw: dict[str, Any], booking_line: BookingLine | None, booking: Any) -> bool:
     return bool(raw.get("is_variance")) or (booking_line is None and booking is not None)
 
 
-def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
+def _add_grn_line(grn: Grn, raw: dict[str, Any], booking: Any) -> None:
     qty, damaged_qty = _grn_quantities(raw)
     if qty <= 0 and damaged_qty <= 0:
         return  # empty row (no received & no damaged units) — intentionally skipped
@@ -193,7 +193,7 @@ def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
         bl.save(update_fields=["received_qty", "updated_at"])
 
 
-def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
+def _resolve_booking(data: dict[str, Any], user: Any) -> tuple[Any, Response | None]:
     """Fetch the optional booking and fail-closed scope-check it (ADR-0003): a
     store-scoped user may only receive against a booking bound to one of their stores."""
     booking_id = data.get("booking_id") or data.get("booking")
@@ -242,7 +242,7 @@ def _booking_touches_stores(booking: Any, ids: list[int]) -> bool:
 GRN_SEARCH_FIELDS = ("doc_number", "vendor__name", "booking__brand__name")
 
 
-class GrnListCreateView(generics.ListCreateAPIView):
+class GrnListCreateView(generics.ListCreateAPIView[Grn]):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
 
@@ -283,7 +283,7 @@ class GrnListCreateView(generics.ListCreateAPIView):
         return Response(GrnSerializer(grn).data, status=status.HTTP_201_CREATED)
 
 
-class GrnDetailView(generics.RetrieveAPIView):
+class GrnDetailView(generics.RetrieveAPIView[Grn]):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
 

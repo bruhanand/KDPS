@@ -10,7 +10,7 @@ All amounts are integer paise. Debit is positive, credit is negative.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -19,7 +19,12 @@ from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
 from core.posting import PostingRef, assert_pt_or_vflip_actor, cr, dr, post_entries
 from masters.ownership import brand_is_owned
-from outbound.costing import OutboundPostingError, book_unit_cost
+
+# Re-exported on purpose (see ``outbound.costing``'s module note): for a caller,
+# the error still belongs to posting. The `as` spelling is what makes that a
+# deliberate re-export rather than an incidental import.
+from outbound.costing import OutboundPostingError as OutboundPostingError
+from outbound.costing import book_unit_cost
 from outbound.maker_checker import request_document_approval, require_approved
 from stockledger.models import (
     MERCH_DIM_FIELDS,
@@ -32,6 +37,7 @@ from stockledger.models import (
 
 if TYPE_CHECKING:
     from accounts.models import User
+    from masters.models import Gstin, Store
     from outbound.models import (
         MarkDamaged,
         ReturnToVendor,
@@ -67,7 +73,7 @@ def _check_stock(store_id: int, sku_code: str, required_qty: int) -> None:
         )
 
 
-def _line_amount(line, qty: int, doc_number: str) -> int:
+def _line_amount(line: Any, qty: int, doc_number: str) -> int:
     """Value one leg of a stock movement — qty × the line's frozen unit cost.
 
     Refuses a line the books never priced (#103). Not an exception to
@@ -89,14 +95,14 @@ def _line_amount(line, qty: int, doc_number: str) -> int:
 
 def _write_stock_entry(
     *,
-    store,
-    gstin,
-    line,
+    store: Store,
+    gstin: Gstin,
+    line: Any,
     qty: int,
     kind: str,
     doc_number: str,
     line_no: int,
-    posted_by=None,
+    posted_by: Any = None,
 ) -> StockLedgerEntry:
     """Create a single stock ledger entry and update StockOnHand."""
     amount_paise = _line_amount(line, qty, doc_number)
@@ -194,11 +200,11 @@ def _validate_scans(scans: dict[str, int], allowed: set[str] | None, context: st
 def _write_transit_entry(
     *,
     transfer: StoreTransfer,
-    line,
+    line: Any,
     qty: int,
     kind: str,
     line_no: int,
-    posted_by=None,
+    posted_by: Any = None,
 ) -> StockLedgerEntry:
     """One in-transit ledger leg + the InTransitStock projection update.
 
@@ -206,7 +212,12 @@ def _write_transit_entry(
     the receiver scans in) and deliberately do NOT touch StockOnHand — the
     bucket lives in InTransitStock, keyed to the transfer's doc number.
     """
-    amount_paise = _line_amount(line, qty, transfer.doc_number)
+    # ``Document.doc_number`` is NULL only while a document is a draft: `post()`
+    # mints it, and a DB check constraint refuses a posted row without one. Every
+    # read of it in this module happens after the document has posted, so the
+    # Optional on the field is a fact about drafts, not about the value here —
+    # which is what the casts below say, throughout.
+    amount_paise = _line_amount(line, qty, cast(str, transfer.doc_number))
     entry = StockLedgerEntry.objects.create(
         store=transfer.source_store,
         gstin=transfer.source_store.gstin,
@@ -215,12 +226,12 @@ def _write_transit_entry(
         qty=qty,
         amount=amount_paise,
         kind=kind,
-        doc_number=transfer.doc_number,
+        doc_number=cast(str, transfer.doc_number),
         line_no=line_no,
         posted_by=posted_by,
     )
     bucket, _ = InTransitStock.objects.get_or_create(
-        transfer_doc_number=transfer.doc_number,
+        transfer_doc_number=cast(str, transfer.doc_number),
         sku_code=line.sku_code,
         defaults={
             "source_store": transfer.source_store,
@@ -342,7 +353,7 @@ def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     return resolve_line_identity(store_id, barcode)
 
 
-def _generate_transfer_pt(transfer: StoreTransfer, user=None) -> None:
+def _generate_transfer_pt(transfer: StoreTransfer, user: Any = None) -> None:
     """Freeze the transfer's PT onto it, inside the dispatch transaction (#72).
 
     Every transfer generates one — never conditionally, never on request — so
@@ -362,7 +373,7 @@ def _generate_transfer_pt(transfer: StoreTransfer, user=None) -> None:
 
 @transaction.atomic
 def post_transfer_dispatch(
-    transfer: StoreTransfer, scans: dict[str, int], user=None
+    transfer: StoreTransfer, scans: dict[str, int], user: Any = None
 ) -> list[StockLedgerEntry]:
     """Post the dispatch side from scanned quantities only.
 
@@ -457,7 +468,7 @@ def post_transfer_dispatch(
                 line=line,
                 qty=-line.qty_dispatched,
                 kind="transfer_out",
-                doc_number=transfer.doc_number,
+                doc_number=cast(str, transfer.doc_number),
                 line_no=LINE_NO_TRANSFER_OUT + i,
                 posted_by=user,
             )
@@ -479,7 +490,7 @@ def post_transfer_dispatch(
     return entries
 
 
-def _bill_partner_store(transfer: StoreTransfer, user=None) -> None:
+def _bill_partner_store(transfer: StoreTransfer, user: Any = None) -> None:
     """The other half of partner billing: raising the receivable, if the
     chain-wide `BillingPolicy` dial says to.
 
@@ -497,7 +508,7 @@ def _bill_partner_store(transfer: StoreTransfer, user=None) -> None:
 
     doc_ref = PostingRef(
         doc_type="STO",
-        doc_number=transfer.doc_number,
+        doc_number=cast(str, transfer.doc_number),
         store=transfer.destination_store,
         gstin=transfer.destination_store.gstin,
         posted_by=user,
@@ -586,7 +597,7 @@ def _validate_receive(
 def post_transfer_receipt(
     transfer: StoreTransfer,
     scans: dict[str, int],
-    user=None,
+    user: Any = None,
     *,
     damaged: dict[str, int] | None = None,
     extras: dict[str, int] | None = None,
@@ -695,7 +706,7 @@ def post_transfer_receipt(
                 line=line,
                 qty=arrived,
                 kind="transfer_in",
-                doc_number=transfer.doc_number,
+                doc_number=cast(str, transfer.doc_number),
                 line_no=LINE_NO_TRANSFER_IN + i,
                 posted_by=user,
             )
@@ -768,7 +779,7 @@ def _post_receive_extras(
     transfer: StoreTransfer,
     extras: dict[str, int],
     exceptions: list[TransferReceiptException],
-    user=None,
+    user: Any = None,
 ) -> list[StockLedgerEntry]:
     """Bring the extras in — the priceable ones as stock, all of them on the record.
 
@@ -798,7 +809,7 @@ def _post_receive_extras(
                 qty=qty,
                 note=note,
                 **{k: v for k, v in identity.items() if k != "unit_cost_paise"},
-                unit_cost_paise=identity["unit_cost_paise"],
+                unit_cost_paise=cast(int, identity["unit_cost_paise"]),
             )
         )
         if int(identity["unit_cost_paise"]) <= 0 or owned is None:
@@ -811,7 +822,7 @@ def _post_receive_extras(
                 line=line,
                 qty=qty,
                 kind="transfer_in",
-                doc_number=transfer.doc_number,
+                doc_number=cast(str, transfer.doc_number),
                 line_no=LINE_NO_EXTRA_IN + i,
                 posted_by=user,
             )
@@ -820,7 +831,7 @@ def _post_receive_extras(
 
     ref = PostingRef(
         doc_type="STO",
-        doc_number=transfer.doc_number,
+        doc_number=cast(str, transfer.doc_number),
         store=dest,
         gstin=dest.gstin,
         posted_by=user,
@@ -1010,7 +1021,7 @@ def build_gap_closure_lines(closure: TransferGapClosure) -> list[TransferGapClos
 
 @transaction.atomic
 def raise_gap_closure(
-    transfer: StoreTransfer, *, reason: str, note: str = "", user=None
+    transfer: StoreTransfer, *, reason: str, note: str = "", user: Any = None
 ) -> TransferGapClosure:
     """Raise the closure for a transfer's gap and put it in the approvals inbox.
 
@@ -1147,7 +1158,7 @@ def _refuse_stale_gap(closure: TransferGapClosure, lines: list[Any]) -> None:
 
 
 @transaction.atomic
-def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedgerEntry]:
+def post_gap_closure(closure: TransferGapClosure, user: Any = None) -> list[StockLedgerEntry]:
     """Post a gap closure: drain the in-transit remainder, per the stated reason.
 
     Refuses unless a second, senior person has approved it (``require_approved``)
@@ -1221,7 +1232,7 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
                 line=line,
                 qty=line.qty,
                 kind="transfer_in",
-                doc_number=closure.doc_number,
+                doc_number=cast(str, closure.doc_number),
                 line_no=i,
                 posted_by=user,
             )
@@ -1229,7 +1240,7 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
 
     ref = PostingRef(
         doc_type="GAP",
-        doc_number=closure.doc_number,
+        doc_number=cast(str, closure.doc_number),
         store=transfer.source_store,
         gstin=transfer.source_store.gstin,
         posted_by=user,
@@ -1305,14 +1316,14 @@ def _check_quarantine(store_id: int, sku_code: str, required_qty: int) -> None:
 
 def _write_quarantine_entry(
     *,
-    store,
-    gstin,
-    line,
+    store: Store,
+    gstin: Gstin,
+    line: Any,
     qty: int,
     doc_number: str,
     line_no: int,
     kind: str = StockLedgerEntry.Kind.QUARANTINE_IN,
-    posted_by=None,
+    posted_by: Any = None,
 ) -> StockLedgerEntry:
     """One quarantine ledger leg + the QuarantineStock projection update.
 
@@ -1367,7 +1378,9 @@ def _write_quarantine_entry(
 
 
 @transaction.atomic
-def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> MarkDamaged:
+def mark_damaged(
+    store: Store, scans: dict[str, int], user: Any = None, note: str = ""
+) -> MarkDamaged:
     """The global mark-damaged action, end to end (Rule 1 — every event is a
     document): create a DMG document and enrich each scanned piece from the
     store's stock (dims + frozen cost, never typed).
@@ -1414,7 +1427,7 @@ def confirm_mark_damaged(mark: MarkDamaged, *, actor: User | None) -> None:
 
 
 @transaction.atomic
-def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
+def post_mark_damaged(mark: MarkDamaged, user: Any = None) -> list[StockLedgerEntry]:
     """Post a mark-damaged document: move each line's pieces from free-to-sell
     into quarantine at the store.
 
@@ -1450,7 +1463,7 @@ def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
                 line=line,
                 qty=-line.qty,
                 kind=StockLedgerEntry.Kind.DAMAGE_OUT,
-                doc_number=mark.doc_number,
+                doc_number=cast(str, mark.doc_number),
                 line_no=LINE_NO_DAMAGE_OUT + i,
                 posted_by=user,
             )
@@ -1462,7 +1475,7 @@ def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
                 gstin=mark.store.gstin,
                 line=line,
                 qty=line.qty,
-                doc_number=mark.doc_number,
+                doc_number=cast(str, mark.doc_number),
                 line_no=LINE_NO_QUARANTINE_IN + i,
                 posted_by=user,
             )
@@ -1599,7 +1612,7 @@ def raise_return_to_brand(
 
 
 @transaction.atomic
-def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
+def post_rtv(rtv: ReturnToVendor, user: Any = None) -> list[StockLedgerEntry]:
     """Post an RTV: stock exits its bucket, GL posts for owned stock only.
 
     - Owned (Outright/Correction): Dr VENDOR_PAYABLE / Cr INVENTORY
@@ -1653,7 +1666,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
                 line=line,
                 qty=-line.qty,
                 kind=StockLedgerEntry.Kind.QUARANTINE_OUT,
-                doc_number=rtv.doc_number,
+                doc_number=cast(str, rtv.doc_number),
                 line_no=LINE_NO_QUARANTINE_RETURN + i,
                 posted_by=user,
             )
@@ -1664,7 +1677,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
                 line=line,
                 qty=-line.qty,
                 kind=StockLedgerEntry.Kind.SEASONAL_RET,
-                doc_number=rtv.doc_number,
+                doc_number=cast(str, rtv.doc_number),
                 line_no=LINE_NO_RETURN_OUT + i,
                 posted_by=user,
             )
@@ -1687,7 +1700,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
     if is_owned and total_value_paise > 0:
         doc_ref = PostingRef(
             doc_type="RTV",
-            doc_number=rtv.doc_number,
+            doc_number=cast(str, rtv.doc_number),
             store=rtv.store,
             gstin=rtv.store.gstin,
             posted_by=user,
@@ -1722,7 +1735,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
             -total_value_paise,
             f"RTV {rtv.return_type}: credit for {rtv.doc_number}",
             user,
-            reference=rtv.doc_number,
+            reference=cast(str, rtv.doc_number),
             gl=False,
         )
 
@@ -1735,7 +1748,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
 
 
 @transaction.atomic
-def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
+def post_adjustment(adj: StockAdjustment, user: Any = None) -> list[StockLedgerEntry]:
     """Post a stock adjustment: +/− qty at frozen cost.
 
     GL: Dr/Cr INVENTORY vs Cr/Dr SUSPENSE.
@@ -1766,7 +1779,7 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
             line=line,
             qty=line.adj_qty,
             kind="adjustment",
-            doc_number=adj.doc_number,
+            doc_number=cast(str, adj.doc_number),
             line_no=i,
             posted_by=user,
         )
@@ -1777,7 +1790,7 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
     if total_debit_paise != 0:
         doc_ref = PostingRef(
             doc_type="ADJ",
-            doc_number=adj.doc_number,
+            doc_number=cast(str, adj.doc_number),
             store=adj.store,
             gstin=adj.store.gstin,
             posted_by=user,
@@ -1807,7 +1820,7 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
 
 
 @transaction.atomic
-def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
+def post_writeoff(wo: WriteOff, user: Any = None) -> list[StockLedgerEntry]:
     """Post a write-off: stock exits, loss booked.
 
     GL: Dr SUSPENSE (loss) / Cr INVENTORY.
@@ -1833,7 +1846,7 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
             line=line,
             qty=-line.qty,
             kind="write_off",
-            doc_number=wo.doc_number,
+            doc_number=cast(str, wo.doc_number),
             line_no=i,
             posted_by=user,
         )
@@ -1843,7 +1856,7 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
     if total_value_paise > 0:
         doc_ref = PostingRef(
             doc_type="WRO",
-            doc_number=wo.doc_number,
+            doc_number=cast(str, wo.doc_number),
             store=wo.store,
             gstin=wo.store.gstin,
             posted_by=user,
@@ -1981,7 +1994,7 @@ def close_stock_request(
 
 
 @transaction.atomic
-def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
+def post_vflip(vflip: VFlip, user: Any = None) -> list[StockLedgerEntry]:
     """Post a V-flip: ownership changes, stock stays.
 
     GL: reverse SOR pair, book as owned.
@@ -2016,7 +2029,7 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
             line=line,
             qty=-line.qty,
             kind="vflip_out",
-            doc_number=vflip.doc_number,
+            doc_number=cast(str, vflip.doc_number),
             line_no=i,
             posted_by=user,
         )
@@ -2027,7 +2040,15 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
         v_brand_name = f"V {original_brand_name}"
 
         class _VLine:
-            pass
+            sku_code: str
+            design: str
+            color: str
+            size: str
+            brand: str
+            season: str
+            item: str
+            hsn: str
+            unit_cost_paise: int
 
         vline = _VLine()
         vline.sku_code = line.sku_code
@@ -2046,7 +2067,7 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
             line=vline,
             qty=line.qty,
             kind="vflip_in",
-            doc_number=vflip.doc_number,
+            doc_number=cast(str, vflip.doc_number),
             line_no=1000 + i,
             posted_by=user,
         )
@@ -2057,7 +2078,7 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
     if total_value_paise > 0:
         doc_ref = PostingRef(
             doc_type="VFL",
-            doc_number=vflip.doc_number,
+            doc_number=cast(str, vflip.doc_number),
             store=vflip.store,
             gstin=vflip.store.gstin,
             posted_by=user,

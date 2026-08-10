@@ -126,7 +126,7 @@ class _PreparedLine:
 
     @property
     def is_return(self) -> bool:
-        return self.payload["direction"] == SaleLine.Direction.RETURN
+        return bool(self.payload["direction"] == SaleLine.Direction.RETURN)
 
     @property
     def value_paise(self) -> int:

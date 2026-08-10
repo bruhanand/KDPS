@@ -95,8 +95,15 @@ Fix as one piece of work if possible; the failures interlock:
 - **Still open, and the one thing a human must do:** `main` has **no branch protection and no rulesets at all** (verified 7 Aug).
   Until the `ci` check is required on `main`, all of the above is advisory.
   Apply it only *after* the rebuilt workflow is merged to `main`, or `main` deadlocks waiting for a check that does not exist there yet.
-- One gate hole remains, on **#292**: `mypy` covers only `core config`; every other app is untyped as far as CI is concerned.
-  (The other half of #292 is closed: the `frontend` job now runs vitest. Those 850 tests had in fact *never* been runnable in CI - they read `navigator.onLine`, a global that only exists from Node 21, and the job asked for Node 20. CI now runs Node 22.)
+- ~~One gate hole remains, on **#292**: `mypy` covers only `core config`; every other app is untyped as far as CI is concerned.~~ **Closed 10 Aug.**
+  (The other half of #292 was already closed: the `frontend` job now runs vitest. Those 850 tests had in fact *never* been runnable in CI - they read `navigator.onLine`, a global that only exists from Node 21, and the job asked for Node 20. CI now runs Node 22.)
+  The gate is now **`mypy .`** - the whole backend, with the exclusions named in `pyproject.toml` - rather than a list of apps, so a newly added app cannot arrive untyped behind a green check.
+  Widening it first reported **1205 errors across 89 files**, which turned out to be mostly three configuration faults rather than 1205 defects, all three invisible while the gate sat on two modules:
+  the DRF stubs package was never installed, so every `rest_framework` name was `Any` and strict's `disallow_subclassing_any` fired on all 252 views and serializers;
+  `DocumentManager` was pinned to the *abstract* `Document`, so every concrete document's `.objects` answered for the base class rather than its own table;
+  and `MoneyField` typed **every** money column `int | None` though only 5 of 49 are nullable, which made arithmetic on money a type error everywhere and is why the money paths were the least checked part of the system.
+  Fixing those three took it to 595 with nothing suppressed; the rest was a mechanical tail.
+  **Worth remembering:** the widening nearly introduced a runtime crash that no type checker would catch - `admin.ModelAdmin` is not subscriptable at runtime, so `ModelAdmin[Foo]` as a real base class raises `TypeError` and kills admin autodiscover at import. `django.setup()` triggers autodiscover, so the existing suite does catch it, but only if somebody runs it.
 - **#192 - The generated API client is about a thousand lines out of date.** Regenerate, diff-review, and add a CI drift check so it cannot silently rot again.
 
 ### 0.7 Declared-standard polish

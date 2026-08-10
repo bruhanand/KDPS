@@ -16,7 +16,10 @@ from alerts.models import Alert, AlertPolicy
 
 
 @admin.register(AlertPolicy)
-class AlertPolicyAdmin(admin.ModelAdmin):
+# `ModelAdmin` is generic to django-stubs but not subscriptable at runtime here
+# (same gap as `core.money.MoneyField`'s base) - subscripting it crashes Django's
+# admin autodiscover, so the generic arg is left off rather than "fixed".
+class AlertPolicyAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("kind", "thresholds_days")
     readonly_fields = ("created_at", "updated_at")
 
@@ -28,7 +31,8 @@ class AlertPolicyAdmin(admin.ModelAdmin):
 
 
 @admin.register(Alert)
-class AlertAdmin(admin.ModelAdmin):
+# See the type-ignore note on `AlertPolicyAdmin` above.
+class AlertAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("kind_label", "title", "status", "store", "due_date", "created_at")
     list_filter = ("kind", "status")
     search_fields = ("title",)

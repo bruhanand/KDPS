@@ -163,7 +163,11 @@ def generate_recommendations(season_code: str) -> int:
         )
         floor = _margin_floor_pct(design, color, brand_name, season_code)
         capped = floor is not None and ladder_pct > floor
-        recommended = max(Decimal("0"), min(ladder_pct, floor)) if capped else ladder_pct
+        recommended = (
+            max(Decimal("0"), min(ladder_pct, floor))
+            if capped and floor is not None
+            else ladder_pct
+        )
 
         existing = EossRecommendation.objects.filter(
             season=season, brand=brand, design=design, color=color

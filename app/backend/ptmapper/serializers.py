@@ -5,13 +5,13 @@ from rest_framework import serializers
 from ptmapper.models import LookupProposal, PtFile, PtRow, ReviewItem
 
 
-class PtRowSerializer(serializers.ModelSerializer):
+class PtRowSerializer(serializers.ModelSerializer[PtRow]):
     class Meta:
         model = PtRow
         fields = ["id", "line_no", "data", "blanks", "provenance", "raw"]
 
 
-class ReviewItemSerializer(serializers.ModelSerializer):
+class ReviewItemSerializer(serializers.ModelSerializer[ReviewItem]):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -29,7 +29,7 @@ class ReviewItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class LookupProposalSerializer(serializers.ModelSerializer):
+class LookupProposalSerializer(serializers.ModelSerializer[LookupProposal]):
     origin_label = serializers.CharField(source="get_origin_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     proposed_by_name = serializers.CharField(
@@ -66,7 +66,7 @@ class LookupProposalSerializer(serializers.ModelSerializer):
         return obj.brand or "GLOBAL"
 
 
-class PtFileListSerializer(serializers.ModelSerializer):
+class PtFileListSerializer(serializers.ModelSerializer[PtFile]):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     stage = serializers.ReadOnlyField()
     stage_label = serializers.ReadOnlyField()

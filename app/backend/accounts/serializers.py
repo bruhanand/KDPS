@@ -21,7 +21,7 @@ from masters.scoping import BRAND_SCOPE, scoped_brands, scoped_stores, visible_s
 _T = TypeVar("_T")
 
 
-class RoleSerializer(serializers.ModelSerializer):
+class RoleSerializer(serializers.ModelSerializer[Role]):
     class Meta:
         model = Role
         fields = [
@@ -36,7 +36,7 @@ class RoleSerializer(serializers.ModelSerializer):
         ]
 
 
-class AdminRoleSerializer(serializers.ModelSerializer):
+class AdminRoleSerializer(serializers.ModelSerializer[Role]):
     user_count = serializers.IntegerField(source="users.count", read_only=True)
 
     class Meta:
@@ -105,7 +105,7 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ActorPolicySerializer(serializers.ModelSerializer):
+class ActorPolicySerializer(serializers.ModelSerializer[ActorPolicy]):
     class Meta:
         model = ActorPolicy
         fields = ["id", "action", "label", "description", "roles"]
@@ -131,8 +131,12 @@ class ActorPolicySerializer(serializers.ModelSerializer):
         return sorted(set(value))
 
 
-class ApprovalPolicyAdminSerializer(serializers.ModelSerializer):
-    label = serializers.CharField(read_only=True)
+class ApprovalPolicyAdminSerializer(serializers.ModelSerializer[ApprovalPolicy]):
+    # DRF's Field base class also carries a `label` attribute (the form label),
+    # typed `str | _StrPromise | None` in the stubs; declaring a same-named
+    # serializer field is a normal DRF pattern the stubs don't model, so the
+    # assignment looks like a type clash that isn't one at runtime.
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
 
     class Meta:
         model = ApprovalPolicy
@@ -155,13 +159,13 @@ class ApprovalPolicyAdminSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class BrandMiniSerializer(serializers.Serializer):
+class BrandMiniSerializer(serializers.Serializer[Brand]):
     id = serializers.IntegerField()
     code = serializers.CharField()
     name = serializers.CharField()
 
 
-class StoreMiniSerializer(serializers.Serializer):
+class StoreMiniSerializer(serializers.Serializer[Store]):
     id = serializers.IntegerField()
     code = serializers.CharField()
     name = serializers.CharField()
@@ -171,7 +175,7 @@ class StoreMiniSerializer(serializers.Serializer):
     gstin_number = serializers.CharField(source="gstin.gstin")
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
+class UserProfileSerializer(serializers.ModelSerializer[User]):
     role = RoleSerializer(read_only=True)
     nav_groups = serializers.SerializerMethodField()
     landing_page = serializers.SerializerMethodField()
@@ -253,7 +257,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_stores(self, obj: User) -> list[dict[str, Any]]:
         return self._cached(
-            obj, "stores", lambda: StoreMiniSerializer(scoped_stores(obj), many=True).data
+            obj, "stores", lambda: list(StoreMiniSerializer(scoped_stores(obj), many=True).data)
         )
 
     def get_sections(self, obj: User) -> list[dict[str, Any]]:
@@ -293,7 +297,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return list(BrandMiniSerializer(scoped_brands(obj), many=True).data)
 
 
-class AdminUserSerializer(serializers.ModelSerializer):
+class AdminUserSerializer(serializers.ModelSerializer[User]):
     role = RoleSerializer(read_only=True)
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.filter(is_active=True),
@@ -404,6 +408,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs: Any) -> Any:
-        data = super().validate(attrs)
+        data: dict[str, Any] = super().validate(attrs)
         data["user"] = UserProfileSerializer(self.user).data
         return data

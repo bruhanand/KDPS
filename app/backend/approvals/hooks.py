@@ -20,7 +20,14 @@ from typing import Any, Protocol
 class OnApproved(Protocol):
     """What a registered callback is handed: the document, and who decided."""
 
-    def __call__(self, subject: Any, *, actor: Any) -> None: ...
+    # `subject` is positional-only (the `/`), because `run_on_approved` below
+    # passes it positionally and every registered callback names it after its
+    # own document - `offer`, `booking`, `mark`, `change`. Without the `/` the
+    # protocol promises a *keyword* named `subject` that no implementation has,
+    # so each registration failed to type-check and was being silenced with its
+    # own `# type: ignore[arg-type]`. The name is ours to choose here, not a
+    # promise to callers.
+    def __call__(self, subject: Any, /, *, actor: Any) -> None: ...
 
 
 _ON_APPROVED: dict[type, OnApproved] = {}

@@ -10,14 +10,17 @@ industry norm); the ladder/target curve itself needs `manage`, the same rung
 from __future__ import annotations
 
 from datetime import date
+from typing import Any, cast
 
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import Serializer
 from rest_framework.views import APIView
 
+from accounts.models import User
 from accounts.permissions import require_section
 from accounts.sections import CAP_APPROVE, CAP_VIEW
 from core.refusals import first_message, refusal_body
@@ -92,10 +95,13 @@ class EossRecommendationDecisionView(APIView):
         if rec.status != EossRecommendation.Status.PENDING:
             return _bad_request(f"This recommendation was already {rec.status}.")
 
+        # IsAuthenticated above guarantees a real user, never AnonymousUser.
+        user = cast(User, request.user)
+
         action = str(request.data.get("action") or "")
         if action == "reject":
             rec.status = EossRecommendation.Status.REJECTED
-            rec.decided_by = request.user
+            rec.decided_by = user
             rec.decided_at = timezone.now()
             rec.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
             return Response(EossRecommendationSerializer(rec).data)
@@ -125,12 +131,12 @@ class EossRecommendationDecisionView(APIView):
             store_scope={"kind": "all", "stores": stores},
             starts_on=date.today(),
             status=Offer.Status.APPROVED,
-            approved_by=request.user,
-            created_by=request.user,
+            approved_by=user,
+            created_by=user,
         )
         rec.status = EossRecommendation.Status.APPROVED
         rec.decided_discount_pct = pct
-        rec.decided_by = request.user
+        rec.decided_by = user
         rec.decided_at = timezone.now()
         rec.offer = offer
         rec.save(
@@ -196,7 +202,7 @@ class EossConfigView(APIView):
         ladder_rows = []
         for i, raw in enumerate(ladder_in, start=1):
             data = {**raw, "brand": brand_code, "step_no": raw.get("step_no", i)}
-            serializer = EossLadderStepSerializer(data=data)
+            serializer: Serializer[Any] = EossLadderStepSerializer(data=data)
             if not serializer.is_valid():
                 return _bad_request(f"ladder[{i - 1}]: {first_message(serializer.errors)}")
             row = dict(serializer.validated_data)

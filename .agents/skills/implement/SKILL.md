@@ -47,4 +47,4 @@ Push the branch and open a PR against `main`. The push alone triggers cloud CI (
 PR body: what changed in plain language, review findings and what was fixed, QA flows driven with screenshot paths, deliberate deviations, anything a human must check by hand.
 Comment the same summary on the issue and stop - the PR stays open, the issue stays open, nothing merges, nothing deploys.
 
-Cloud CI is lighter than the full local `npm run ci` (it skips ruff, mypy strict, import-linter, and the migration check) - that trade is deliberate, for speed. Run `npm run ci` yourself only if you want the stricter local gate; it is not part of this flow.
+Cloud CI runs the same gate as local `npm run ci` - ruff format and check, mypy, import-linter, the migration and drift checks, pytest and the frontend build and unit tests (#292). It is not a lighter subset, so a green run there means what a green run here means. What it does not do is wait for you: it runs on GitHub, in parallel shards, while you carry on.

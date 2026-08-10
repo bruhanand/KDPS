@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -27,13 +28,13 @@ DERIVED = list(CONTROLLED.keys())
 class Command(BaseCommand):
     help = "Audit PT-mapper fill rates across a folder of real brand files."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         repo_root = Path(settings.BASE_DIR).parent.parent
         default = repo_root / "docs" / "data-from-kdps" / "Q&A-req-recieved" / "PT FILE"
         parser.add_argument("--dir", default=str(default))
         parser.add_argument("--misses", type=int, default=20)
 
-    def handle(self, *args, **opts) -> None:
+    def handle(self, *args: Any, **opts: Any) -> None:
         ptdir = Path(opts["dir"])
         if not ptdir.exists():
             self.stderr.write(f"Directory not found: {ptdir}")
@@ -42,10 +43,10 @@ class Command(BaseCommand):
         files = sorted(p for p in ptdir.iterdir() if not p.name.startswith("."))
         total_rows = 0
         filled = {c: 0 for c in DERIVED}
-        prov_by_field: dict[str, Counter] = {c: Counter() for c in DERIVED}
+        prov_by_field: dict[str, Counter[str]] = {c: Counter() for c in DERIVED}
         per_file = []
         per_file_rates: list[dict[str, float]] = []  # each file's per-field fill rate
-        miss_by_dim: dict[str, Counter] = {}
+        miss_by_dim: dict[str, Counter[str]] = {}
 
         for p in files:
             try:

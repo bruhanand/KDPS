@@ -7,6 +7,8 @@ StockOnHand is mutable and updated directly.
 Safe to re-run (idempotent). Prints a summary of all actions taken.
 """
 
+from typing import Any
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -15,7 +17,7 @@ class Command(BaseCommand):
     help = "Cancel polluted RTV id=28 and backfill V-flip brand labels"
 
     @transaction.atomic
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         from core.documents import DocStatus
         from outbound.models import ReturnToVendor, VFlip
         from stockledger.models import StockLedgerEntry, StockOnHand

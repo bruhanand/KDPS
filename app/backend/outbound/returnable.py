@@ -40,7 +40,7 @@ Two things the design corpus left open, decided here and marked so:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -300,7 +300,7 @@ def _priced(store_id: int, holdings: list[Any]) -> dict[str, int]:
     return book_unit_costs(store_id, {row.sku_code: row.season or "" for row in holdings})
 
 
-def _quarantine_rows(qs: Any, arrivals: dict[tuple[int, str], date]):
+def _quarantine_rows(qs: Any, arrivals: dict[tuple[int, str], date]) -> Iterator[PoolRow]:
     """Confirmed-damaged pieces. No window: a defect does not expire, and the
     negotiated 60–120 days is the *commercial* clock on unsold stock."""
     holdings = list(qs.order_by("store__code", "sku_code"))
@@ -335,7 +335,9 @@ def _quarantine_rows(qs: Any, arrivals: dict[tuple[int, str], date]):
         )
 
 
-def _season_end_rows(brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date], today: date):
+def _season_end_rows(
+    brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date], today: date
+) -> Iterator[PoolRow]:
     """Unsold stock going back at season end — offered only inside the window.
 
     A brand with no negotiated window (``return_window_days`` is 0) still shows

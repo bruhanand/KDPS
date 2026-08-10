@@ -8,6 +8,8 @@ archetype does differently (e.g. Ginesys hides colour/size inside CATEGORY3/4).
 
 from __future__ import annotations
 
+from typing import Any
+
 # KDPS target Work Sheet columns, in order.
 KDPS_COLUMNS = [
     "SEASON",
@@ -193,7 +195,7 @@ HEADER_KEYWORDS = {
 }
 
 
-PROFILES = [
+PROFILES: list[dict[str, Any]] = [
     {
         "code": "ginesys_pt_email",
         "name": "Ginesys PT EMAIL (ABFRL distributor)",
@@ -375,7 +377,7 @@ PROFILES = [
     },
 ]
 
-GENERIC_PROFILE = {
+GENERIC_PROFILE: dict[str, Any] = {
     "code": "generic",
     "name": "Generic (header-name auto-map)",
     "archetype": "A",

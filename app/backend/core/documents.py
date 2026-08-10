@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from django.db import connection, models, transaction
 
@@ -311,10 +311,21 @@ class VoucherSeries(models.Model):
         )
 
 
-class DocumentManager(models.Manager["Document"]):
+#: The concrete document a manager is attached to. `DocumentManager` is declared
+#: on the *abstract* base, so without this it would bind to `Document` itself and
+#: every subclass's `.objects` would answer questions about the abstract base
+#: rather than the real table — `Grn.objects.filter(store=…)` reporting "cannot
+#: resolve keyword 'store'; choices are: series". Parameterising it lets the
+#: django-stubs plugin specialise the manager per concrete model, so
+#: `Grn.objects` is a `DocumentManager[Grn]` and `idempotent_create` hands back a
+#: `Grn` rather than `Any`.
+_DocT = TypeVar("_DocT", bound="Document")
+
+
+class DocumentManager(models.Manager[_DocT]):
     """Adds the offline-write dedupe entry point to every concrete document."""
 
-    def idempotent_create(self, *, idempotency_uuid: uuid.UUID, **fields: Any) -> Any:
+    def idempotent_create(self, *, idempotency_uuid: uuid.UUID, **fields: Any) -> _DocT:
         """Create-or-return by `idempotency_uuid`. A retried offline write with
         the same key returns the original document — never a duplicate. The
         unique column makes the create race-safe (a losing insert re-fetches)."""
@@ -342,7 +353,7 @@ class Document(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects: DocumentManager = DocumentManager()
+    objects = DocumentManager()
 
     class Meta:
         abstract = True

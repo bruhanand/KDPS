@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import openpyxl
 from django.conf import settings
@@ -604,7 +605,7 @@ RULE_SEED = [
 ]
 
 
-def cv(val) -> str:
+def cv(val: Any) -> str:
     if val is None:
         return ""
     if isinstance(val, float) and val == int(val):
@@ -640,7 +641,7 @@ def _add_lookup(dim: str, key: str, target: str) -> None:
     )
 
 
-def _load_master_sheet(path: Path) -> list[list]:
+def _load_master_sheet(path: Path) -> list[list[Any]]:
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     ms = wb["Master Sheet"]
     rows = [list(r) for r in ms.iter_rows(values_only=True)]
@@ -648,7 +649,9 @@ def _load_master_sheet(path: Path) -> list[list]:
     return rows
 
 
-def _extract_vocabulary(rows: list[list]) -> tuple[dict[str, set[str]], dict[str, tuple[str, str]]]:
+def _extract_vocabulary(
+    rows: list[list[Any]],
+) -> tuple[dict[str, set[str]], dict[str, tuple[str, str]]]:
     dim_values: dict[str, set[str]] = {d: set() for d in DIM_COLS.values()}
     item_rows: dict[str, tuple[str, str]] = {}
     for r in rows[1:]:
@@ -760,7 +763,7 @@ def _merge_vocabularies(
 class Command(BaseCommand):
     help = "Seed PT-mapper controlled vocabulary + lookup tables from the Master Sheet."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         repo_root = Path(settings.BASE_DIR).parent.parent
         data = repo_root / "docs" / "data-from-kdps"
         # Canonical first (its Master Sheet carries the Excel data-validation
@@ -771,7 +774,7 @@ class Command(BaseCommand):
         )
         parser.add_argument("--extra-path", default=str(data / "KDPS PT FILE SHEET.xlsx"))
 
-    def handle(self, *args, **opts) -> None:
+    def handle(self, *args: Any, **opts: Any) -> None:
         paths = [Path(opts["path"]), Path(opts["extra_path"])]
         sources = []
         for p in paths:

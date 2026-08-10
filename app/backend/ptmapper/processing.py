@@ -33,7 +33,7 @@ def _recompute_derived(row: PtRow, changed_cols: set[str]) -> None:
     row.provenance = new_prov
 
 
-def _sync_review_items(reviews: list[dict]) -> int:
+def _sync_review_items(reviews: list[dict[str, Any]]) -> int:
     """Upsert each engine miss into the review queue; return the open count.
 
     A fresh miss for a raw whose item is already RESOLVED means the earlier
@@ -87,7 +87,9 @@ def _snapshot_manual(pt: PtFile) -> dict[int, dict[str, Any]]:
     return snap
 
 
-def _reapply_manual(pt: PtFile, snapshot: dict[int, dict[str, Any]], blank_cells: int) -> tuple:
+def _reapply_manual(
+    pt: PtFile, snapshot: dict[int, dict[str, Any]], blank_cells: int
+) -> tuple[int, int, int]:
     """Re-stamp the snapshotted manual cells onto the freshly-mapped rows (matched by
     ``line_no``; the engine is deterministic over the same bytes, so line_no is stable).
     Returns ``(blank_cells, applied_count, dropped_count)`` — a cell whose row vanished

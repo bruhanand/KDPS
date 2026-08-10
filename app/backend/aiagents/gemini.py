@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import tempfile
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -66,19 +67,22 @@ def _spool(content: bytes, content_type: str) -> tuple[str, str]:
     return path, mime
 
 
-def _parse_json(text: str) -> dict:
+def _parse_json(text: str) -> dict[str, Any]:
     text = text.strip()
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
     try:
-        return json.loads(text)
+        parsed: dict[str, Any] = json.loads(text)
+        return parsed
     except json.JSONDecodeError:
         m = re.search(r"\{.*\}", text, re.S)
         if m:
-            return json.loads(m.group(0))
+            parsed_from_match: dict[str, Any] = json.loads(m.group(0))
+            return parsed_from_match
         raise
 
 
 async def _ask(system: str, prompt: str, file_path: str, mime: str) -> str:
+    # No stubs/py.typed marker published for emergentintegrations.
     from emergentintegrations.llm.chat import (
         FileContentWithMimeType,
         LlmChat,
@@ -91,10 +95,11 @@ async def _ask(system: str, prompt: str, file_path: str, mime: str) -> str:
         system_message=system,
     ).with_model("gemini", GEMINI_MODEL)
     part = FileContentWithMimeType(file_path=file_path, mime_type=mime)
-    return await chat.send_message(UserMessage(text=prompt, file_contents=[part]))
+    reply: str = await chat.send_message(UserMessage(text=prompt, file_contents=[part]))
+    return reply
 
 
-def extract(content: bytes, content_type: str, system: str, prompt: str) -> dict:
+def extract(content: bytes, content_type: str, system: str, prompt: str) -> dict[str, Any]:
     """Run a Gemini extraction on a document blob, returning parsed JSON.
 
     Raises on API/parse failure so the caller can surface 'upload a clearer

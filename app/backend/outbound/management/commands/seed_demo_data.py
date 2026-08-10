@@ -1347,6 +1347,7 @@ class Command(BaseCommand):
         if approval is not None and approval.status == ApprovalStatus.PENDING:
             decide(approval, actor=ops1, action="approve")
         line = sr4.lines.first()
+        assert line is not None  # the ask above was created with exactly one line
         fulfil_stock_request(
             sr4, [{"line_id": line.id, "qty": line.qty}], user=self.users["wh.ranchi"]
         )
@@ -1364,6 +1365,7 @@ class Command(BaseCommand):
         if approval is not None and approval.status == ApprovalStatus.PENDING:
             decide(approval, actor=ops1, action="approve")
         line = sr5.lines.first()
+        assert line is not None  # the ask above was created with exactly one line
         transfer = fulfil_stock_request(
             sr5, [{"line_id": line.id, "qty": line.qty}], user=self.users["wh.ranchi"]
         )
