@@ -30,11 +30,12 @@ Usage::
 
 from __future__ import annotations
 
+import io
 from datetime import date, timedelta
 from typing import Any
 
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError, OutputWrapper
 from django.db import transaction
 
 from accounts.models import Role, User
@@ -650,49 +651,83 @@ class Command(BaseCommand):
             return
 
         call_command("seed_foundation")
-        self._clean_test_junk()
-        self._ensure_series()
 
-        self.users = {
-            u.username: u
-            for u in User.objects.filter(
-                username__in=[
-                    "superadmin",
-                    "owner",
-                    "ops1",
-                    "accounts1",
-                    "brand1",
-                    "wh.patna",
-                    "wh.ranchi",
-                    "deo.manager",
-                    "deo.cashier",
-                    "bkr.manager",
-                    "bkr.cashier",
-                    "hzb.manager",
-                    "dum.manager",
-                    "banka.manager",
-                ]
-            )
-        }
-        self.stores = {s.code: s for s in Store.objects.all()}
-        self.vendors = {v.code: v for v in Vendor.objects.all()}
-        self.brands = {b.name: b for b in Brand.objects.all()}
-        self.seasons = {s.code: s for s in Season.objects.all()}
+        # Every progress line below is held back until the whole run has
+        # succeeded. The command is one atomic transaction - if a later step
+        # fails, every line already printed would claim progress the rollback
+        # just undid (#251/#252/#256: a traceback a dozen lines in, nothing on
+        # screen saying the stock those lines described was gone again). A
+        # failure below prints nothing but the one sentence naming what broke;
+        # success flushes every buffered line, unchanged from before.
+        buffer = io.StringIO()
+        real_stdout, self.stdout = self.stdout, OutputWrapper(buffer)
+        current_step = "cleaning test junk"
+        try:
+            self._clean_test_junk()
+            current_step = "ensuring voucher series"
+            self._ensure_series()
 
-        self._seed_inbound()
-        self._seed_open_and_booked_orders()
-        self._seed_transfers()
-        self._seed_damage()
-        self._seed_rtvs()
-        self._seed_adjustments()
-        self._seed_vflip()
-        self._seed_stocktakes()
-        self._seed_stock_requests()
-        self._seed_writeoffs()
-        self._seed_money()
-        self._seed_offers()
-        self._seed_customers()
-        call_command("check_alerts")
+            current_step = "loading seed users and masters"
+            self.users = {
+                u.username: u
+                for u in User.objects.filter(
+                    username__in=[
+                        "superadmin",
+                        "owner",
+                        "ops1",
+                        "accounts1",
+                        "brand1",
+                        "wh.patna",
+                        "wh.ranchi",
+                        "deo.manager",
+                        "deo.cashier",
+                        "bkr.manager",
+                        "bkr.cashier",
+                        "hzb.manager",
+                        "dum.manager",
+                        "banka.manager",
+                    ]
+                )
+            }
+            self.stores = {s.code: s for s in Store.objects.all()}
+            self.vendors = {v.code: v for v in Vendor.objects.all()}
+            self.brands = {b.name: b for b in Brand.objects.all()}
+            self.seasons = {s.code: s for s in Season.objects.all()}
+
+            current_step = "inbound receipts"
+            self._seed_inbound()
+            current_step = "the open/booked order"
+            self._seed_open_and_booked_orders()
+            current_step = "transfers"
+            self._seed_transfers()
+            current_step = "damage flags"
+            self._seed_damage()
+            current_step = "RTVs"
+            self._seed_rtvs()
+            current_step = "adjustments"
+            self._seed_adjustments()
+            current_step = "the V-flip"
+            self._seed_vflip()
+            current_step = "stocktakes"
+            self._seed_stocktakes()
+            current_step = "stock requests"
+            self._seed_stock_requests()
+            current_step = "write-offs"
+            self._seed_writeoffs()
+            current_step = "money movements"
+            self._seed_money()
+            current_step = "offers"
+            self._seed_offers()
+            current_step = "customers"
+            self._seed_customers()
+            current_step = "alerts"
+            call_command("check_alerts")
+        except Exception as exc:
+            self.stdout = real_stdout
+            raise CommandError(f"Demo seed failed while seeding {current_step}: {exc}") from exc
+
+        self.stdout = real_stdout
+        self.stdout.write(buffer.getvalue(), ending="")
 
         self.stdout.write(self.style.SUCCESS("\nDemo data seeded across all modules."))
         self.stdout.write("  Verify: GET /api/stockledger/on-hand, /api/finledger/health")
@@ -1103,7 +1138,7 @@ class Command(BaseCommand):
             notes=f"{SEED_TAG}: stitching defects reported at billing",
             created_by=ops1,
         )
-        self._rtv_line(rtv1, deo, "PE-CHK-BLU-42", 2)
+        self._rtv_line(rtv1, deo, "PE-PLO-GRN-L", 2)
         request_document_approval(rtv1, requested_by=ops1)
         approval = approval_for(rtv1)
         if approval is not None and approval.status == ApprovalStatus.PENDING:
@@ -1114,8 +1149,8 @@ class Command(BaseCommand):
         banka = self.stores["BANKA"]
         rtv2 = ReturnToVendor.objects.create(
             store=banka,
-            vendor=self.vendors["blackberrys"],
-            brand=self.brands["Blackberrys"],
+            vendor=self.vendors["abfrl"],
+            brand=self.brands["Van Heusen"],
             return_type=ReturnType.SEASONAL,
             logistics_route=LogisticsRoute.WAREHOUSE_CONSOLIDATION,
             season=SS26,
@@ -1123,7 +1158,7 @@ class Command(BaseCommand):
             notes=f"{SEED_TAG}: season-end return within window",
             created_by=ops1,
         )
-        self._rtv_line(rtv2, banka, "BB-TROU-GRY-34", 3)
+        self._rtv_line(rtv2, banka, "VH-TRSR-NVY-34", 3)
         request_document_approval(rtv2, requested_by=ops1)
         approval = approval_for(rtv2)
         if approval is not None and approval.status == ApprovalStatus.PENDING:
@@ -1223,8 +1258,8 @@ class Command(BaseCommand):
             season=SS26,
             created_by=ops1,
         )
-        identity = resolve_line_identity(deo.id, "LP-SLIM-WHT-38", SS26)
-        VFlipLine.objects.create(vflip=vf, sku_code="LP-SLIM-WHT-38", qty=2, **identity)
+        identity = resolve_line_identity(deo.id, "LP-OXF-BLU-40", SS26)
+        VFlipLine.objects.create(vflip=vf, sku_code="LP-OXF-BLU-40", qty=2, **identity)
         request_document_approval(vf, requested_by=ops1)
         approval = approval_for(vf)
         if approval is not None and approval.status == ApprovalStatus.PENDING:
