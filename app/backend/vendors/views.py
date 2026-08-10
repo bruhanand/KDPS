@@ -10,7 +10,8 @@ table (#130): reading a booking needs ``view``, placing one needs ``operate``.
 Until then these endpoints were open to any authenticated user, so the table's
 Booking column decided nothing - which is why a store person's ratified
 ``view`` cell had to arrive with a gate behind it. *Which* bookings a caller
-sees is the separate record-scope axis, and #101's work.
+sees is the separate record-scope axis (``vendors.scoping``, #234) - a store
+login sees a booking only if one of its lines lands at a store in their scope.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from masters.permissions import IsMasterSteward
 from vendors.agents import read_booking_receipt
 from vendors.approval import ask_for_approval
 from vendors.models import Booking, BookingLine, Vendor
+from vendors.scoping import scope_bookings
 from vendors.serializers import (
     BookingCreateSerializer,
     BookingSerializer,
@@ -175,6 +177,7 @@ class BookingListCreateView(generics.ListCreateAPIView[Booking]):
         qs = Booking.objects.select_related(
             "vendor", "brand", "season", "destination_store"
         ).prefetch_related("lines", "lines__store")
+        qs = scope_bookings(qs, self.request.user)
         params = self.request.query_params
         if params.get("status"):
             qs = qs.filter(status=params["status"])
@@ -252,11 +255,17 @@ class BookingListCreateView(generics.ListCreateAPIView[Booking]):
 
 
 class BookingDetailView(generics.RetrieveAPIView[Booking]):
+    """Knowing a booking's id is not a way round the list's scope gate: out of
+    scope must read exactly like not existing (404, never 403 - ADR-0003)."""
+
     permission_classes = [IsAuthenticated, CanReadBooking]
     serializer_class = BookingSerializer
-    queryset = Booking.objects.select_related(
-        "vendor", "brand", "season", "destination_store"
-    ).prefetch_related("lines", "lines__store")
+
+    def get_queryset(self) -> Any:
+        qs = Booking.objects.select_related(
+            "vendor", "brand", "season", "destination_store"
+        ).prefetch_related("lines", "lines__store")
+        return scope_bookings(qs, self.request.user)
 
 
 class BookingCloseView(APIView):

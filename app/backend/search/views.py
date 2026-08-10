@@ -51,6 +51,7 @@ from outbound.scoping import transfer_at_stores
 from ptmapper.models import PtFile
 from stockledger.models import StockOnHand
 from vendors.models import Booking
+from vendors.scoping import booking_at_stores
 
 #: Shortest query we will run. One character matches half the catalogue and the
 #: panel would be noise, not an answer.
@@ -92,12 +93,10 @@ def _scope_transfer(qs: QuerySet[Any], ids: list[int]) -> QuerySet[Any]:
 
 
 def _scope_booking(qs: QuerySet[Any], ids: list[int]) -> QuerySet[Any]:
-    # A booking spans several stores: a line's effective destination is its own
-    # store, or (if unset) the booking's default. Visible if ANY line lands here
-    # — the same rule the pending-bookings list uses.
-    return qs.filter(
-        Q(lines__store_id__in=ids) | Q(lines__store__isnull=True, destination_store_id__in=ids)
-    ).distinct()
+    # The predicate belongs to `vendors` (#234) — the same shape the Booking
+    # list, detail and pending-receipt endpoints answer with, written once so
+    # search cannot drift from the screens its results link to.
+    return qs.filter(booking_at_stores(ids)).distinct()
 
 
 def _docstatus(doc: Any) -> str:

@@ -10,7 +10,6 @@ from datetime import date
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -28,11 +27,11 @@ from inbound.serializers import GrnSerializer
 from masters.models import Store
 from masters.scoping import (
     actionable_store_ids,
-    active_store_ids,
     scope_by_store,
     scope_by_store_many,
 )
 from vendors.models import Booking, BookingLine
+from vendors.scoping import scope_bookings
 from vendors.serializers import BookingSerializer
 
 
@@ -59,14 +58,10 @@ class PendingBookingsView(APIView):
         ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
         # A read, so it follows the unit the person is *acting in* (#88), not
         # their whole entitlement — switch to Deoghar and you see Deoghar's queue.
-        ids = active_store_ids(request.user)
-        if ids is not None:  # store-scoped user → bookings with a line landing at their store
-            # A booking spans several stores: a line's effective destination is its own
-            # store, or (if unset) the booking's default. Visible if ANY line lands here.
-            qs = qs.filter(
-                Q(lines__store_id__in=ids)
-                | Q(lines__store__isnull=True, destination_store_id__in=ids)
-            ).distinct()
+        # `scope_bookings` is `vendors.scoping`'s (#234): the same any-line-in-
+        # scope rule the list, detail and search endpoints answer with, hand-
+        # rolled here before it had a shared home.
+        qs = scope_bookings(qs, request.user)
         return Response(
             BookingSerializer(qs.prefetch_related("lines", "lines__store"), many=True).data
         )
