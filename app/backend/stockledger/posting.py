@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 
 from django.db import transaction
 
@@ -472,7 +472,7 @@ def reverse_pt_inward(pt: Any, user: Any) -> dict[str, Any]:
     answers with `reverse_pt_postings` below, so a bare `pt.cancel()` typed at a
     shell does exactly what this button does, which was the whole point.
     """
-    return pt.cancel(user)
+    return cast(dict[str, Any], pt.cancel(user))
 
 
 def reverse_pt_postings(pt: Any, user: Any) -> dict[str, Any]:
