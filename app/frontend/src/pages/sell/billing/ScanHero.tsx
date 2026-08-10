@@ -74,7 +74,14 @@ export function ScanHero({
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
               event.preventDefault();
-              onSubmit(value);
+              // The live DOM value, not the closed-over `value` prop (#257): a
+              // wedge firing barcode after barcode faster than React repaints
+              // can have this handler still bound to a render from before the
+              // last keystroke committed, and the prop would submit whatever
+              // was typed as of that stale render - a truncated code that
+              // genuinely fails to resolve, on a tag that is really on the
+              // shelf.
+              onSubmit(event.currentTarget.value);
             }}
           />
           <span className="scan-hero-state" data-testid="scan-hero-state">

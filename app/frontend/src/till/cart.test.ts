@@ -109,6 +109,40 @@ describe("a rescan of a piece already on the bill (#244, grill Q1)", () => {
   });
 });
 
+describe("a burst of scans with no inter-scan delay (#257)", () => {
+  // The counter's `takePiece` chains every scan through `scanPiece` off
+  // `setCart`'s own `current`, exactly like this reduce does, so that a wedge
+  // firing faster than React repaints still lands one line per scan instead
+  // of a later `setCart` call overwriting an earlier one's line outright.
+  // This locks in the shape that chain must produce.
+  const found = (barcode: string, season = "FW25") => item(barcode, season, 149900);
+
+  it("resolves 20 distinct barcodes chained one after another into 20 lines", () => {
+    const pieces = Array.from({ length: 20 }, (_, i) => found(String(8900000 + i)));
+
+    const cart = pieces.reduce(
+      (current, piece) => scanPiece(current, piece, { stock: 3, alternatives: [] }, 1),
+      cartOf(),
+    );
+
+    expect(cart.lines).toHaveLength(20);
+    expect(new Set(cart.lines.map((l) => l.barcode)).size).toBe(20);
+    expect(cart.lines.every((l) => l.qty === 1)).toBe(true);
+  });
+
+  it("resolves a burst of the same barcode chained one after another into one line at full qty", () => {
+    const piece = found("8901234");
+
+    const cart = Array.from({ length: 20 }).reduce<Cart>(
+      (current) => scanPiece(current, piece, { stock: 3, alternatives: [] }, 1),
+      cartOf(),
+    );
+
+    expect(cart.lines).toHaveLength(1);
+    expect(cart.lines[0].qty).toBe(20);
+  });
+});
+
 describe("bill-level Sold by", () => {
   it("fills only lines without an actor, leaving an explicit line choice alone", () => {
     const cart = cartOf(scanned(149900, { salesman: null }), scanned(149900, { salesman: 9 }));
