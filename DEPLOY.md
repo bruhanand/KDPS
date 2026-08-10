@@ -49,6 +49,22 @@ Created by `seed_foundation` (full list also in `memory/test_credentials.md`).
 | `deo.manager` | `Store@123` | store_manager | store (DEO) |
 | `deo.cashier` | `Store@123` | store_staff | store (DEO) |
 
+## What a re-seed does and does not overwrite
+
+`seed_foundation` runs on every deploy and is safe to re-run by hand.
+It upserts roles, masters and demo users, so a fresh row appears and an existing one is brought back in line with the seed.
+
+Two things a live operator owns are deliberately left alone:
+
+- **A user's password.** Set only when the account is first created, so an operator-changed password survives every redeploy.
+- **A role's access grid** (`Role.section_access` — what the Setup → Access screen edits, applied by two administrators with an audit row behind it).
+  The seed is **additive only** here: it grants a section the role does not have a cell for yet, and it never changes a cell the role already has.
+  So an approved access change survives a redeploy, and a section added in a later release still reaches roles seeded before it existed.
+  If the ratified access sheet itself changes, that arrives as a migration carrying the new cells — never as a silent re-seed of everything.
+
+Everything else on a role **is** overwritten back to the seed, including its name, description, landing page and sidebar nav groups.
+If you retune one of those on a live server, expect the next deploy to put it back.
+
 ## Things to know (free tier)
 
 - **Free Postgres is deleted after 30 days.** For anything beyond a short demo,

@@ -1,7 +1,10 @@
 """Idempotent foundation seed: roles, the masters spine, and demo users.
 
-Run: `python manage.py seed_foundation`. Safe to re-run — it upserts. It also
-(re)writes `memory/test_credentials.md` in the checkout (override with
+Run: `python manage.py seed_foundation`. Safe to re-run — it upserts. Two
+columns are deliberately *not* upserted, because a live operator owns them: a
+user's password (set on creation only) and a role's access grid (added to, never
+overwritten — see `_seed_roles` and issue #224). It also (re)writes
+`memory/test_credentials.md` in the checkout (override with
 `SEED_CREDENTIALS_PATH`) so the testing/fork agents always have current logins.
 """
 
@@ -16,6 +19,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from accounts.matrix import seeded_row
 from accounts.models import NAV_GROUPS, Role, User
 from accounts.rbac_matrix import section_access_for
 from core.documents import VoucherSeries
@@ -180,17 +184,30 @@ class Command(BaseCommand):
             )
 
     def _seed_roles(self) -> None:
+        """Roles, with the access grid seeded **additively** (#224).
+
+        The grid is the one column on this row that two administrators maintain
+        between releases (#173, floor rule 4), so the sheet is starting content
+        for it and nothing more: `seeded_row` fills the sections a stored row
+        does not state and leaves the ones it does exactly as they are. Before
+        this, any redeploy that re-ran the seed took an approved, audited grant
+        back with nothing on any screen to say so.
+
+        The row is locked for the read-then-write, so a re-seed racing an access
+        change being applied cannot read the row before and write it after.
+        """
         for r in ROLES:
+            existing = Role.objects.select_for_update().filter(code=r["code"]).first()
             Role.objects.update_or_create(
                 code=r["code"],
                 defaults={
                     "name": r["name"],
                     "landing_page": r["landing_page"],
                     "nav_groups": r["nav_groups"],
-                    # The SIDEBAR RBAC contract (#85). Re-seeding overwrites it back
-                    # to the sheet default; a live admin's retune is a deliberate
-                    # data edit they'd re-apply, same as nav_groups here.
-                    "section_access": section_access_for(r["code"]),
+                    "section_access": seeded_row(
+                        existing.section_access if existing else None,
+                        default=section_access_for(r["code"]),
+                    ),
                     "description": r["description"],
                     "is_system": True,
                     "is_active": True,
