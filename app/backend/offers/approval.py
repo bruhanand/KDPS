@@ -57,7 +57,11 @@ def headline(offer: Offer) -> str:
     Brand, the offer's own name, how many shops it reaches and from when — the
     four things that decide whether this needs a second look, in one line.
     """
-    brand = offer.brand.name if offer.brand_id else "Storewide"
+    # Guarded on the object, not `brand_id`: identical behaviour and identical
+    # query count (a null FK answers `None` without touching the database, and
+    # the set case already loaded the row to read `.name`), but it is the form
+    # mypy can narrow. The column is a PROTECT FK, so a set id always resolves.
+    brand = offer.brand.name if offer.brand else "Storewide"
     stores = len((offer.store_scope or {}).get("stores") or [])
     where = "1 store" if stores == 1 else f"{stores} stores"
     until = f" → {offer.ends_on:%d %b}" if offer.ends_on else " → until stopped"
@@ -77,7 +81,7 @@ def ask_for_countersignature(offer: Offer, *, requested_by: Any) -> Approval:
         made_by=offer.created_by or requested_by,
         requested_by=requested_by,
         approver_roles=policy.approver_roles_for(0),
-        brand=offer.brand.name if offer.brand_id else "",
+        brand=offer.brand.name if offer.brand else "",
     )
 
 

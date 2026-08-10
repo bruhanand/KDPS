@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
 
 from masters.models import Brand, Season
 from vendors.models import Booking, BookingLine, Vendor
 
 
-class VendorSerializer(serializers.ModelSerializer):
+class VendorSerializer(serializers.ModelSerializer[Vendor]):
     brand_names = serializers.SerializerMethodField()
 
     class Meta:
@@ -30,7 +32,7 @@ class VendorSerializer(serializers.ModelSerializer):
         return [b.name for b in obj.brands.all()]
 
 
-class BookingLineSerializer(serializers.ModelSerializer):
+class BookingLineSerializer(serializers.ModelSerializer[BookingLine]):
     store_name = serializers.CharField(source="store.name", read_only=True, default=None)
 
     class Meta:
@@ -49,7 +51,7 @@ class BookingLineSerializer(serializers.ModelSerializer):
         ]
 
 
-class BookingSerializer(serializers.ModelSerializer):
+class BookingSerializer(serializers.ModelSerializer[Booking]):
     lines = BookingLineSerializer(many=True, read_only=True)
     vendor_name = serializers.CharField(source="vendor.name", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
@@ -104,7 +106,7 @@ class BookingSerializer(serializers.ModelSerializer):
         return sum(line.received_qty for line in obj.lines.all())
 
 
-class BookingCreateSerializer(serializers.Serializer):
+class BookingCreateSerializer(serializers.Serializer[dict[str, Any]]):
     vendor = serializers.PrimaryKeyRelatedField(queryset=Vendor.objects.all())
     brand = serializers.PrimaryKeyRelatedField(queryset=Brand.objects.all())
     season = serializers.PrimaryKeyRelatedField(queryset=Season.objects.all())

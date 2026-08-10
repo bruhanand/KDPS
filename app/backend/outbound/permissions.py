@@ -41,8 +41,11 @@ on every write, so holding the rung never means holding it *everywhere*.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
 
 from accounts.actor_policies import user_may_act
 from accounts.permissions import require_section
@@ -106,7 +109,7 @@ class CanExecuteVFlip(BasePermission):
 
     message = "Only an allowed Accounts or Owner user may execute a V-flip."
 
-    def has_permission(self, request, view):
+    def has_permission(self, request: Request, view: Any) -> bool:
         return user_may_act(request.user, "outbound.execute_vflip")
 
 
@@ -129,11 +132,11 @@ class CanCreateReturnToBrand(BasePermission):
 
     message = "A store may only mark damage; the warehouse creates and executes returns."
 
-    def has_permission(self, request, view):
+    def has_permission(self, request: Request, view: Any) -> bool:
         return user_may_act(request.user, "outbound.create_return_to_brand")
 
 
-def enforce_store_scope(user, store_id: int) -> None:
+def enforce_store_scope(user: Any, store_id: int) -> None:
     """Raise 403 if the user's store scope excludes ``store_id``.
 
     Network roles (actionable_store_ids → None) pass unconditionally; a

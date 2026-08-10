@@ -95,16 +95,39 @@ max-complexity = 10
 "tests/conftest.py" = ["C901"]
 
 # --- Types -------------------------------------------------------------------
-# K0 starts mypy strict on a tiny surface (core + config). As money slices land,
-# the strict surface grows with the code; it never shrinks.
+# K0 started mypy strict on a tiny surface (core + config) on the promise that
+# "the strict surface grows with the code; it never shrinks". It did not grow -
+# it sat on two modules while eighteen apps were written behind it (#292).
+#
+# The gate is now the whole backend (`mypy .`), not a list of apps. A list is the
+# tempting shape and the wrong one: it gates what somebody remembered to add, so
+# a new app arrives untyped and the gate stays green while saying nothing about
+# it. Checking everything and naming the exclusions inverts that - the surface
+# can only grow, and shrinking it means deleting a line somebody has to justify.
 [tool.mypy]
 python_version = "3.12"
 plugins = ["mypy_django_plugin.main"]
 strict = true
-exclude = ['migrations/', 'tests/']
+# `migrations/` are generated; `tests/` is a separate argument about how strictly
+# test code should type and is not this ticket's. The last two are not source at
+# all - they only need naming because `mypy .` walks the directory tree.
+exclude = ['migrations/', 'tests/', '\.venv/', 'staticfiles/']
 
 [[tool.mypy.overrides]]
 module = ["dj_database_url"]
+ignore_missing_imports = true
+
+# Third-party packages that publish no stubs and no `py.typed`. Declared once
+# here rather than as an inline ignore at each of the eight import sites: the
+# fact is a property of the dependency, not of the line that imports it, and
+# eight copies drift the moment one file stops importing it (`strict` turns a
+# stale ignore into an error, so drift is loud but still busywork). The three
+# spreadsheet readers are the PT/invoice ingest path; `emergentintegrations` is
+# the vendored LLM client. Publishing stubs for any of them - `types-openpyxl`
+# is the obvious first - would mean deleting its line here and typing the call
+# sites, which is the direction of travel, not a new argument.
+[[tool.mypy.overrides]]
+module = ["openpyxl.*", "xlrd.*", "pyxlsb.*", "emergentintegrations.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]

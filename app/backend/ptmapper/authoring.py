@@ -16,6 +16,7 @@ Two trust levels (Rule 8):
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from ptmapper.engine import Resolver, _quantity_out, norm, raw_str
@@ -30,7 +31,9 @@ def _blank_row() -> dict[str, Any]:
     return dict.fromkeys(KDPS_COLUMNS, "")
 
 
-def _resolve_or_blank(value: str, resolve) -> tuple[str, str]:
+def _resolve_or_blank(
+    value: str, resolve: Callable[[str], tuple[str | None, str]]
+) -> tuple[str, str]:
     """Resolve a GRN free-text value through the lookup tables → ``(value, source)``;
     an unknown value stays blank (the operator fills it in the editor — authoring
     misses are NOT pushed to the review queue, the human is already in the loop)."""
@@ -164,9 +167,11 @@ _EXTRACT_CELLS: list[tuple[str, str, Any]] = [
 ]
 
 
-def _extract_index(extract: dict) -> tuple[dict[tuple[str, str], dict], dict[str, list[dict]]]:
-    by_style_size: dict[tuple[str, str], dict] = {}
-    by_style: dict[str, list[dict]] = {}
+def _extract_index(
+    extract: dict[str, Any],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    by_style_size: dict[tuple[str, str], dict[str, Any]] = {}
+    by_style: dict[str, list[dict[str, Any]]] = {}
     for line in extract.get("lines") or []:
         style = norm(line.get("style_code"))
         if not style:
@@ -176,7 +181,11 @@ def _extract_index(extract: dict) -> tuple[dict[tuple[str, str], dict], dict[str
     return by_style_size, by_style
 
 
-def _match_line(row: PtRow, by_style_size: dict, by_style: dict) -> dict | None:
+def _match_line(
+    row: PtRow,
+    by_style_size: dict[tuple[str, str], dict[str, Any]],
+    by_style: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any] | None:
     """The invoice line behind a GRN-seeded row: exact (style, size) first — the raw
     GRN size, since the row's SIZE may already be normalised — then style alone when
     the invoice carries it exactly once (no guessing across sizes)."""
@@ -191,7 +200,7 @@ def _match_line(row: PtRow, by_style_size: dict, by_style: dict) -> dict | None:
     return candidates[0] if len(candidates) == 1 else None
 
 
-def apply_invoice_extract(pt: PtFile, extract: dict) -> int:
+def apply_invoice_extract(pt: PtFile, extract: dict[str, Any]) -> int:
     """Merge the AI invoice read onto the authored rows: fill *blank* money/identity
     cells with provenance ``inferred`` (Rule 8 — reviewable, never final). QTY is
     never touched: the GRN's counted quantity always wins over the invoice."""

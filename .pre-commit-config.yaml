@@ -23,7 +23,7 @@ repos:
         # Dummy Django env so the django-stubs plugin can import settings.py (which
         # reads os.environ at import). mypy never connects to the DB, so the values
         # only need to exist and pass the postgres-engine check.
-        entry: bash -c 'cd app/backend && DJANGO_SECRET_KEY=ci-typecheck DJANGO_DEBUG=0 DJANGO_ALLOWED_HOSTS=* DATABASE_URL=postgres://kdps:kdps@localhost:5432/kdps uv run mypy core config'
+        entry: bash -c 'cd app/backend && DJANGO_SECRET_KEY=ci-typecheck DJANGO_DEBUG=0 DJANGO_ALLOWED_HOSTS=* DATABASE_URL=postgres://kdps:kdps@localhost:5432/kdps uv run mypy .'
         language: system
         pass_filenames: false
         files: ^app/backend/.*\.py$

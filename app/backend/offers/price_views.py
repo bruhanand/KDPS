@@ -71,7 +71,7 @@ def _costs(barcodes: list[str]) -> dict[str, dict[str, Any]]:
         .values("barcode", "season", "unit_cost_paise", "mrp_paise")
     )
     for row in rows:
-        out.setdefault(row["barcode"], row)
+        out.setdefault(row["barcode"], dict(row))
     return out
 
 

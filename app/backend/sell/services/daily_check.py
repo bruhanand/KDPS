@@ -323,7 +323,7 @@ def _check_returns_by_seller(store: Store, day: date, report: Report) -> None:
         report.returns_by_seller[f"{store.code}/{seller.code}"] += count
 
     limit = SellPolicy.current().return_review_count
-    over = sorted(
+    over: list[dict[str, Any]] = sorted(
         (
             {"salesman": seller.code, "name": seller.name, "returns": count}
             for seller, count in per_seller.items()

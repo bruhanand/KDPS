@@ -4,6 +4,8 @@ against and confirms. Never the final writer."""
 
 from __future__ import annotations
 
+from typing import Any
+
 from aiagents.gemini import extract
 
 _SYSTEM = (
@@ -28,7 +30,7 @@ _PROMPT = (
 )
 
 
-def read_invoice(content: bytes, content_type: str) -> dict:
+def read_invoice(content: bytes, content_type: str) -> dict[str, Any]:
     data = extract(content, content_type, _SYSTEM, _PROMPT)
     data.setdefault("lines", [])
     data.setdefault("missing", [])
@@ -59,7 +61,7 @@ _PT_PROMPT = (
 )
 
 
-def read_invoice_for_pt(content: bytes, content_type: str) -> dict:
+def read_invoice_for_pt(content: bytes, content_type: str) -> dict[str, Any]:
     """The richer read behind PT authoring (D2 non-brand path): the store/warehouse
     ``read_invoice`` shape plus per-line rate (what KDPS pays → BASIC / P RATE),
     HSN and GST, and invoice-level freight/discount. Same trust boundary: a draft

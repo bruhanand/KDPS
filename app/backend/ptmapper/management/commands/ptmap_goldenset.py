@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -26,14 +27,14 @@ HEADER = ["file", "barcode", "design", *FIELDS]
 class Command(BaseCommand):
     help = "Export engine guesses as a golden-set template for human correction."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         repo = Path(settings.BASE_DIR).parent.parent
         default_dir = repo / "docs" / "data-from-kdps" / "Q&A-req-recieved" / "PT FILE"
         parser.add_argument("--dir", default=str(default_dir))
         parser.add_argument("--out", default="goldenset_template.csv")
         parser.add_argument("--sample", type=int, default=30, help="rows per file")
 
-    def handle(self, *args, **opts) -> None:
+    def handle(self, *args: Any, **opts: Any) -> None:
         ptdir = Path(opts["dir"])
         if not ptdir.exists():
             self.stderr.write(f"Directory not found: {ptdir}")

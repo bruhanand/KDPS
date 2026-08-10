@@ -699,8 +699,10 @@ def _build_adjustment(
     for v in lines:
         # Counted dims first, the books' answer over the top — the cost among
         # them, which is why it can never come from the count's own payload.
-        identity = {f: v.dims.get(f, "") for f in MERCH_DIM_FIELDS}
-        identity.update(resolve_line_identity(stocktake.store_id, v.sku_code, identity["season"]))
+        identity: dict[str, int | str] = {f: v.dims.get(f, "") for f in MERCH_DIM_FIELDS}
+        identity.update(
+            resolve_line_identity(stocktake.store_id, v.sku_code, v.dims.get("season", ""))
+        )
         StockAdjustmentLine.objects.create(
             adjustment=adjustment,
             sku_code=v.sku_code,

@@ -68,9 +68,9 @@ class Command(BaseCommand):
 
             if e.kind in QUARANTINE_KINDS:
                 qkey = (e.store_id, e.sku_code)
-                q = quar_agg.setdefault(qkey, [0, 0])
-                q[0] += e.qty
-                q[1] += int(e.amount or 0)
+                qa = quar_agg.setdefault(qkey, [0, 0])
+                qa[0] += e.qty
+                qa[1] += int(e.amount or 0)
                 if e.qty > 0:
                     prev = quar_desc.get(qkey)
                     # Latest positive quarantine leg wins for who/when.

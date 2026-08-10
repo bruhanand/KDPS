@@ -199,4 +199,6 @@ checkout (`npm run dev`, or `./scripts/dev.sh --api`) and run the gate beside it
 
 All green = the build is sound. `npm run ci` is the **local acceptance gate for every slice**.
 
-**Two gates, not one.** The cloud CI (`.github/workflows/ci.yml`) runs only **pytest** (kernel anti-cheat + API regression, on real Postgres) **+ the frontend build** — *not* ruff / mypy strict / import-linter (those run in pre-commit and local `npm run ci`). So a green cloud run is **not** a green `npm run ci`: the deployed **Render alpha** currently carries ~54 ruff findings + un-gated mypy strict. Deploy steps + seeded logins: `DEPLOY.md`.
+**One gate, run in two places (#292).** The cloud CI (`.github/workflows/ci.yml`) runs the same checks as local `npm run ci` - ruff format and check, `mypy .`, import-linter, the migration and drift checks, pytest, and the frontend build and unit tests. A green cloud run means what a green local run means; it is not a lighter subset, and the older note here saying otherwise was simply wrong.
+
+Where they differ, the cloud is the *stronger* of the two. It boots a real server, so the ~57 live-API suites described above actually run there, where a bare local `npm run ci` skips them. Keep the two definitions in step: `mypy .` is spelled out in **four** places - `package.json` (twice), the workflow's `lint` job, and `.pre-commit-config.yaml` - and if they ever drift, pre-commit passing tells you nothing about CI. Deploy steps + seeded logins: `DEPLOY.md`.

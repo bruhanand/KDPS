@@ -163,7 +163,8 @@ def _line_qty(line: Any) -> int:
     """
     for field in ("adj_qty", "qty", "qty_planned"):
         if hasattr(line, field):
-            return abs(getattr(line, field) or 0)
+            qty: int = getattr(line, field) or 0
+            return abs(qty)
     return 0
 
 
@@ -210,7 +211,7 @@ def _inr(paise: int) -> str:
     if len(rupees) > 3:
         head, tail = rupees[:-3], rupees[-3:]
         # Indian grouping: every two digits above the last three.
-        groups = []
+        groups: list[str] = []
         while len(head) > 2:
             groups.insert(0, head[-2:])
             head = head[:-2]

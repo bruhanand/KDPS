@@ -184,8 +184,12 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      # The whole backend, not a list of apps (#292). A list gates what somebody
+      # remembered to add to it, so a new app arrives untyped behind a green
+      # check; `.` gates everything and the exclusions are named in pyproject,
+      # where removing one is a line a reviewer can see.
       - name: Type check (mypy)
-        run: uv run mypy core config
+        run: uv run mypy .
 
       - name: Architecture boundaries (lint-imports)
         run: uv run lint-imports

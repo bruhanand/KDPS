@@ -6,7 +6,7 @@ from core.money import paise_to_rupees_str
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 
 
-class VendorLedgerEntrySerializer(serializers.ModelSerializer):
+class VendorLedgerEntrySerializer(serializers.ModelSerializer[VendorLedgerEntry]):
     vendor_name = serializers.CharField(source="vendor.name", read_only=True)
     vendor_code = serializers.CharField(source="vendor.code", read_only=True)
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
@@ -36,7 +36,7 @@ class VendorLedgerEntrySerializer(serializers.ModelSerializer):
         return paise_to_rupees_str(obj.amount)
 
 
-class CashLedgerEntrySerializer(serializers.ModelSerializer):
+class CashLedgerEntrySerializer(serializers.ModelSerializer[CashLedgerEntry]):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
     vendor_name = serializers.CharField(source="vendor.name", read_only=True, default="")
     amount_rupees = serializers.SerializerMethodField()

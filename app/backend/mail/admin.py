@@ -20,7 +20,10 @@ from .models import MailAccount
 
 
 @admin.register(MailAccount)
-class MailAccountAdmin(admin.ModelAdmin):
+# `ModelAdmin` is generic to django-stubs but not subscriptable at runtime here
+# (same gap as `core.money.MoneyField`'s base) - subscripting it crashes Django's
+# admin autodiscover, so the generic arg is left off rather than "fixed".
+class MailAccountAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ("user", "email_address", "status", "last_synced_at")
     list_filter = ("status",)
     search_fields = ("user__username", "email_address")

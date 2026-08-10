@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -28,14 +29,14 @@ FIELDS = list(CONTROLLED.keys())
 class Command(BaseCommand):
     help = "Measure mapping accuracy against a human-corrected golden CSV."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         repo = Path(settings.BASE_DIR).parent.parent
         default_dir = repo / "docs" / "data-from-kdps" / "Q&A-req-recieved" / "PT FILE"
         parser.add_argument("--golden", required=True)
         parser.add_argument("--dir", default=str(default_dir))
 
-    def _load_golden(self, path: Path) -> dict:
-        golden: dict[str, dict[str, dict]] = {}
+    def _load_golden(self, path: Path) -> dict[str, dict[str, dict[str, str]]]:
+        golden: dict[str, dict[str, dict[str, str]]] = {}
         with open(path, newline="") as f:
             for row in csv.DictReader(f):
                 fn = (row.get("file") or "").strip()
@@ -47,14 +48,14 @@ class Command(BaseCommand):
                 }
         return golden
 
-    def handle(self, *args, **opts) -> None:
+    def handle(self, *args: Any, **opts: Any) -> None:
         gpath = Path(opts["golden"])
         if not gpath.exists():
             self.stderr.write(f"Golden file not found: {gpath}")
             return
         golden = self._load_golden(gpath)
         ptdir = Path(opts["dir"])
-        stat = {f: Counter() for f in FIELDS}
+        stat: dict[str, Counter[str]] = {f: Counter() for f in FIELDS}
         matched = unmatched = 0
 
         for fn, bcmap in golden.items():

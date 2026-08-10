@@ -90,7 +90,7 @@ def _row(line: Any) -> dict[str, Any]:
     }
 
 
-def build_transfer_pt_rows(transfer: Any) -> list[dict]:
+def build_transfer_pt_rows(transfer: Any) -> list[dict[str, Any]]:
     """The transfer's PT rows — a function of its scanned lines and nothing else.
 
     Nothing outside the transfer is consulted, master data included: cost and MRP

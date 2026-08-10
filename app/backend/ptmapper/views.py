@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import io
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 
 import openpyxl
 from django.db import transaction
@@ -22,6 +22,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.actor_policies import user_may_act
+from accounts.models import User
 from accounts.permissions import require_section
 from accounts.sections import CAP_APPROVE, CAP_VIEW
 from core.documents import DocStatus
@@ -108,7 +109,7 @@ def _cell_error(col: str, val: Any, valid: dict[str, set[str]]) -> str:
     return f"'{s}' is not an allowed Master-Sheet {dim} value."
 
 
-def _parse_context(data: Any) -> tuple[dict, Response | None]:
+def _parse_context(data: Any) -> tuple[dict[str, str], Response | None]:
     """Optional operator context on upload/re-run: brand (a Master brand, matched
     case-insensitively to its canonical spelling) + invoice date."""
     ctx: dict[str, str] = {}
@@ -156,7 +157,7 @@ PT_FILE_SEARCH_FIELDS = ("original_filename", "brand_guess", "status")
 CanReadOrMakePtFile = require_section("receive_goods", CAP_VIEW, write_minimum=CAP_APPROVE)
 
 
-class PtFileListCreateView(generics.ListCreateAPIView):
+class PtFileListCreateView(generics.ListCreateAPIView[PtFile]):
     permission_classes = [IsAuthenticated, CanReadOrMakePtFile]
 
     def get_queryset(self) -> Any:
@@ -168,7 +169,7 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         # narrow what the scope above already allows.
         return text_filter(qs, search_term(self.request), PT_FILE_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[PtFileListSerializer]:
         return PtFileListSerializer
 
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -179,7 +180,7 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         if err is not None:
             return err
         grn_pk = None
-        grn_id = request.data.get("grn")
+        grn_id: Any = request.data.get("grn")
         if grn_id not in (None, ""):
             try:
                 grn_pk = int(grn_id)
@@ -221,7 +222,9 @@ class PtFileListCreateView(generics.ListCreateAPIView):
                     original_filename=stored.filename,
                     grn=grn,
                     meta={"context": context} if context else {},
-                    created_by=request.user
+                    # is_authenticated=True rules out AnonymousUser here, but mypy can't
+                    # narrow a plain boolean check — cast reflects that, not runtime.
+                    created_by=cast(User, request.user)
                     if getattr(request.user, "is_authenticated", False)
                     else None,
                 )
@@ -284,7 +287,7 @@ class PtFileFromGrnView(APIView):
         return Response(PtFileDetailSerializer(pt).data, status=status.HTTP_201_CREATED)
 
 
-class PtFileDetailView(generics.RetrieveDestroyAPIView):
+class PtFileDetailView(generics.RetrieveDestroyAPIView[PtFile]):
     permission_classes = [IsAuthenticated]
     serializer_class = PtFileDetailSerializer
     queryset = PtFile.objects.prefetch_related("rows")
@@ -414,14 +417,14 @@ def _fill_kind(scope: Any) -> str:
 
 
 def _plan_remembers(
-    remember: list[dict], by_id: dict[int, PtRow]
-) -> tuple[list[tuple[int, str, str, str, str, str]], list[dict]]:
+    remember: list[dict[str, Any]], by_id: dict[int, PtRow]
+) -> tuple[list[tuple[int, str, str, str, str, str]], list[dict[str, Any]]]:
     """Validate each ``{"row_id","column"}`` remember tick against its post-edit row and
     return ``(plan, errors)``. A plan entry is ``(row_id, column, dimension, source_key,
     target, brand)`` — a learnable column with a non-empty raw source and a non-blank
     value; the rule is scoped to the row's resolved BRAND (D4)."""
     plan: list[tuple[int, str, str, str, str, str]] = []
-    errors: list[dict] = []
+    errors: list[dict[str, Any]] = []
     for spec in remember:
         rid = spec.get("row_id")
         col = spec.get("column", "")
@@ -452,7 +455,7 @@ def _fill_applies(row: PtRow, col: str, scope: Any) -> bool:
     if scope == "blank":
         return not str(row.data.get(col) or "").strip()
     if isinstance(scope, dict) and "match_raw" in scope:
-        return (row.raw or {}).get(col, "") == scope["match_raw"]
+        return bool((row.raw or {}).get(col, "") == scope["match_raw"])
     return False
 
 
@@ -484,7 +487,7 @@ class PtRowsUpdateView(APIView):
         remember = request.data.get("remember", [])
 
         valid = _valid_values()
-        errors: list[dict] = []
+        errors: list[dict[str, Any]] = []
         for rid, data in edits.items():
             for col, val in data.items():
                 if col not in KDPS_COLUMN_SET:
@@ -527,13 +530,13 @@ class PtRowsUpdateView(APIView):
                 if _fill_applies(r, col, scope):
                     _apply_cell(r, col, val, changed, events=events, actor=actor, kind=kind, pt=pt)
         for rid, data in edits.items():
-            r = by_id.get(rid)
-            if r is None:
+            edit_row = by_id.get(rid)
+            if edit_row is None:
                 continue
             for col, val in data.items():
                 if col in KDPS_COLUMN_SET:
                     _apply_cell(
-                        r,
+                        edit_row,
                         col,
                         val,
                         changed,
@@ -581,14 +584,14 @@ class PtRowsUpdateView(APIView):
         return Response(PtFileDetailSerializer(pt).data)
 
 
-def _invoice_send_blocks(pt: PtFile) -> list[dict]:
+def _invoice_send_blocks(pt: PtFile) -> list[dict[str, Any]]:
     """The hard gates before an authored PT may leave the warehouse (invoice source
     only — the brand path is untouched): every row needs a BARCODE (keep-if-present;
     else the warehouse generates it in the counter software and types it — manual for
     now; generation moves in-house with the KDPS-built POS) and a SEASON (the
     canonical-season block, Q39 — the editor already restricts the cell to
     Master-Sheet seasons, this refuses blanks)."""
-    problems: list[dict] = []
+    problems: list[dict[str, Any]] = []
     for row in pt.rows.all():
         missing = [c for c in ("BARCODE", "SEASON") if not str(row.data.get(c) or "").strip()]
         if missing:
@@ -669,7 +672,8 @@ class PtFilePostView(APIView):
         # The GRN's own booking is the source of truth for the commercial model: a booked
         # SOR/consignment arrival must post against it (Dr INVENTORY / Cr the vendor
         # payable), not fall through to "Direct receipt" because the request omitted it.
-        grn_booking = pt.grn.booking if pt.grn_id else None
+        grn = pt.grn
+        grn_booking = grn.booking if grn is not None else None
         if grn_booking is not None:
             if booking is not None and booking.pk != grn_booking.pk:
                 return Response(
@@ -778,8 +782,8 @@ class PtFilePriceView(APIView):
             return Response({"detail": "margin_pct must be a number."}, status=400)
 
         priced = 0
-        skipped: list[dict] = []
-        errors: list[dict] = []
+        skipped: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
         touched: list[PtRow] = []
         for row in pt.rows.all():
             if str(row.data.get("MRP") or "").strip():
@@ -887,7 +891,7 @@ class PtFileExportView(APIView):
 REVIEW_ITEM_SEARCH_FIELDS = ("dimension", "raw_value", "resolved_value", "status")
 
 
-class ReviewListView(generics.ListAPIView):
+class ReviewListView(generics.ListAPIView[ReviewItem]):
     permission_classes = [IsAuthenticated]
     serializer_class = ReviewItemSerializer
 
@@ -915,7 +919,7 @@ class ReviewResolveView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def _scope_brand(self, item: ReviewItem, data: dict) -> tuple[str, Response | None]:
+    def _scope_brand(self, item: ReviewItem, data: dict[str, Any]) -> tuple[str, Response | None]:
         """Brand to scope this resolution to. Explicit ``brand`` wins (validated Master
         brand, or ``""`` for global); else the item's single resolved brand; else global."""
         if "brand" in data:
@@ -929,7 +933,9 @@ class ReviewResolveView(APIView):
         brands = [b for b in (item.context or {}).get("brands", []) if b]
         return (brands[0] if len(brands) == 1 else ""), None
 
-    def _resolve_single(self, item: ReviewItem, data: dict, actor: Any) -> Response | None:
+    def _resolve_single(
+        self, item: ReviewItem, data: dict[str, Any], actor: Any
+    ) -> Response | None:
         target = (data.get("target_value") or "").strip()
         if not target:
             return Response({"detail": "target_value is required."}, status=400)
@@ -965,7 +971,7 @@ class ReviewResolveView(APIView):
         item.resolved_value = target
         return None
 
-    def _resolve_taxonomy(self, item: ReviewItem, data: dict) -> Response | None:
+    def _resolve_taxonomy(self, item: ReviewItem, data: dict[str, Any]) -> Response | None:
         pattern = (data.get("pattern") or item.raw_value).strip()
         grid = {
             "gender": (data.get("gender") or "").strip(),
@@ -1026,7 +1032,7 @@ class ReviewResolveView(APIView):
 LOOKUP_PROPOSAL_SEARCH_FIELDS = ("source_key", "target_value", "brand", "status")
 
 
-class LookupProposalListView(generics.ListAPIView):
+class LookupProposalListView(generics.ListAPIView[LookupProposal]):
     """The staged-learning queue. ``?status=`` (default ``proposed``) filters by status;
     ``all`` returns every proposal, newest first."""
 

@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -155,7 +156,7 @@ def _get_or_create_booking(
     brand: Brand,
     season: Season,
     dest_store: Store,
-    skus: list[dict],
+    skus: list[dict[str, Any]],
     tag: str,
     user: User,
 ) -> Booking:
@@ -194,7 +195,7 @@ def _create_grn(
     store: Store,
     user: User,
     tag: str,
-    skus: list[dict],
+    skus: list[dict[str, Any]],
 ) -> Grn:
     """Create & post a GRN for the seed booking."""
     fy = _fy()
@@ -236,8 +237,8 @@ def _create_and_post_pt(
     store: Store,
     user: User,
     tag: str,
-    skus: list[dict],
-) -> dict:
+    skus: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Create a PtFile with mapped rows, advance to 'sent', then post via the
     real posting engine."""
     fy = _fy()
@@ -269,7 +270,7 @@ class Command(BaseCommand):
     help = "Seed on-hand stock via the real inbound pipeline for outbound demo testing."
 
     @transaction.atomic
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         if _already_seeded():
             self.stdout.write(
                 self.style.WARNING(

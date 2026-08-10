@@ -9,7 +9,7 @@ only ever slows a *failing* login, never a working one).
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from django.conf import settings
 from django.db.models import Count
@@ -78,7 +78,13 @@ class IsAccessAdministrator(BasePermission):
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-    permission_classes = [AllowAny]
+    # simplejwt's `TokenViewBase.permission_classes = ()` has no annotation, so
+    # mypy infers the narrowest possible type - the empty tuple `tuple[()]` -
+    # and any subclass override (this is the ordinary DRF `permission_classes`
+    # override every view in this file does) reads as incompatible. Nothing
+    # about *this* assignment is wrong; the base class just has no type room
+    # for it.
+    permission_classes = [AllowAny]  # type: ignore[assignment]
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         username = str(request.data.get("username", "")).strip()
@@ -121,7 +127,8 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        return Response(UserProfileSerializer(request.user).data)
+        # `IsAuthenticated` above guarantees a real `User`.
+        return Response(UserProfileSerializer(cast(User, request.user)).data)
 
 
 class TillPinView(APIView):
@@ -147,7 +154,10 @@ class TillPinView(APIView):
     permission_classes = [IsAuthenticated, require_section("sell", CAP_APPROVE)]
 
     def put(self, request: Request) -> Response:
-        user = request.user
+        # `IsAuthenticated` above guarantees a real `User`, not the
+        # `AnonymousUser` half of DRF's `request.user` union (same pattern as
+        # `alerts/views.py`).
+        user = cast(User, request.user)
         if not may_hold_till_pin(user):
             return _refuse(
                 "A counter PIN authorises an exception at a till, so it belongs to "
@@ -192,12 +202,26 @@ class LogoutView(APIView):
         refresh = request.data.get("refresh") or request.COOKIES.get("refresh_token")
         if refresh:
             try:
-                RefreshToken(refresh).blacklist()
+                # simplejwt types `Token.__init__`'s parameter as `Token | None`,
+                # but its implementation (`tokens.py:59`) treats a non-`None`
+                # argument as an encoded token string and decodes it - passing
+                # the raw refresh string here is the documented usage.
+                RefreshToken(refresh).blacklist()  # type: ignore[arg-type]
             except TokenError:
                 pass
         response = Response({"detail": "Logged out."})
         _clear_auth_cookies(response)
         return response
+
+
+#: `settings.JWT_COOKIE_SAMESITE` is a plain `str` env-backed setting
+#: (`config/settings.py`), but `set_cookie`/`delete_cookie` only accept the
+#: four literal cookie values Django itself recognises. The setting is ours to
+#: configure correctly (default `"Lax"`); this only tells mypy what every
+#: caller already relies on being true. Read per-call, not hoisted to a
+#: module constant, so a test's `override_settings` still takes effect.
+def _samesite() -> Literal["Lax", "Strict", "None", False] | None:
+    return cast(Literal["Lax", "Strict", "None", False] | None, settings.JWT_COOKIE_SAMESITE)
 
 
 def _set_auth_cookies(response: Response, *, access: str, refresh: str | None = None) -> None:
@@ -208,7 +232,7 @@ def _set_auth_cookies(response: Response, *, access: str, refresh: str | None = 
             max_age=settings.JWT_ACCESS_COOKIE_MAX_AGE,
             httponly=True,
             secure=settings.JWT_COOKIE_SECURE,
-            samesite=settings.JWT_COOKIE_SAMESITE,
+            samesite=_samesite(),
             path="/",
         )
     if refresh:
@@ -218,14 +242,14 @@ def _set_auth_cookies(response: Response, *, access: str, refresh: str | None = 
             max_age=settings.JWT_REFRESH_COOKIE_MAX_AGE,
             httponly=True,
             secure=settings.JWT_COOKIE_SECURE,
-            samesite=settings.JWT_COOKIE_SAMESITE,
+            samesite=_samesite(),
             path="/",
         )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/", samesite=settings.JWT_COOKIE_SAMESITE)
-    response.delete_cookie("refresh_token", path="/", samesite=settings.JWT_COOKIE_SAMESITE)
+    response.delete_cookie("access_token", path="/", samesite=_samesite())
+    response.delete_cookie("refresh_token", path="/", samesite=_samesite())
 
 
 class CookieRefreshView(APIView):
@@ -294,9 +318,21 @@ def _pending_response(change: AccessChange, approval: Any) -> Response:
 
 
 class PendingAccessChangeMixin:
-    """Every Setup write becomes a proposal a second administrator applies."""
+    """Every Setup write becomes a proposal a second administrator applies.
+
+    Always combined with a `generics.GenericAPIView` subclass (see the view
+    classes below), which is where `get_serializer`/`get_object` actually come
+    from - this mixin alone is never instantiated on its own.
+    """
 
     access_resource: str
+
+    if TYPE_CHECKING:
+        # Declared only so mypy can check this mixin in isolation; the real
+        # implementations are supplied by whichever `generics.GenericAPIView`
+        # subclass a concrete view also inherits from.
+        def get_serializer(self, *args: Any, **kwargs: Any) -> Any: ...
+        def get_object(self) -> Any: ...
 
     def _propose(self, request: Request, *, target: Any = None, partial: bool = False) -> Response:
         # A field this serializer does not know is refused rather than dropped.
@@ -322,7 +358,9 @@ class PendingAccessChangeMixin:
             )
         change, approval = propose_access_change(
             resource=self.access_resource,
-            actor=request.user,
+            # `IsAuthenticated` (every concrete view below) guarantees a real
+            # `User`, not the `AnonymousUser` half of DRF's `request.user`.
+            actor=cast(User, request.user),
             data=request.data,
             target=target,
             partial=partial,
@@ -470,7 +508,8 @@ class RoleAccessView(APIView):
 
         change, approval = propose_access_change(
             resource=AccessChange.Resource.ROLE,
-            actor=request.user,
+            # `IsAuthenticated` above guarantees a real `User`.
+            actor=cast(User, request.user),
             data={"section_access": after},
             target=role,
             partial=True,
@@ -495,7 +534,7 @@ ROLE_SEARCH_FIELDS = ("code", "name")
 USER_SEARCH_FIELDS = ("username", "full_name")
 
 
-class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView[Role]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     access_resource = AccessChange.Resource.ROLE
@@ -505,14 +544,14 @@ class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), ROLE_SEARCH_FIELDS)
 
 
-class RoleDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+class RoleDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView[Role]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     queryset = Role.objects.all()
     access_resource = AccessChange.Resource.ROLE
 
 
-class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView[User]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
     access_resource = AccessChange.Resource.USER
@@ -526,7 +565,7 @@ class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), USER_SEARCH_FIELDS)
 
 
-class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView[User]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
     access_resource = AccessChange.Resource.USER
@@ -535,13 +574,13 @@ class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
         return User.objects.select_related("role", "entity").prefetch_related("stores", "brands")
 
 
-class ActorPolicyListView(generics.ListAPIView):
+class ActorPolicyListView(generics.ListAPIView[ActorPolicy]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ActorPolicySerializer
     queryset = ActorPolicy.objects.all()
 
 
-class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView[ActorPolicy]):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ActorPolicySerializer
     queryset = ActorPolicy.objects.all()
@@ -550,14 +589,18 @@ class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPI
     lookup_url_kwarg = "action"
 
 
-class ApprovalPolicyListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+class ApprovalPolicyListCreateView(
+    PendingAccessChangeMixin, generics.ListCreateAPIView[ApprovalPolicy]
+):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ApprovalPolicyAdminSerializer
     queryset = ApprovalPolicy.objects.all()
     access_resource = AccessChange.Resource.APPROVAL_POLICY
 
 
-class ApprovalPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+class ApprovalPolicyDetailView(
+    PendingAccessChangeMixin, generics.RetrieveUpdateAPIView[ApprovalPolicy]
+):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ApprovalPolicyAdminSerializer
     queryset = ApprovalPolicy.objects.all()

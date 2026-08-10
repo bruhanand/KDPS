@@ -4,6 +4,8 @@ reviews and confirms; it never creates the booking itself."""
 
 from __future__ import annotations
 
+from typing import Any
+
 from aiagents.gemini import extract
 
 _SYSTEM = (
@@ -30,7 +32,7 @@ _PROMPT = (
 )
 
 
-def read_booking_receipt(content: bytes, content_type: str) -> dict:
+def read_booking_receipt(content: bytes, content_type: str) -> dict[str, Any]:
     data = extract(content, content_type, _SYSTEM, _PROMPT)
     data.setdefault("lines", [])
     data.setdefault("missing", [])

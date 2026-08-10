@@ -6,7 +6,7 @@ from core.money import paise_to_rupees_str
 from stockledger.models import StockLedgerEntry
 
 
-class StockLedgerEntrySerializer(serializers.ModelSerializer):
+class StockLedgerEntrySerializer(serializers.ModelSerializer[StockLedgerEntry]):
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)

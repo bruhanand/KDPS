@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
 
 from inbound.models import Grn, GrnLine
 
 
-class GrnLineSerializer(serializers.ModelSerializer):
+class GrnLineSerializer(serializers.ModelSerializer[GrnLine]):
     class Meta:
         model = GrnLine
         fields = [
@@ -22,13 +24,15 @@ class GrnLineSerializer(serializers.ModelSerializer):
         ]
 
 
-class GrnPtFileSerializer(serializers.Serializer):
+class GrnPtFileSerializer(serializers.Serializer[Any]):
     """A linked PT file, as the GRN screens need it (duck-typed off ``PtFile`` —
     inbound never imports ptmapper models)."""
 
     id = serializers.IntegerField(read_only=True)
     original_filename = serializers.CharField(read_only=True)
-    source = serializers.CharField(read_only=True)
+    # Field name collides with DRF's own Field.source attribute (typed `str | None`
+    # in stubs); this is the PtFile.source model field, not a `source=` kwarg.
+    source = serializers.CharField(read_only=True)  # type: ignore[assignment]
     stage = serializers.CharField(read_only=True)
     stage_label = serializers.CharField(read_only=True)
     doc_number = serializers.CharField(read_only=True, allow_null=True)
@@ -36,7 +40,7 @@ class GrnPtFileSerializer(serializers.Serializer):
     row_count = serializers.IntegerField(read_only=True)
 
 
-class GrnSerializer(serializers.ModelSerializer):
+class GrnSerializer(serializers.ModelSerializer[Grn]):
     lines = GrnLineSerializer(many=True, read_only=True)
     number = serializers.CharField(source="doc_number", read_only=True, allow_null=True)
     store_code = serializers.CharField(source="store.code", read_only=True)

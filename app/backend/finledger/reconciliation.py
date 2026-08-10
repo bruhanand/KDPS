@@ -16,11 +16,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from django.db import transaction
 
 from finledger.models import BankStatementImport, BankStatementLine, CashLedgerEntry
-from ptmapper.engine import UnsupportedFormat, read_sheets
+
+# `UnsupportedFormat` is re-exported deliberately: a statement this module cannot
+# read is a reconciliation failure to every caller (`finledger.views` turns it into
+# a 400), and none of them should have to reach into the PT-mapper to name it.
+from ptmapper.engine import UnsupportedFormat as UnsupportedFormat
+from ptmapper.engine import read_sheets
 
 #: A candidate must land within this many days of the statement row to be
 #: considered at all — wide enough for a NEFT that posted a day or two either
@@ -77,7 +83,7 @@ def _norm(cell: object) -> str:
     return re.sub(r"[^a-z0-9 ]", "", str(cell or "").strip().lower()).strip()
 
 
-def _score_header_row(row: list) -> tuple[int, dict[str, int]]:
+def _score_header_row(row: list[Any]) -> tuple[int, dict[str, int]]:
     cols: dict[str, int] = {}
     score = 0
     for i, cell in enumerate(row):
@@ -91,7 +97,7 @@ def _score_header_row(row: list) -> tuple[int, dict[str, int]]:
     return score, cols
 
 
-def _detect_header(rows: list[list]) -> tuple[int, dict[str, int]] | None:
+def _detect_header(rows: list[list[Any]]) -> tuple[int, dict[str, int]] | None:
     """The header row isn't always row 0 — bank exports often preamble with
     account info/title rows first, so this scans the first 30 rows for the
     best-scoring one that has at minimum a date and a debit or credit column."""
@@ -136,7 +142,7 @@ def _parse_date(value: object) -> date | None:
 
 def parse_statement(content: bytes, filename: str, content_type: str) -> list[ParsedRow]:
     sheets = read_sheets(content, filename, content_type)
-    rows: list[list] = max((sheet_rows for _, sheet_rows in sheets), key=len, default=[])
+    rows: list[list[Any]] = max((sheet_rows for _, sheet_rows in sheets), key=len, default=[])
     if not rows:
         raise UnsupportedFormat("The file has no rows.")
     header = _detect_header(rows)
@@ -148,7 +154,7 @@ def parse_statement(content: bytes, filename: str, content_type: str) -> list[Pa
     header_i, cols = header
     parsed: list[ParsedRow] = []
 
-    def cell(row: list, field: str) -> object:
+    def cell(row: list[Any], field: str) -> object:
         i = cols.get(field)
         return row[i] if i is not None and i < len(row) else None
 
@@ -199,7 +205,7 @@ def _score(row: ParsedRow, entry: CashLedgerEntry) -> int:
             if token in narration:
                 score += 8
                 break
-        vendor_name = entry.vendor.name if entry.vendor_id else ""
+        vendor_name = entry.vendor.name if entry.vendor else ""
         if vendor_name and any(
             part.lower() in narration for part in vendor_name.split() if len(part) > 3
         ):

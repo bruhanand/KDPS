@@ -40,7 +40,7 @@ class StockLedgerPagination(PageNumberPagination):
 MOVEMENT_SEARCH_FIELDS = ("doc_number", "sku_code", "design")
 
 
-class StockLedgerListView(generics.ListAPIView):
+class StockLedgerListView(generics.ListAPIView[StockLedgerEntry]):
     permission_classes = [IsAuthenticated]
     serializer_class = StockLedgerEntrySerializer
     pagination_class = StockLedgerPagination
@@ -261,7 +261,7 @@ class StockOnHandView(APIView):
             }
         )
 
-    def _rows(self, qs: Any, group_by: str) -> tuple[list[dict], int]:
+    def _rows(self, qs: Any, group_by: str) -> tuple[list[dict[str, Any]], int]:
         if group_by == "sku":
             lines = qs.count()
             page = qs.order_by("brand", "-net_qty")[: self.MAX_LINES]

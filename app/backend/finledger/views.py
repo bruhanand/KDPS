@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db.models import Count, Sum
 from django.utils import timezone
@@ -40,6 +40,9 @@ from finledger.reconciliation import UnsupportedFormat, parse_statement, process
 from finledger.serializers import CashLedgerEntrySerializer, VendorLedgerEntrySerializer
 from vendors.models import Vendor
 
+if TYPE_CHECKING:
+    from accounts.models import User
+
 # Vendor/cash payables, balances and ageing are the books (ADR-0003) — gated by
 # the SIDEBAR RBAC contract, not by a hand-kept role list. `money: manage` is the
 # rung only Owner and Accounts hold: a store person or warehouse operator holds
@@ -70,7 +73,7 @@ class LedgerPagination(PageNumberPagination):
 VENDOR_ENTRY_SEARCH_FIELDS = ("doc_number", "vendor__name", "vendor__code")
 
 
-class VendorEntriesView(generics.ListAPIView):
+class VendorEntriesView(generics.ListAPIView[VendorLedgerEntry]):
     permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = VendorLedgerEntrySerializer
     pagination_class = LedgerPagination
@@ -221,7 +224,8 @@ class VendorBillView(APIView):
     def post(self, request: Request) -> Response:
         if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
-        vendor = Vendor.objects.filter(pk=request.data.get("vendor_id")).first()
+        vendor_id: Any = request.data.get("vendor_id")
+        vendor = Vendor.objects.filter(pk=vendor_id).first()
         if not vendor:
             return Response({"detail": "vendor_id is required / invalid."}, status=400)
         amount = rupees_to_paise(request.data.get("amount"))
@@ -243,7 +247,8 @@ class VendorPaymentView(APIView):
     def post(self, request: Request) -> Response:
         if not _keeps_books(request.user):
             return Response({"detail": "Not permitted."}, status=403)
-        vendor = Vendor.objects.filter(pk=request.data.get("vendor_id")).first()
+        vendor_id: Any = request.data.get("vendor_id")
+        vendor = Vendor.objects.filter(pk=vendor_id).first()
         if not vendor:
             return Response({"detail": "vendor_id is required / invalid."}, status=400)
         amount = rupees_to_paise(request.data.get("amount"))
@@ -289,7 +294,7 @@ class VendorReverseView(APIView):
 CASH_ENTRY_SEARCH_FIELDS = ("doc_number", "description", "vendor__name")
 
 
-class CashEntriesView(generics.ListAPIView):
+class CashEntriesView(generics.ListAPIView[CashLedgerEntry]):
     permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = CashLedgerEntrySerializer
     pagination_class = LedgerPagination
@@ -442,11 +447,9 @@ def _line_dict(line: BankStatementLine) -> dict[str, Any]:
         "match_confidence": line.match_confidence,
         "candidates": line.candidates,
         "matched_entry_id": line.matched_entry_id,
-        "matched_entry_doc_number": line.matched_entry.doc_number
-        if line.matched_entry_id
-        else None,
+        "matched_entry_doc_number": line.matched_entry.doc_number if line.matched_entry else None,
         "matched_by_name": (
-            (line.matched_by.full_name or line.matched_by.username) if line.matched_by_id else ""
+            (line.matched_by.full_name or line.matched_by.username) if line.matched_by else ""
         ),
     }
 
@@ -474,7 +477,7 @@ class BankStatementImportsView(APIView):
                         "matched_count": b.matched_count,
                         "uploaded_by_name": (
                             (b.uploaded_by.full_name or b.uploaded_by.username)
-                            if b.uploaded_by_id
+                            if b.uploaded_by
                             else ""
                         ),
                     }
@@ -501,7 +504,9 @@ class BankStatementImportsView(APIView):
         batch = BankStatementImport.objects.create(
             file=stored,
             bank_label=request.data.get("bank_label", ""),
-            uploaded_by=request.user,
+            # Every writer on this view is `IsAuthenticated` + `money: manage`
+            # gated, so the actor is a real person, never `AnonymousUser`.
+            uploaded_by=cast("User", request.user),
         )
         process_import(batch, rows)
         return Response(
@@ -551,7 +556,7 @@ class BankStatementLineMatchView(APIView):
         if action == "ignore":
             line.status = BankStatementLine.Status.IGNORED
             line.matched_entry = None
-            line.matched_by = request.user
+            line.matched_by = cast("User", request.user)
         elif action == "unlink":
             line.status = (
                 BankStatementLine.Status.REVIEW
@@ -561,7 +566,7 @@ class BankStatementLineMatchView(APIView):
             line.matched_entry = None
             line.matched_by = None
         else:
-            entry_id = request.data.get("entry_id")
+            entry_id: Any = request.data.get("entry_id")
             entry = CashLedgerEntry.objects.filter(pk=entry_id).first()
             if not entry:
                 return Response(
@@ -574,6 +579,6 @@ class BankStatementLineMatchView(APIView):
                 )
             line.status = BankStatementLine.Status.MATCHED
             line.matched_entry = entry
-            line.matched_by = request.user
+            line.matched_by = cast("User", request.user)
         line.save(update_fields=["status", "matched_entry", "matched_by"])
         return Response(_line_dict(line))

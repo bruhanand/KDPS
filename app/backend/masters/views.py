@@ -14,7 +14,7 @@ carries the argument.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
@@ -22,6 +22,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import User
 from accounts.permissions import require_section
 from accounts.sections import CAP_MANAGE, CAP_VIEW
 from core.fiscal import financial_year_months
@@ -56,7 +57,7 @@ GSTIN_SEARCH_FIELDS = ("gstin", "state_name", "legal_entity__name", "legal_entit
 # --- Stores --------------------------------------------------------------
 
 
-class StoreListView(generics.ListCreateAPIView):
+class StoreListView(generics.ListCreateAPIView[Store]):
     serializer_class = StoreSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
 
@@ -65,7 +66,7 @@ class StoreListView(generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), STORE_SEARCH_FIELDS)
 
 
-class LocationListView(generics.ListAPIView):
+class LocationListView(generics.ListAPIView[Store]):
     """Every active location in the network, identity fields only — the list of
     places stock may be *sent* to.
 
@@ -84,7 +85,7 @@ class LocationListView(generics.ListAPIView):
     queryset = Store.objects.filter(is_active=True).select_related("gstin").order_by("code")
 
 
-class StoreDetailView(generics.RetrieveUpdateAPIView):
+class StoreDetailView(generics.RetrieveUpdateAPIView[Store]):
     serializer_class = StoreSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Store.objects.select_related("gstin").all()
@@ -93,7 +94,7 @@ class StoreDetailView(generics.RetrieveUpdateAPIView):
 # --- Brands --------------------------------------------------------------
 
 
-class BrandListView(generics.ListCreateAPIView):
+class BrandListView(generics.ListCreateAPIView[Brand]):
     serializer_class = BrandSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
 
@@ -102,7 +103,7 @@ class BrandListView(generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), BRAND_SEARCH_FIELDS)
 
 
-class BrandDetailView(generics.RetrieveUpdateAPIView):
+class BrandDetailView(generics.RetrieveUpdateAPIView[Brand]):
     serializer_class = BrandSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Brand.objects.all()
@@ -111,7 +112,7 @@ class BrandDetailView(generics.RetrieveUpdateAPIView):
 # --- Seasons -------------------------------------------------------------
 
 
-class SeasonListView(generics.ListCreateAPIView):
+class SeasonListView(generics.ListCreateAPIView[Season]):
     serializer_class = SeasonSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
 
@@ -120,7 +121,7 @@ class SeasonListView(generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), SEASON_SEARCH_FIELDS)
 
 
-class SeasonDetailView(generics.RetrieveUpdateAPIView):
+class SeasonDetailView(generics.RetrieveUpdateAPIView[Season]):
     serializer_class = SeasonSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Season.objects.all()
@@ -129,7 +130,7 @@ class SeasonDetailView(generics.RetrieveUpdateAPIView):
 # --- GSTINs --------------------------------------------------------------
 
 
-class GstinListView(generics.ListCreateAPIView):
+class GstinListView(generics.ListCreateAPIView[Gstin]):
     serializer_class = GstinSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
 
@@ -138,7 +139,7 @@ class GstinListView(generics.ListCreateAPIView):
         return text_filter(qs, search_term(self.request), GSTIN_SEARCH_FIELDS)
 
 
-class GstinDetailView(generics.RetrieveUpdateAPIView):
+class GstinDetailView(generics.RetrieveUpdateAPIView[Gstin]):
     serializer_class = GstinSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Gstin.objects.select_related("legal_entity").all()
@@ -147,7 +148,7 @@ class GstinDetailView(generics.RetrieveUpdateAPIView):
 # --- Legal entities ------------------------------------------------------
 
 
-class LegalEntityListView(generics.ListAPIView):
+class LegalEntityListView(generics.ListAPIView[LegalEntity]):
     serializer_class = LegalEntitySerializer
     permission_classes = [IsAuthenticated]
     queryset = LegalEntity.objects.filter(is_active=True)
@@ -279,7 +280,9 @@ class StoreTargetView(APIView):
             month=form.validated_data["month"],
             defaults={
                 "target_paise": form.validated_data["target_paise"],
-                "set_by": request.user,
+                # `IsAuthenticated` in `permission_classes` guarantees a real
+                # user by the time this line runs - never `AnonymousUser`.
+                "set_by": cast(User, request.user),
             },
         )
         return Response(StoreTargetSerializer(target).data)

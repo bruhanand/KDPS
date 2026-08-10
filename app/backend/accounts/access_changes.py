@@ -7,7 +7,9 @@ from typing import Any
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.db.models import Model
 from django.utils import timezone
+from rest_framework import serializers
 
 from accounts.floors import describe_floors, floor_violations
 from accounts.matrix import stored_row
@@ -31,7 +33,11 @@ class AccessChangeRightsError(ApprovalRightsError):
     """The checker is outside the immutable access-administrator floor."""
 
 
-SERIALIZERS = {
+#: Keyed on ``str`` (not ``AccessChange.Resource``) because callers - notably
+#: ``propose_access_change`` below - index this with the ``resource: str`` they
+#: were handed; ``Resource`` is a ``TextChoices`` (a ``str`` at runtime), so this
+#: is the same mapping, just typed the way it is actually indexed.
+SERIALIZERS: dict[str, type[serializers.ModelSerializer[Any]]] = {
     AccessChange.Resource.ROLE: AdminRoleSerializer,
     AccessChange.Resource.USER: AdminUserSerializer,
     AccessChange.Resource.ACTOR_POLICY: ActorPolicySerializer,
@@ -122,12 +128,19 @@ def propose_access_change(
     return change, approval
 
 
-def _target(model: type, change: AccessChange) -> Any:
+def _target[M: Model](model: type[M], change: AccessChange) -> Any:
     if change.operation == AccessChange.Operation.CREATE:
         return model()
     try:
-        return model.objects.select_for_update().get(pk=change.target_id)
-    except model.DoesNotExist as exc:
+        # `objects`/`DoesNotExist` are real on every concrete Model subclass,
+        # but django-stubs' plugin only re-adds them (they are stripped from
+        # `Model` itself, see `django-stubs/db/models/base.pyi`) when the class
+        # is named directly - a type parameter bound to `Model`, needed here
+        # because this helper is shared across four unrelated resources,
+        # doesn't qualify.
+        query = model.objects.select_for_update()  # type: ignore[attr-defined]
+        return query.get(pk=change.target_id)
+    except model.DoesNotExist as exc:  # type: ignore[attr-defined]
         raise AccessChangeError("The row this access change targeted no longer exists.") from exc
 
 
@@ -157,7 +170,7 @@ def _apply_user(change: AccessChange) -> None:
         user.brands.set(brand_ids)
 
 
-def _apply_columns(model: type) -> Callable[[AccessChange], None]:
+def _apply_columns[M: Model](model: type[M]) -> Callable[[AccessChange], None]:
     """Every other resource is a row of plain columns the serializer validated."""
 
     def apply(change: AccessChange) -> None:

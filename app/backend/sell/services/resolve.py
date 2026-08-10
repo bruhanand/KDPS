@@ -173,7 +173,9 @@ def manager_for_override(user_id: Any, store: Store) -> User | None:
     """
     if not user_id:
         return None
-    user = User.objects.filter(pk=user_id, is_active=True).select_related("role").first()
+    user: User | None = (
+        User.objects.filter(pk=user_id, is_active=True).select_related("role").first()
+    )
     if user is None or not user_can(user, "sell", CAP_APPROVE):
         return None
     allowed = actionable_store_ids(user)

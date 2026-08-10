@@ -82,7 +82,9 @@ class Command(BaseCommand):
         demotions: list[str] = []
         conflicts: list[str] = []
 
-        def consider(dim: str, key: str, target: str, brand: str, support: int, files: set) -> None:
+        def consider(
+            dim: str, key: str, target: str, brand: str, support: int, files: set[int]
+        ) -> None:
             existing = Lookup.objects.filter(dimension=dim, source_key=key, brand=brand).first()
             if existing is not None:
                 if existing.target_value != target:

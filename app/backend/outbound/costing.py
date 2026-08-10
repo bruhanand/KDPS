@@ -23,7 +23,6 @@ the error still belongs to posting.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 from stockledger.models import StockOnHand
 
@@ -65,7 +64,7 @@ def book_unit_costs(store_id: int, seasons_by_barcode: Mapping[str, str]) -> dic
     if not barcodes:
         return {}
 
-    on_hand: dict[str, Any] = {
+    on_hand: dict[str, StockOnHand] = {
         row.sku_code: row
         for row in StockOnHand.objects.filter(store_id=store_id, sku_code__in=barcodes)
     }
@@ -74,8 +73,8 @@ def book_unit_costs(store_id: int, seasons_by_barcode: Mapping[str, str]) -> dic
     # How many cohorts each barcode has at all — the "is it ambiguous?" question
     # the single-piece version answered by fetching two rows.
     count_by_barcode: dict[str, int] = {}
-    for cohort in cohorts:
-        count_by_barcode[cohort.barcode] = count_by_barcode.get(cohort.barcode, 0) + 1
+    for c in cohorts:
+        count_by_barcode[c.barcode] = count_by_barcode.get(c.barcode, 0) + 1
 
     priced: dict[str, int] = {}
     for barcode, fallback_season in seasons_by_barcode.items():

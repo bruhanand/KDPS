@@ -17,16 +17,20 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
+# No stubs are published for openpyxl and `types-openpyxl` is not a dependency
+# here, so the workbook API types as Any. Narrow, and only about the .xlsx
+# writer below.
 import openpyxl
-from django.db.models import Sum
+from django.db.models import QuerySet, Sum
 from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
@@ -146,6 +150,9 @@ from outbound.serializers import (
 from outbound.transfer_pt import KDPS_COLUMNS
 from stockledger.views import search_on_hand
 
+if TYPE_CHECKING:
+    from accounts.models import User
+
 #: The people on a document's approval trail. Every maker-checker document's read
 #: shape joins all three, and a response that forgets one N+1s on names.
 APPROVAL_JOINS = (
@@ -155,7 +162,7 @@ APPROVAL_JOINS = (
 )
 
 
-def _filter_docstatus(qs, request):
+def _filter_docstatus[QS: QuerySet[Any]](qs: QS, request: Request) -> QS:
     """Apply the optional ``?docstatus=`` filter to a list queryset.
 
     A non-integer value is a client error, not a server one — return a
@@ -188,7 +195,7 @@ TRANSFER_SEARCH_FIELDS = (
 )
 
 
-def _transfers(user: Any) -> Any:
+def _transfers(user: Any) -> QuerySet[StoreTransfer]:
     """Transfers the caller is an end of (#141), in the read shape.
 
     Scoped here rather than at each view, so a new transfer read cannot be added
@@ -200,13 +207,13 @@ def _transfers(user: Any) -> Any:
     return scope_transfers(qs, user)
 
 
-class TransferListCreateView(generics.ListCreateAPIView):
-    def get_permissions(self):
+class TransferListCreateView(generics.ListCreateAPIView[StoreTransfer]):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanWriteTransfer()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StoreTransfer]:
         # Scoped before anything else narrows it, so the typed term filters the
         # caller's own transfers rather than the network's (#141, #102).
         qs = _transfers(self.request.user)
@@ -216,12 +223,12 @@ class TransferListCreateView(generics.ListCreateAPIView):
         qs = _filter_docstatus(qs, self.request)
         return text_filter(qs, search_term(self.request), TRANSFER_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return StoreTransferWriteSerializer
         return StoreTransferReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = StoreTransferWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         enforce_store_scope(request.user, ser.validated_data["source_store"].id)
@@ -232,13 +239,13 @@ class TransferListCreateView(generics.ListCreateAPIView):
         )
 
 
-class TransferDetailView(generics.RetrieveAPIView):
+class TransferDetailView(generics.RetrieveAPIView[StoreTransfer]):
     #: Scoped, so a transfer between two other stores is a 404 — knowing the id
     #: is not a way in, and the answer must not tell you the document is real.
     permission_classes = [IsAuthenticated]
     serializer_class = StoreTransferReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StoreTransfer]:
         return _transfers(self.request.user)
 
 
@@ -252,7 +259,7 @@ class TransferDispatchView(APIView):
 
     permission_classes = [CanWriteTransfer]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             transfer = (
                 StoreTransfer.objects.select_related("source_store", "destination_store")
@@ -297,7 +304,7 @@ class TransferReceiveView(APIView):
 
     permission_classes = [CanWriteTransfer]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             transfer = (
                 StoreTransfer.objects.select_related("source_store", "destination_store")
@@ -362,7 +369,7 @@ class TransferPTBaseView(APIView):
     #: File extension for the download views; the JSON view has none.
     extension = ""
 
-    def get(self, request, pk):
+    def get(self, request: Request, pk: int) -> HttpResponse:
         # Reached through the scoped transfer, so another store's PT is a 404 —
         # the same answer as a transfer that does not exist, and as a dispatched
         # transfer with no PT yet.
@@ -381,15 +388,15 @@ class TransferPTBaseView(APIView):
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         return self.render(pt)
 
-    def render(self, pt):  # pragma: no cover - overridden by every subclass
+    def render(self, pt: TransferPT) -> HttpResponse:  # pragma: no cover - subclassed
         raise NotImplementedError
 
-    def rows_in_column_order(self, pt) -> list[list]:
+    def rows_in_column_order(self, pt: TransferPT) -> list[list[Any]]:
         """The stored rows as plain lists, in the KDPS column order — the shape
         both file formats write."""
         return [[row.get(column, "") for column in KDPS_COLUMNS] for row in pt.rows]
 
-    def as_attachment(self, resp, pt):
+    def as_attachment(self, resp: HttpResponse, pt: TransferPT) -> HttpResponse:
         """Name the download after the voucher, with the slashes a voucher series
         uses flattened out of the filename: ``KDPS-PT-PT-A-STO-26-27-0001.csv``."""
         stem = (pt.transfer.doc_number or f"transfer-{pt.transfer_id}").replace("/", "-")
@@ -400,7 +407,7 @@ class TransferPTBaseView(APIView):
 class TransferPTView(TransferPTBaseView):
     """GET: the transfer's PT, whole — the shape the print screen renders."""
 
-    def render(self, pt):
+    def render(self, pt: TransferPT) -> HttpResponse:
         return Response(TransferPTSerializer(pt).data)
 
 
@@ -409,7 +416,7 @@ class TransferPTCsvView(TransferPTBaseView):
 
     extension = "csv"
 
-    def render(self, pt):
+    def render(self, pt: TransferPT) -> HttpResponse:
         resp = HttpResponse(content_type="text/csv")
         writer = csv.writer(resp)
         writer.writerow(KDPS_COLUMNS)
@@ -422,7 +429,7 @@ class TransferPTXlsxView(TransferPTBaseView):
 
     extension = "xlsx"
 
-    def render(self, pt):
+    def render(self, pt: TransferPT) -> HttpResponse:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "KDPS PT"
@@ -443,7 +450,7 @@ class TransferPTXlsxView(TransferPTBaseView):
 # ---------------------------------------------------------------------------
 
 
-def _transfer_for_read(pk):
+def _transfer_for_read(pk: int) -> StoreTransfer:
     """Re-read a transfer with everything the read shape joins on.
 
     Re-read rather than ``refresh_from_db``: the response carries the fresh
@@ -457,7 +464,7 @@ def _transfer_for_read(pk):
     )
 
 
-def _open_gap_transfers():
+def _open_gap_transfers() -> QuerySet[StoreTransfer]:
     """Every transfer where what was sent and what was received do not agree,
     and nobody has yet said why.
 
@@ -476,7 +483,7 @@ def _open_gap_transfers():
     )
 
 
-class TransferGapListView(generics.ListAPIView):
+class TransferGapListView(generics.ListAPIView[StoreTransfer]):
     """GET: the gaps list — every open gap, for the warehouse/HO screen.
 
     Scoped on the *source* store: the sender is answerable for the pieces until
@@ -488,8 +495,11 @@ class TransferGapListView(generics.ListAPIView):
     serializer_class = StoreTransferReadSerializer
     pagination_class = None
 
-    def get_queryset(self):
-        return scope_by_store(_open_gap_transfers(), self.request.user, "source_store_id")
+    def get_queryset(self) -> QuerySet[StoreTransfer]:
+        gaps: QuerySet[StoreTransfer] = scope_by_store(
+            _open_gap_transfers(), self.request.user, "source_store_id"
+        )
+        return gaps
 
 
 class TransferGapClosureCreateView(APIView):
@@ -503,7 +513,7 @@ class TransferGapClosureCreateView(APIView):
 
     permission_classes = [CanCloseTransferGap]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             transfer = _transfer_for_read(pk)
         except StoreTransfer.DoesNotExist:
@@ -532,7 +542,7 @@ class TransferGapClosureCreateView(APIView):
         )
 
 
-def _gap_closure_for_read(pk):
+def _gap_closure_for_read(pk: int) -> TransferGapClosure:
     return (
         TransferGapClosure.objects.select_related(
             "store",
@@ -546,17 +556,17 @@ def _gap_closure_for_read(pk):
     )
 
 
-class GapClosureDetailView(generics.RetrieveAPIView):
+class GapClosureDetailView(generics.RetrieveAPIView[TransferGapClosure]):
     #: Reading a closure is store-scoped like outbound's other reads (#141);
     #: correcting one is a write, and carries the same senior gate as raising and
     #: posting it.
     permission_classes = [IsAuthenticated]
     serializer_class = GapClosureReadSerializer
 
-    def get_permissions(self):
+    def get_permissions(self) -> list[BasePermission]:
         return [CanCloseTransferGap()] if self.request.method == "PATCH" else [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[TransferGapClosure]:
         # Scoped by *entitlement*, not by the switcher, because this is the one
         # outbound detail that is also fetched in order to act on it: the PATCH
         # below corrects the draft. The top bar chooses what you are looking at
@@ -565,7 +575,7 @@ class GapClosureDetailView(generics.RetrieveAPIView):
         # screen. Everything the correction itself refuses — a posted closure, a
         # senior at the receiving store — stays in `amend_gap_closure`, and still
         # answers 400 with its reason rather than a silent 404.
-        return scope_by_entitlement(
+        closures: QuerySet[TransferGapClosure] = scope_by_entitlement(
             TransferGapClosure.objects.select_related(
                 "store",
                 "created_by",
@@ -576,8 +586,9 @@ class GapClosureDetailView(generics.RetrieveAPIView):
             self.request.user,
             "store_id",
         )
+        return closures
 
-    def patch(self, request, *args, **kwargs):
+    def patch(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Correct a draft closure — a new reason, a new note, lines re-read.
 
         The way back from a rejection or a stale draft, so one wrong reason code
@@ -594,7 +605,7 @@ class GapClosureDetailView(generics.RetrieveAPIView):
                 closure,
                 reason=ser.validated_data["reason"],
                 note=ser.validated_data["note"],
-                user=request.user,
+                user=cast("User", request.user),
             )
         except OutboundPostingError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -613,7 +624,7 @@ class GapClosureSubmitView(APIView):
 
     permission_classes = [CanCloseTransferGap]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             closure = _gap_closure_for_read(pk)
         except TransferGapClosure.DoesNotExist:
@@ -641,7 +652,7 @@ class ScanLookupView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         from stockledger.models import StockOnHand, merch_dims
 
         store_id = request.query_params.get("store")
@@ -688,7 +699,7 @@ class CrossLocationStockSearchView(APIView):
     permission_classes = [IsAuthenticated]
     MAX_LINES = 500
 
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         from masters.models import Sku
         from stockledger.models import StockOnHand, merch_dims
 
@@ -749,7 +760,10 @@ class BillingPolicyView(APIView):
         if mode not in BillingPolicy.Mode.values:
             raise ValidationError({"mode": f"must be one of {BillingPolicy.Mode.values}"})
         policy.mode = mode
-        policy.set_by = request.user
+        # Gated by `CanManageBillingPolicy` above, so this is a real user —
+        # the anonymous one the request type still allows never reaches here,
+        # and could not be stored on the column if it did. Same everywhere below.
+        policy.set_by = cast("User", request.user)
         policy.save(update_fields=["mode", "set_by", "updated_at"])
         return Response(BillingPolicySerializer(policy).data)
 
@@ -780,7 +794,7 @@ class PartnerDuesView(APIView):
             .order_by("-dispatch_date")
         )
 
-        by_store: dict[int, dict] = {}
+        by_store: dict[int, dict[str, Any]] = {}
         for t in transfers:
             store = t.destination_store
             row = by_store.setdefault(
@@ -874,7 +888,8 @@ class PartnerSettlementsView(APIView):
         )
 
     def post(self, request: Request) -> Response:
-        store = Store.objects.filter(pk=request.data.get("store_id"), is_partner=True).first()
+        store_id: Any = request.data.get("store_id")
+        store = Store.objects.filter(pk=store_id, is_partner=True).first()
         if not store:
             return Response(
                 {"detail": "store_id is required / must be a partner store."}, status=400
@@ -937,7 +952,7 @@ STOCK_REQUEST_SEARCH_FIELDS = (
 )
 
 
-def _stock_requests(user: Any) -> Any:
+def _stock_requests(user: Any) -> QuerySet[StockRequest]:
     """Stock requests the caller is an end of (#74), in the read shape."""
     qs = StockRequest.objects.select_related(
         "requesting_store", "fulfilling_store", "created_by"
@@ -951,22 +966,22 @@ def _stock_requests(user: Any) -> Any:
     return scope_stock_requests(qs, user)
 
 
-class StockRequestListCreateView(generics.ListCreateAPIView):
-    def get_permissions(self):
+class StockRequestListCreateView(generics.ListCreateAPIView[StockRequest]):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanWriteTransfer()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StockRequest]:
         qs = _stock_requests(self.request.user)
         return text_filter(qs, search_term(self.request), STOCK_REQUEST_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return StockRequestWriteSerializer
         return StockRequestReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = StockRequestWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         # A store may only ask on its own behalf — the same rule that gates
@@ -979,11 +994,11 @@ class StockRequestListCreateView(generics.ListCreateAPIView):
         )
 
 
-class StockRequestDetailView(generics.RetrieveAPIView):
+class StockRequestDetailView(generics.RetrieveAPIView[StockRequest]):
     permission_classes = [IsAuthenticated]
     serializer_class = StockRequestReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StockRequest]:
         return _stock_requests(self.request.user)
 
 
@@ -997,7 +1012,7 @@ class StockRequestFulfilView(APIView):
 
     permission_classes = [CanWriteTransfer]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             stock_request = StockRequest.objects.select_related(
                 "requesting_store", "fulfilling_store"
@@ -1026,7 +1041,7 @@ class StockRequestCloseView(APIView):
 
     permission_classes = [CanWriteTransfer]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             stock_request = StockRequest.objects.select_related("fulfilling_store").get(pk=pk)
         except StockRequest.DoesNotExist:
@@ -1051,7 +1066,7 @@ class StockRequestCloseView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class MarkDamagedView(generics.ListCreateAPIView):
+class MarkDamagedView(generics.ListCreateAPIView[MarkDamaged]):
     """GET: list mark-damaged documents — ``?docstatus=0`` for the reports still
     waiting on someone. POST: the global mark-damaged action — create a DMG
     document from scanned pieces.
@@ -1067,24 +1082,25 @@ class MarkDamagedView(generics.ListCreateAPIView):
     stock view — damage is caught everywhere. store_staff is read-only.
     """
 
-    def get_permissions(self):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanWriteReturnToBrand()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[MarkDamaged]:
         qs = MarkDamaged.objects.select_related(
             "store", "created_by", "confirmed_by"
         ).prefetch_related("lines", *APPROVAL_JOINS)
         qs = _filter_docstatus(qs, self.request)
-        return scope_by_store(qs, self.request.user, "store_id")
+        marks: QuerySet[MarkDamaged] = scope_by_store(qs, self.request.user, "store_id")
+        return marks
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return MarkDamagedInputSerializer
         return MarkDamagedReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = MarkDamagedInputSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         store = ser.validated_data["store"]
@@ -1108,7 +1124,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
 # ---------------------------------------------------------------------------
 
 
-def _rtvs(user: Any) -> Any:
+def _rtvs(user: Any) -> QuerySet[ReturnToVendor]:
     """Returns to brand the caller may read, in the read shape.
 
     By store *or* brand (#75): a return is a store's document and a brand
@@ -1118,7 +1134,8 @@ def _rtvs(user: Any) -> Any:
     qs = ReturnToVendor.objects.select_related(
         "store", "vendor", "brand", "created_by", "approved_by", "via_transfer", "credit_note"
     ).prefetch_related("lines", *APPROVAL_JOINS)
-    return scope_by_store_or_brand(qs, user, "store_id", "brand__name")
+    scoped: QuerySet[ReturnToVendor] = scope_by_store_or_brand(qs, user, "store_id", "brand__name")
+    return scoped
 
 
 #: Return to Brand (#106) — the return's own number, and who it's going back to.
@@ -1181,10 +1198,10 @@ class ReturnablePoolView(APIView):
         )
 
 
-class RTVListCreateView(generics.ListCreateAPIView):
+class RTVListCreateView(generics.ListCreateAPIView[ReturnToVendor]):
     """The returns list, and the scan-built create behind it (#75)."""
 
-    def get_permissions(self):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             # Two gates, both data: the section says who reaches Return to
             # Brand, the stored actor policy says which of them may send stock
@@ -1192,7 +1209,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
             return [CanWriteReturnToBrand(), CanCreateReturnToBrand()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[ReturnToVendor]:
         qs = _filter_docstatus(_rtvs(self.request.user), self.request)
         rt = self.request.query_params.get("return_type")
         if rt:
@@ -1201,12 +1218,12 @@ class RTVListCreateView(generics.ListCreateAPIView):
         # narrow what the scope + filters above already allow.
         return text_filter(qs, search_term(self.request), RTV_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return ReturnToBrandCreateSerializer
         return ReturnToVendorReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = ReturnToBrandCreateSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
@@ -1220,7 +1237,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
                 route=data["logistics_route"],
                 via_transfer=data.get("via_transfer"),
                 scans=ser.scans_by_barcode(),
-                user=request.user,
+                user=cast("User", request.user),
                 notes=data.get("notes", ""),
             )
         except OutboundPostingError as e:
@@ -1231,11 +1248,11 @@ class RTVListCreateView(generics.ListCreateAPIView):
         )
 
 
-class RTVDetailView(generics.RetrieveAPIView):
+class RTVDetailView(generics.RetrieveAPIView[ReturnToVendor]):
     permission_classes = [IsAuthenticated]
     serializer_class = ReturnToVendorReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[ReturnToVendor]:
         return _rtvs(self.request.user)
 
 
@@ -1244,7 +1261,7 @@ class RTVSubmitView(APIView):
 
     permission_classes = [CanWriteReturnToBrand, CanCreateReturnToBrand]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             rtv = (
                 ReturnToVendor.objects.select_related("store", "vendor", "brand")
@@ -1312,35 +1329,36 @@ class RTVCreditNoteView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _adjustments(user: Any) -> Any:
+def _adjustments(user: Any) -> QuerySet[StockAdjustment]:
     """Stock adjustments at the caller's own stores (#141), in the read shape."""
     qs = StockAdjustment.objects.select_related(
         "store", "approved_by", "created_by"
     ).prefetch_related("lines", *APPROVAL_JOINS)
-    return scope_by_store(qs, user, "store_id")
+    scoped: QuerySet[StockAdjustment] = scope_by_store(qs, user, "store_id")
+    return scoped
 
 
 #: Adjustments (#106) — the document number, the reason code, and the store.
 ADJUSTMENT_SEARCH_FIELDS = ("doc_number", "reason", "store__name", "store__code")
 
 
-class AdjustmentListCreateView(generics.ListCreateAPIView):
-    def get_permissions(self):
+class AdjustmentListCreateView(generics.ListCreateAPIView[StockAdjustment]):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanWriteStockCount()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StockAdjustment]:
         qs = _filter_docstatus(_adjustments(self.request.user), self.request)
         # The screen's own search box (#102), applied last.
         return text_filter(qs, search_term(self.request), ADJUSTMENT_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return StockAdjustmentWriteSerializer
         return StockAdjustmentReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = StockAdjustmentWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         enforce_store_scope(request.user, ser.validated_data["store"].id)
@@ -1351,11 +1369,11 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         )
 
 
-class AdjustmentDetailView(generics.RetrieveAPIView):
+class AdjustmentDetailView(generics.RetrieveAPIView[StockAdjustment]):
     permission_classes = [IsAuthenticated]
     serializer_class = StockAdjustmentReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[StockAdjustment]:
         return _adjustments(self.request.user)
 
 
@@ -1364,7 +1382,7 @@ class AdjustmentSubmitView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             adj = (
                 StockAdjustment.objects.select_related("store").prefetch_related("lines").get(pk=pk)
@@ -1394,35 +1412,36 @@ class AdjustmentSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _writeoffs(user: Any) -> Any:
+def _writeoffs(user: Any) -> QuerySet[WriteOff]:
     """Write-offs at the caller's own stores (#141), in the read shape."""
     qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
         "lines", *APPROVAL_JOINS
     )
-    return scope_by_store(qs, user, "store_id")
+    scoped: QuerySet[WriteOff] = scope_by_store(qs, user, "store_id")
+    return scoped
 
 
 #: Write-offs (#106) — the document number, the reason, and the store.
 WRITEOFF_SEARCH_FIELDS = ("doc_number", "reason", "store__name", "store__code")
 
 
-class WriteOffListCreateView(generics.ListCreateAPIView):
-    def get_permissions(self):
+class WriteOffListCreateView(generics.ListCreateAPIView[WriteOff]):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanWriteStockCount()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[WriteOff]:
         qs = _filter_docstatus(_writeoffs(self.request.user), self.request)
         # The screen's own search box (#102), applied last.
         return text_filter(qs, search_term(self.request), WRITEOFF_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return WriteOffWriteSerializer
         return WriteOffReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = WriteOffWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         enforce_store_scope(request.user, ser.validated_data["store"].id)
@@ -1433,11 +1452,11 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         )
 
 
-class WriteOffDetailView(generics.RetrieveAPIView):
+class WriteOffDetailView(generics.RetrieveAPIView[WriteOff]):
     permission_classes = [IsAuthenticated]
     serializer_class = WriteOffReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[WriteOff]:
         return _writeoffs(self.request.user)
 
 
@@ -1446,7 +1465,7 @@ class WriteOffSubmitView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             wo = WriteOff.objects.select_related("store").prefetch_related("lines").get(pk=pk)
         except WriteOff.DoesNotExist:
@@ -1474,7 +1493,7 @@ class WriteOffSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _vflips(user: Any) -> Any:
+def _vflips(user: Any) -> QuerySet[VFlip]:
     """V-flips at the caller's own stores (#141), in the read shape.
 
     Scoped by store like the rest, not by the brand being flipped: the document
@@ -1484,30 +1503,31 @@ def _vflips(user: Any) -> Any:
     qs = VFlip.objects.select_related(
         "store", "original_brand", "authorized_by", "created_by"
     ).prefetch_related("lines", *APPROVAL_JOINS)
-    return scope_by_store(qs, user, "store_id")
+    scoped: QuerySet[VFlip] = scope_by_store(qs, user, "store_id")
+    return scoped
 
 
 #: V-Flips (#106) — the document number, the brand being flipped, and the store.
 VFLIP_SEARCH_FIELDS = ("doc_number", "original_brand__name", "store__name", "store__code")
 
 
-class VFlipListCreateView(generics.ListCreateAPIView):
-    def get_permissions(self):
+class VFlipListCreateView(generics.ListCreateAPIView[VFlip]):
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "POST":
             return [CanFlipOwnership()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[VFlip]:
         qs = _filter_docstatus(_vflips(self.request.user), self.request)
         # The screen's own search box (#102), applied last.
         return text_filter(qs, search_term(self.request), VFLIP_SEARCH_FIELDS)
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
         if self.request.method == "POST":
             return VFlipWriteSerializer
         return VFlipReadSerializer
 
-    def create(self, request, *args, **kwargs):
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         ser = VFlipWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         enforce_store_scope(request.user, ser.validated_data["store"].id)
@@ -1518,11 +1538,11 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         )
 
 
-class VFlipDetailView(generics.RetrieveAPIView):
+class VFlipDetailView(generics.RetrieveAPIView[VFlip]):
     permission_classes = [IsAuthenticated]
     serializer_class = VFlipReadSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[VFlip]:
         return _vflips(self.request.user)
 
 
@@ -1531,7 +1551,7 @@ class VFlipSubmitView(APIView):
 
     permission_classes = [CanExecuteVFlip]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             vflip = (
                 VFlip.objects.select_related("store", "original_brand")
@@ -1582,14 +1602,14 @@ class RequestApprovalView(APIView):
     #: *source* for a transfer, the store for everything else.
     scope_field: str = "store_id"
 
-    def _load(self, pk):
+    def _load(self, pk: int) -> Any:
         return (
             self.model.objects.select_related(*self.related)
             .prefetch_related("lines", *APPROVAL_JOINS)
             .get(pk=pk)
         )
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             doc = self._load(pk)
         except self.model.DoesNotExist:
@@ -1613,7 +1633,7 @@ class RequestApprovalView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _stocktakes(user: Any) -> Any:
+def _stocktakes(user: Any) -> QuerySet[Stocktake]:
     """Counts this user may see — scoped at the queryset, fail-closed (ADR-0003).
 
     Scope belongs here rather than on each view because a count carries per-line
@@ -1625,7 +1645,8 @@ def _stocktakes(user: Any) -> Any:
     qs = Stocktake.objects.select_related("store", "opened_by", "adjustment").prefetch_related(
         "sessions__lines", "sessions__counted_by"
     )
-    return scope_by_store(qs, user, "store_id")
+    scoped: QuerySet[Stocktake] = scope_by_store(qs, user, "store_id")
+    return scoped
 
 
 def _load_stocktake(pk: int, user: Any) -> Stocktake:
@@ -1635,18 +1656,20 @@ def _load_stocktake(pk: int, user: Any) -> Stocktake:
 class StocktakeListCreateView(APIView):
     """GET: counts at the stores this user can see. POST: open a new one."""
 
-    def get_permissions(self):
+    def get_permissions(self) -> list[BasePermission]:
         return [CanWriteStockCount()] if self.request.method == "POST" else [IsAuthenticated()]
 
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         return Response(StocktakeReadSerializer(_stocktakes(request.user), many=True).data)
 
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         ser = StocktakeCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         store = ser.validated_data["store"]
         enforce_store_scope(request.user, store.id)
-        stocktake = open_stocktake(store, user=request.user, note=ser.validated_data["note"])
+        stocktake = open_stocktake(
+            store, user=cast("User", request.user), note=ser.validated_data["note"]
+        )
         return Response(
             StocktakeReadSerializer(_load_stocktake(stocktake.pk, request.user)).data,
             status=status.HTTP_201_CREATED,
@@ -1656,7 +1679,7 @@ class StocktakeListCreateView(APIView):
 class StocktakeDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, pk):
+    def get(self, request: Request, pk: int) -> Response:
         try:
             return Response(StocktakeReadSerializer(_load_stocktake(pk, request.user)).data)
         except Stocktake.DoesNotExist:
@@ -1668,7 +1691,7 @@ class CountSessionCreateView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             stocktake = Stocktake.objects.select_related("store").get(pk=pk)
         except Stocktake.DoesNotExist:
@@ -1682,7 +1705,7 @@ class CountSessionCreateView(APIView):
                 stocktake,
                 scope=ser.validated_data["scope"],
                 scope_value=ser.validated_data["scope_value"],
-                user=request.user,
+                user=cast("User", request.user),
             )
         except CountError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1701,7 +1724,7 @@ class CountLookupView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         from outbound.counting import identity_dims
 
         store_id = request.query_params.get("store")
@@ -1733,7 +1756,7 @@ class CountSessionScanView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         session = _load_session(pk)
         if session is None:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -1753,7 +1776,7 @@ class CountSessionSubmitView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         session = _load_session(pk)
         if session is None:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -1806,7 +1829,7 @@ class StocktakeVarianceView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, pk):
+    def get(self, request: Request, pk: int) -> Response:
         try:
             stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
@@ -1824,7 +1847,7 @@ class StocktakeRecountView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
@@ -1839,7 +1862,7 @@ class StocktakeRecountView(APIView):
                 sku_code=ser.validated_data["sku_code"],
                 counted_qty=ser.validated_data["counted_qty"],
                 reason=ser.validated_data["reason"],
-                user=request.user,
+                user=cast("User", request.user),
             )
         except SameCounterError as e:
             return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
@@ -1860,7 +1883,7 @@ class StocktakeApplyView(APIView):
 
     permission_classes = [CanWriteStockCount]
 
-    def post(self, request, pk):
+    def post(self, request: Request, pk: int) -> Response:
         try:
             stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
@@ -1872,7 +1895,7 @@ class StocktakeApplyView(APIView):
         try:
             adjustment = apply_variance(
                 stocktake,
-                user=request.user,
+                user=cast("User", request.user),
                 confirm_skus=frozenset(ser.validated_data["confirm"]),
             )
         except RecountRequiredError as e:
