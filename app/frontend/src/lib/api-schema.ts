@@ -192,15 +192,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_actor_policies_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_actor_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_actor_policies_partial_update"];
         trace?: never;
     };
@@ -211,10 +229,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_approval_policies_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_approval_policies_create"];
         delete?: never;
         options?: never;
@@ -229,15 +259,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_approval_policies_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_approval_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_approval_policies_partial_update"];
         trace?: never;
     };
@@ -264,10 +312,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_roles_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_roles_create"];
         delete?: never;
         options?: never;
@@ -314,15 +374,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_roles_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_roles_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_roles_partial_update"];
         trace?: never;
     };
@@ -333,10 +411,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_users_list"];
         put?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         post: operations["auth_admin_users_create"];
         delete?: never;
         options?: never;
@@ -351,15 +441,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         get: operations["auth_admin_users_retrieve"];
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         put: operations["auth_admin_users_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Every Setup write becomes a proposal a second administrator applies. */
+        /**
+         * @description Every Setup write becomes a proposal a second administrator applies.
+         *
+         *     Always combined with a `generics.GenericAPIView` subclass (see the view
+         *     classes below), which is where `get_serializer`/`get_object` actually come
+         *     from - this mixin alone is never instantiated on its own.
+         */
         patch: operations["auth_admin_users_partial_update"];
         trace?: never;
     };
