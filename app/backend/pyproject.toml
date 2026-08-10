@@ -54,6 +54,13 @@ dev = [
     "pytest-split>=0.9",
     "mypy>=1.13",
     "django-stubs[compatible-mypy]>=5.1",
+    # Without these, every `rest_framework` name is `Any` (the old
+    # `ignore_missing_imports` override), and under `strict = true` that made
+    # `disallow_subclassing_any` fire on all 252 views, serializers and
+    # permissions in the codebase. Those were never 252 defects — they were one
+    # missing stub package, invisible while the gate only covered `core config`,
+    # which barely touches DRF.
+    "djangorestframework-stubs[compatible-mypy]>=3.15",
     "ruff>=0.8",
     "import-linter>=2.1",
 ]
@@ -98,10 +105,6 @@ exclude = ['migrations/', 'tests/']
 
 [[tool.mypy.overrides]]
 module = ["dj_database_url"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["rest_framework.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]
