@@ -15,8 +15,9 @@ from __future__ import annotations
 
 from django.core.management import call_command
 
-from core.gl import GLEntry
+from core.gl import GLEntry, trial_balance
 from outbound.models import ReturnToVendorLine, VFlipLine
+from stockledger.models import StockOnHand
 from vendors.models import Booking
 
 # The exact barcodes the seed used to reference before this fix landed - no
@@ -25,12 +26,23 @@ from vendors.models import Booking
 # is the historical bug walking back in.
 NEVER_RECEIVED_BARCODES = {"PE-CHK-BLU-42", "BB-TROU-GRY-34", "LP-SLIM-WHT-38"}
 
+# The six locations `seed_foundation` creates (5 selling stores + the Ranchi
+# warehouse) - the acceptance criterion is "all six stores stocked".
+ALL_STORE_CODES = {"DEO", "BKR", "HZB", "DUM", "BANKA", "RAN-WH"}
+
 
 def test_seed_demo_data_runs_green_on_a_fresh_db_and_a_second_run_is_a_clean_noop(db):
     call_command("seed_demo_data")
 
     bookings = Booking.objects.count()
     assert bookings > 0
+
+    stocked_stores = set(
+        StockOnHand.objects.filter(net_qty__gt=0).values_list("store__code", flat=True)
+    )
+    assert stocked_stores == ALL_STORE_CODES
+
+    assert trial_balance() == 0  # every posting's legs sum to zero, so does the whole GL
 
     # A second consecutive run must not crash or duplicate the wave - it
     # recognises its own sentinel and skips.

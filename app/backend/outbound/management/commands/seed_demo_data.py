@@ -650,19 +650,22 @@ class Command(BaseCommand):
             )
             return
 
-        call_command("seed_foundation")
-
         # Every progress line below is held back until the whole run has
         # succeeded. The command is one atomic transaction - if a later step
         # fails, every line already printed would claim progress the rollback
         # just undid (#251/#252/#256: a traceback a dozen lines in, nothing on
-        # screen saying the stock those lines described was gone again). A
-        # failure below prints nothing but the one sentence naming what broke;
-        # success flushes every buffered line, unchanged from before.
+        # screen saying the stock those lines described was gone again). That
+        # includes `seed_foundation` and `check_alerts` below: each is its own
+        # Command instance, so its output is captured only because it is
+        # handed this same buffer, not our wrapper around it. A failure below
+        # prints nothing but the one sentence naming what broke; success
+        # flushes every buffered line, unchanged from before.
         buffer = io.StringIO()
         real_stdout, self.stdout = self.stdout, OutputWrapper(buffer)
-        current_step = "cleaning test junk"
+        current_step = "seeding foundation data"
         try:
+            call_command("seed_foundation", stdout=buffer)
+            current_step = "cleaning test junk"
             self._clean_test_junk()
             current_step = "ensuring voucher series"
             self._ensure_series()
@@ -694,39 +697,31 @@ class Command(BaseCommand):
             self.brands = {b.name: b for b in Brand.objects.all()}
             self.seasons = {s.code: s for s in Season.objects.all()}
 
-            current_step = "inbound receipts"
-            self._seed_inbound()
-            current_step = "the open/booked order"
-            self._seed_open_and_booked_orders()
-            current_step = "transfers"
-            self._seed_transfers()
-            current_step = "damage flags"
-            self._seed_damage()
-            current_step = "RTVs"
-            self._seed_rtvs()
-            current_step = "adjustments"
-            self._seed_adjustments()
-            current_step = "the V-flip"
-            self._seed_vflip()
-            current_step = "stocktakes"
-            self._seed_stocktakes()
-            current_step = "stock requests"
-            self._seed_stock_requests()
-            current_step = "write-offs"
-            self._seed_writeoffs()
-            current_step = "money movements"
-            self._seed_money()
-            current_step = "offers"
-            self._seed_offers()
-            current_step = "customers"
-            self._seed_customers()
-            current_step = "alerts"
-            call_command("check_alerts")
-        except Exception as exc:
-            self.stdout = real_stdout
-            raise CommandError(f"Demo seed failed while seeding {current_step}: {exc}") from exc
+            steps: list[tuple[str, Any]] = [
+                ("inbound receipts", self._seed_inbound),
+                ("the open/booked order", self._seed_open_and_booked_orders),
+                ("transfers", self._seed_transfers),
+                ("damage flags", self._seed_damage),
+                ("RTVs", self._seed_rtvs),
+                ("adjustments", self._seed_adjustments),
+                ("the V-flip", self._seed_vflip),
+                ("stocktakes", self._seed_stocktakes),
+                ("stock requests", self._seed_stock_requests),
+                ("write-offs", self._seed_writeoffs),
+                ("money movements", self._seed_money),
+                ("offers", self._seed_offers),
+                ("customers", self._seed_customers),
+            ]
+            for current_step, step in steps:  # noqa: B007 - read by the except clause below
+                step()
 
-        self.stdout = real_stdout
+            current_step = "alerts"
+            call_command("check_alerts", stdout=buffer)
+        except Exception as exc:
+            raise CommandError(f"Demo seed failed while seeding {current_step}: {exc}") from exc
+        finally:
+            self.stdout = real_stdout
+
         self.stdout.write(buffer.getvalue(), ending="")
 
         self.stdout.write(self.style.SUCCESS("\nDemo data seeded across all modules."))
