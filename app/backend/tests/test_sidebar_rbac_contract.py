@@ -256,7 +256,10 @@ def test_the_client_copy_of_the_table_is_current():
 
     assert TARGET.exists(), f"{TARGET} is missing - run manage.py dump_rbac_matrix"
     assert TARGET.read_text() == rendered(), (
-        f"{TARGET.name} is stale - run `python manage.py dump_rbac_matrix` and commit it"
+        f"{TARGET.name} is stale - run `python manage.py dump_rbac_matrix` and commit it. "
+        "If a ratified cell moved, that also needs a backfill migration: since #224 the "
+        "seed adds to a stored grid and never rewrites it, so a sheet change alone never "
+        "reaches a database that has already been seeded."
     )
 
 
