@@ -5,6 +5,7 @@ import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerRe
 import { useAuth } from "../auth/AuthContext";
 import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { Money } from "../lib/format";
 import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -14,7 +15,7 @@ interface BalanceT {
   vendor_id: number;
   vendor_code: string;
   vendor_name: string;
-  outstanding_rupees: string;
+  outstanding_paise: number;
   entries: number;
 }
 interface AgeingRowT {
@@ -23,18 +24,18 @@ interface AgeingRowT {
   vendor_name: string;
   payment_terms: string;
   oldest_days: number;
-  bucket_0_30_rupees: string;
-  bucket_31_60_rupees: string;
-  bucket_60_plus_rupees: string;
-  total_due_rupees: string;
+  bucket_0_30_paise: number;
+  bucket_31_60_paise: number;
+  bucket_60_plus_paise: number;
+  total_due_paise: number;
   open_bill_count: number;
 }
 interface AgeingT {
   as_of: string;
-  total_due_rupees: string;
-  bucket_0_30_rupees: string;
-  bucket_31_60_rupees: string;
-  bucket_60_plus_rupees: string;
+  total_due_paise: number;
+  bucket_0_30_paise: number;
+  bucket_31_60_paise: number;
+  bucket_60_plus_paise: number;
   rows: AgeingRowT[];
 }
 interface EntryT {
@@ -44,7 +45,7 @@ interface EntryT {
   kind: string;
   kind_label: string;
   vendor_name: string;
-  amount_rupees: string;
+  amount: number;
   description: string;
   reference: string;
 }
@@ -56,7 +57,7 @@ export default function VendorLedger() {
   // read from the same section payload rather than a role list of our own.
   const isFinance = userCan(user, "money", "manage");
 
-  const [balances, setBalances] = useState<{ total_payable_rupees: string; vendors_with_dues: number; rows: BalanceT[] }>();
+  const [balances, setBalances] = useState<{ total_payable_paise: number; vendors_with_dues: number; rows: BalanceT[] }>();
   const [ageing, setAgeing] = useState<AgeingT>();
   const [entries, setEntries] = useState<EntryT[]>([]);
   const [vendors, setVendors] = useState<{ id: number; name: string }[]>([]);
@@ -138,11 +139,11 @@ export default function VendorLedger() {
       />
 
       <div className="stat-grid">
-        <div className="card stat-card"><IndianRupee size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono">{balances?.total_payable_rupees ?? "0.00"}</div><div className="stat-label">Total payable (₹)</div></div>
+        <div className="card stat-card"><IndianRupee size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono"><Money paise={balances?.total_payable_paise ?? 0} /></div><div className="stat-label">Total payable (₹)</div></div>
         <div className="card stat-card"><Users size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono">{balances?.vendors_with_dues ?? 0}</div><div className="stat-label">Vendors with dues</div></div>
-        <div className="card stat-card"><TimerReset size={18} style={{ color: "var(--amber)" }} /><div className="stat-value mono" data-testid="vl-ageing-0-30">{ageing?.bucket_0_30_rupees ?? "0.00"}</div><div className="stat-label">0–30 days (₹)</div></div>
-        <div className="card stat-card"><TimerReset size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="vl-ageing-31-60">{ageing?.bucket_31_60_rupees ?? "0.00"}</div><div className="stat-label">31–60 days (₹)</div></div>
-        <div className="card stat-card"><AlertTriangle size={18} style={{ color: "var(--red)" }} /><div className="stat-value mono" data-testid="vl-ageing-60-plus">{ageing?.bucket_60_plus_rupees ?? "0.00"}</div><div className="stat-label">60+ days (₹)</div></div>
+        <div className="card stat-card"><TimerReset size={18} style={{ color: "var(--amber)" }} /><div className="stat-value mono" data-testid="vl-ageing-0-30"><Money paise={ageing?.bucket_0_30_paise ?? 0} /></div><div className="stat-label">0–30 days (₹)</div></div>
+        <div className="card stat-card"><TimerReset size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="vl-ageing-31-60"><Money paise={ageing?.bucket_31_60_paise ?? 0} /></div><div className="stat-label">31–60 days (₹)</div></div>
+        <div className="card stat-card"><AlertTriangle size={18} style={{ color: "var(--red)" }} /><div className="stat-value mono" data-testid="vl-ageing-60-plus"><Money paise={ageing?.bucket_60_plus_paise ?? 0} /></div><div className="stat-label">60+ days (₹)</div></div>
         <div className="card stat-card"><ReceiptText size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono">{count}</div><div className="stat-label">Ledger entries</div></div>
       </div>
 
@@ -187,7 +188,7 @@ export default function VendorLedger() {
                 <tr key={b.vendor_id} data-testid={`vl-balance-row-${b.vendor_id}`}>
                   <td><b>{b.vendor_name}</b></td><td className="mono">{b.vendor_code}</td>
                   <td className="num">{b.entries}</td>
-                  <td className="num mono" style={{ fontWeight: 700 }}>{b.outstanding_rupees}</td>
+                  <td className="num mono" style={{ fontWeight: 700 }}><Money paise={b.outstanding_paise} /></td>
                 </tr>
               ))}
             </tbody>
@@ -212,10 +213,10 @@ export default function VendorLedger() {
                   <td><b>{r.vendor_name}</b><div className="mono" style={{ fontSize: 12 }}>{r.vendor_code} · {r.open_bill_count} bill(s)</div></td>
                   <td>{r.payment_terms || "—"}</td>
                   <td className="num">{r.oldest_days}d</td>
-                  <td className="num mono">{r.bucket_0_30_rupees}</td>
-                  <td className="num mono" style={{ fontWeight: Number(r.bucket_31_60_rupees) ? 700 : 400 }}>{r.bucket_31_60_rupees}</td>
-                  <td className="num mono" style={{ fontWeight: Number(r.bucket_60_plus_rupees) ? 800 : 400, color: Number(r.bucket_60_plus_rupees) ? "var(--red)" : "inherit" }}>{r.bucket_60_plus_rupees}</td>
-                  <td className="num mono" style={{ fontWeight: 800 }}>{r.total_due_rupees}</td>
+                  <td className="num mono"><Money paise={r.bucket_0_30_paise} /></td>
+                  <td className="num mono" style={{ fontWeight: r.bucket_31_60_paise ? 700 : 400 }}><Money paise={r.bucket_31_60_paise} /></td>
+                  <td className="num mono" style={{ fontWeight: r.bucket_60_plus_paise ? 800 : 400, color: r.bucket_60_plus_paise ? "var(--red)" : "inherit" }}><Money paise={r.bucket_60_plus_paise} /></td>
+                  <td className="num mono" style={{ fontWeight: 800 }}><Money paise={r.total_due_paise} /></td>
                 </tr>
               ))}
             </tbody>
@@ -249,7 +250,7 @@ export default function VendorLedger() {
                   <td><span className={`chip chip-${e.kind === "bill" ? "amber" : e.kind === "payment" ? "green" : "red"}`}>{e.kind_label}</span></td>
                   <td>{e.vendor_name}</td>
                   <td>{e.description}{e.reference ? ` · ${e.reference}` : ""}</td>
-                  <td className="num mono" style={{ fontWeight: 700, color: Number(e.amount_rupees) < 0 ? "var(--rust)" : "inherit" }}>{e.amount_rupees}</td>
+                  <td className="num mono" style={{ fontWeight: 700, color: e.amount < 0 ? "var(--rust)" : "inherit" }}><Money paise={e.amount} /></td>
                   <td>{isFinance && e.kind !== "reversal" && (
                     <button className="btn btn-sm" disabled={busy} onClick={() => reverse(e.id)} data-testid={`vl-reverse-${e.id}`}><RotateCcw size={13} /> Reverse</button>
                   )}</td>

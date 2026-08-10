@@ -210,8 +210,11 @@ class VendorAgeingView(APIView):
                 "as_of": today.isoformat(),
                 "total_due_paise": total_due,
                 "total_due_rupees": paise_to_rupees_str(total_due),
+                "bucket_0_30_paise": totals["bucket_0_30"],
                 "bucket_0_30_rupees": paise_to_rupees_str(totals["bucket_0_30"]),
+                "bucket_31_60_paise": totals["bucket_31_60"],
                 "bucket_31_60_rupees": paise_to_rupees_str(totals["bucket_31_60"]),
+                "bucket_60_plus_paise": totals["bucket_60_plus"],
                 "bucket_60_plus_rupees": paise_to_rupees_str(totals["bucket_60_plus"]),
                 "rows": rows,
             }
