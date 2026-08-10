@@ -60,6 +60,7 @@ from accounts.sections import (
     CAP_MANAGE,
     CAPABILITY_ORDER,
     CAPABILITY_RANK,
+    CAPABILITY_WORDS,
     SECTION_CODES,
     SECTION_LABELS,
 )
@@ -200,6 +201,40 @@ def floor_violations(role_code: str, section_access: dict[str, Any]) -> list[dic
         if CAPABILITY_RANK.get(asked, 0) > CAPABILITY_RANK[limit["max_capability"]]:
             violations.append({"section": section, "requested": asked, **limit})
     return violations
+
+
+def clamp_to_floors(
+    role_code: str, section_access: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """The row with every floor-crossing cell pulled down to its ceiling.
+
+    Both doors refuse a crossing edit on the way in, so a stored row can only
+    cross a floor one way: the floor moved under it. Floors are ratified in
+    code, so a release can tighten one - add a role to ``STORE_SEATS``, narrow
+    ``HEAD_OFFICE_VALUE_ACTORS`` - and every row already stored at the old
+    ceiling is suddenly above the new one, with no edit to refuse.
+
+    Until #224 the seed papered over that by heart: it wrote the sheet, which is
+    floor-clean, over every row on every deploy. Seeding the grid additively
+    keeps an administrator's retune, which is the point - but it would also keep
+    a rung the floor has since locked. So the seed narrows, out loud, on the
+    same deploy that ships the tighter floor.
+
+    Returns the row to store and the violations it corrected, so the caller can
+    say which cells it moved rather than moving them silently. Narrowing only:
+    this never raises a cell.
+    """
+    crossed = floor_violations(role_code, section_access)
+    if not crossed:
+        return section_access, []
+    out = dict(section_access)
+    for violation in crossed:
+        ceiling = violation["max_capability"]
+        out[violation["section"]] = {
+            "capability": ceiling,
+            "label": CAPABILITY_WORDS.get(ceiling, ceiling),
+        }
+    return out, crossed
 
 
 def describe_floors(violations: list[dict[str, str]]) -> list[str]:

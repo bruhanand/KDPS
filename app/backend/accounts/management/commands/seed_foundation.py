@@ -1,7 +1,9 @@
 """Idempotent foundation seed: roles, the masters spine, and demo users.
 
-Run: `python manage.py seed_foundation`. Safe to re-run — it upserts. It also
-(re)writes `memory/test_credentials.md` in the checkout (override with
+Run: `python manage.py seed_foundation`. Safe to re-run - it upserts, except for
+the three things a live operator owns: a user's password, a role's access grid
+and whether a role is active (see `_seed_roles`). It also (re)writes
+`memory/test_credentials.md` in the checkout (override with
 `SEED_CREDENTIALS_PATH`) so the testing/fork agents always have current logins.
 """
 
@@ -16,6 +18,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from accounts.floors import clamp_to_floors, describe_floors
+from accounts.matrix import seeded_row
 from accounts.models import NAV_GROUPS, Role, User
 from accounts.rbac_matrix import section_access_for
 from core.documents import VoucherSeries
@@ -158,8 +162,23 @@ USERS: list[tuple[str, str, str, str, list[str], str, list[str]]] = [
 class Command(BaseCommand):
     help = "Seed foundation roles, masters and demo users (idempotent)."
 
-    @transaction.atomic
     def handle(self, *args: Any, **options: Any) -> None:
+        self._seed_rows()
+        if SEED_DEMO:
+            # Outside the transaction on purpose: this is filesystem IO, and the
+            # seed holds a row lock on every Role while it runs. Writing a file
+            # under those locks makes a concurrent access-change apply wait on a
+            # disk, and the file is derived from a constant - it needs no
+            # database consistency at all.
+            self._write_credentials()
+            self.stdout.write(self.style.SUCCESS("Foundation seed complete (incl. demo users)."))
+        else:
+            self.stdout.write(
+                self.style.SUCCESS("Foundation seed complete (SEED_DEMO=0: demo users skipped).")
+            )
+
+    @transaction.atomic
+    def _seed_rows(self) -> None:
         self._seed_roles()
         entity, gstins = self._seed_entity_gstins()
         stores = self._seed_stores(gstins)
@@ -172,28 +191,47 @@ class Command(BaseCommand):
         if SEED_DEMO:
             self._seed_users(entity, stores)
             self._seed_sample_booking(vendors, stores)
-            self._write_credentials()
-            self.stdout.write(self.style.SUCCESS("Foundation seed complete (incl. demo users)."))
-        else:
-            self.stdout.write(
-                self.style.SUCCESS("Foundation seed complete (SEED_DEMO=0: demo users skipped).")
-            )
 
     def _seed_roles(self) -> None:
+        """Roles, with the access grid seeded **additively** (#224).
+
+        The grid is the one column here that two administrators maintain between
+        releases (#173, floor rule 4), so the sheet is starting content for it
+        and nothing more - `accounts.matrix.seeded_row` says why and how. What
+        this method adds on top is the floor: a cell kept from the stored row is
+        pulled down if a release has since locked that rung, and the cells it
+        moved are named on stdout rather than corrected in silence.
+
+        Where the row already exists it is locked for the read-then-write, so a
+        re-seed racing an access change being applied cannot read the row before
+        and write it after. On a first seed there is no row to lock, and the
+        unique `code` settles the race instead.
+        """
         for r in ROLES:
+            existing = Role.objects.select_for_update().filter(code=r["code"]).first()
+            access, corrected = clamp_to_floors(
+                r["code"],
+                seeded_row(
+                    existing.section_access if existing else None,
+                    default=section_access_for(r["code"]),
+                ),
+            )
+            for line in describe_floors(corrected):
+                self.stdout.write(self.style.WARNING(f"{r['code']} narrowed to the floor: {line}"))
             Role.objects.update_or_create(
                 code=r["code"],
                 defaults={
                     "name": r["name"],
                     "landing_page": r["landing_page"],
                     "nav_groups": r["nav_groups"],
-                    # The SIDEBAR RBAC contract (#85). Re-seeding overwrites it back
-                    # to the sheet default; a live admin's retune is a deliberate
-                    # data edit they'd re-apply, same as nav_groups here.
-                    "section_access": section_access_for(r["code"]),
+                    "section_access": access,
                     "description": r["description"],
                     "is_system": True,
-                    "is_active": True,
+                    # Only on creation. Deactivating a role is an access change
+                    # two administrators agree (#224 again, from the other side):
+                    # switching it back on at the next deploy would re-open a
+                    # seat they closed, and this one fails open.
+                    **({} if existing else {"is_active": True}),
                 },
             )
 

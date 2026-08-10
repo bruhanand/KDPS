@@ -17,6 +17,8 @@ it. The rules the whole module holds to:
 · a replacement **replaces**. A section the caller left out is removed, not
   kept, because the other reading would make a half-sent form silently grant
   whatever the role held before.
+· a **seed adds only**. The ratified sheet is starting content, so it fills the
+  sections a stored row does not state and never overwrites one it does.
 """
 
 from __future__ import annotations
@@ -96,6 +98,39 @@ def replacement_row(requested: dict[str, Any], *, current: Row) -> Row:
         else:
             label = _label_of(entry) or CAPABILITY_WORDS.get(capability, capability)
         out[section] = {"capability": capability, "label": label[:120]}
+    return out
+
+
+def seeded_row(stored: Any, *, default: Row) -> Row:
+    """The row to store when seeding a role that may already exist (#224).
+
+    Additive only, which is the one shape that shuts both traps:
+
+    · a cell the stored row already states is kept **verbatim**. An access
+      change two administrators agreed and audited used to be written back to
+      the sheet by any redeploy that re-ran the seed, silently and with nothing
+      on any screen to say so;
+    · a cell it does not state is filled from the ratified sheet, so a section
+      added after a role was seeded still reaches that role. A seed that simply
+      skipped existing roles would trade this defect for the opposite one.
+
+    "States it" is presence of the key, exactly as the backfill migrations read
+    it - not readability. A cell stored unreadable already grants nothing
+    (``capability_of`` fail-closes), and re-granting the sheet's rung over it
+    would be this function widening access on its own initiative. For the same
+    reason a key outside ``SECTION_CODES`` rides along untouched: no gate reads
+    it, and removing a key is a migration's job, not a seed's.
+
+    Two things this does *not* do. It never narrows a kept cell to a floor that
+    has since tightened - that is ``floors.clamp_to_floors``, which the seed
+    applies on top. And it never re-ratifies the sheet: a cell whose ratified
+    value changes reaches live rows as an explicit migration carrying the new
+    value (see ``0005_add_staff_section_access``), never as a silent re-seed.
+    """
+    out: Row = dict(stored) if isinstance(stored, dict) else {}
+    for section in SECTION_CODES:
+        if section not in out:
+            out[section] = dict(default[section])
     return out
 
 
