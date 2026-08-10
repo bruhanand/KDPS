@@ -597,6 +597,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description Knowing a booking's id is not a way round the list's scope gate: out of
+         *     scope must read exactly like not existing (404, never 403 - ADR-0003).
+         */
         get: operations["bookings_retrieve"];
         put?: never;
         post?: never;
