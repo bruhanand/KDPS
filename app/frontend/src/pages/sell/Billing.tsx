@@ -20,11 +20,11 @@ import {
   emptyCart,
   inheritBillSalesman,
   priceCart,
-  scanPiece,
   toDraft,
   whyItCannotClose,
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
+import { useCart } from "../../till/useCart";
 import type { HeldBill } from "../../till/db";
 import { clearDraft, persistDraft, readDraft, rekeyDraft, restoredDraft } from "../../till/draft";
 import type { DraftPayload } from "../../till/draft";
@@ -190,7 +190,7 @@ function Counter({
   const { engine, till } = useTill();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [cart, setCart] = useState<Cart>(emptyCart);
+  const { cart, setCart, take: takeScanned } = useCart();
   const [customer, setCustomer] = useState<TillCustomer>(NO_CUSTOMER);
   const [saving, setSaving] = useState(false);
   const [holding, setHolding] = useState(false);
@@ -662,24 +662,21 @@ function Counter({
 
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
-      // `scanPiece`, not a bare append: scanning a tag already on the bill
-      // bumps that line's quantity instead of laying a duplicate beside it
+      // `useCart`'s `take`, not a bare `setCart`: it chains through the
+      // functional updater's own `current` rather than the outer `cart`
+      // closure (#257, the #168 fix's own pattern - PR #314's
+      // `addLineIfAbsent`). A wedge firing scans faster than React repaints
+      // can call this handler again before the previous scan's `setCart` has
+      // committed; reading the closure would then compute both lines from
+      // the same pre-burst cart, and whichever `setCart` call React applies
+      // last would win outright, silently dropping every line computed
+      // before it. `current` is always whatever React actually has pending,
+      // so the same race chains the two scans onto one another instead of
+      // racing them. `scanPiece` inside `take` is also what turns a rescan
+      // of a tag already on the bill into a qty bump rather than a duplicate
       // (#244).
-      //
-      // Computed inside `setCart`'s functional updater, off `current` rather
-      // than the outer `cart` closure (#257, the #168 fix's own pattern -
-      // PR #314's `addLineIfAbsent`). A wedge firing scans faster than React
-      // repaints can call this handler again before the previous scan's
-      // `setCart` has committed; reading the closure would then compute both
-      // lines from the same pre-burst cart; and whichever `setCart` call
-      // React applies last would win outright, silently dropping every line
-      // computed before it. `current` is always whatever React actually has
-      // pending, so the same race chains the two scans onto one another
-      // instead of racing them.
-      setCart((current) => {
-        const next = scanPiece(current, piece, { stock, alternatives }, soldBy);
+      takeScanned(piece, { stock, alternatives }, soldBy, (next) => {
         onScreenRef.current = { ...onScreenRef.current, cart: next };
-        return next;
       });
       // The undo snapshot is one render behind under the same race - a burst
       // pushes the same pre-burst cart onto the stack more than once rather
@@ -687,7 +684,10 @@ function Counter({
       // just makes one Undo press pop what would otherwise have taken two,
       // which is the pre-existing, tolerable shape #244 already shipped -
       // #257 is about a scan never reaching the bill, not the undo stack's
-      // granularity across one.
+      // granularity across one. Sourcing this from `onScreenRef.current.cart`
+      // instead would only trade this for a worse bug: that mirror is not
+      // kept in sync for `editLine`/`removeLeg`, so an edit sitting between
+      // two scans would silently vanish under Undo.
       pushCartUndo(cart);
       startingANewBill();
       // The cashier is looking at the customer, not at the screen (#247, grill
@@ -698,7 +698,7 @@ function Counter({
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [cart, clearScan, muted, pushCartUndo, soldBy, startingANewBill],
+    [cart, clearScan, muted, pushCartUndo, soldBy, startingANewBill, takeScanned],
   );
 
   /**
