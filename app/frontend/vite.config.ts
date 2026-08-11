@@ -1,6 +1,9 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+// `vitest/config` re-exports vite's own defineConfig with the `test` key typed.
+// Vite behaves identically; this only lets the exclude below be written here
+// rather than in a second config file.
+import { configDefaults, defineConfig } from "vitest/config";
 
 import { PWA_OPTIONS } from "./src/pwa/config";
 
@@ -29,5 +32,13 @@ export default defineConfig({
     // (ENOSPC) and crash the dev server under this repo's file count. Polling
     // avoids inotify entirely.
     watch: { usePolling: true, interval: 300 },
+  },
+  test: {
+    // The live-QA specs are Playwright's, and they share vitest's default
+    // `*.spec.ts` pattern. Without this, `vitest run` collects them and dies on
+    // "Playwright Test did not expect test() to be called here" - a red gate
+    // that says nothing about the code. Two runners, two directories, one
+    // exclude.
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
 });

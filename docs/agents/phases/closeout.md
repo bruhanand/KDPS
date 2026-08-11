@@ -26,10 +26,10 @@ everything else is a finding.
 
 ## 3. Whole-feature QA
 
-Drive the feature end to end in the browser with the discipline of [live-qa.md](live-qa.md):
-preconditions first, then the **cross-ticket journeys** - the flows that span several tickets, which
-per-issue QA never exercised. Include the owning role, one scope-negative flow, and money rendering
-wherever money shows.
+Run every spec the feature's tickets left behind (`npm run e2e`), then write one more:
+`app/frontend/e2e/<slug>-journey.spec.ts`, covering the **cross-ticket journeys** - the flows that span
+several tickets, which per-issue QA never exercised. Method and toolkit in [live-qa.md](live-qa.md).
+Include the owning role, one scope-negative flow, and money rendering wherever money shows.
 
 ## 4. Report
 

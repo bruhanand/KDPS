@@ -199,6 +199,29 @@ checkout (`npm run dev`, or `./scripts/dev.sh --api`) and run the gate beside it
 
 All green = the build is sound. `npm run ci` is the **local acceptance gate for every slice**.
 
+### Live QA in a real browser
+
+`npm run ci` proves the code; it does not prove the screen. A button wired to
+nothing, a table that renders empty and money printed as `285000` all survive a
+fully green gate. Playwright specs in `app/frontend/e2e/` are what catch those,
+and they run against this workspace's own stack:
+
+```bash
+npm run e2e:install   # the Chromium binary, once per machine (~150MB)
+npm run e2e           # every spec, against the stack npm run dev is serving
+npm run e2e -- --headed          # watch it happen
+npm run e2e e2e/smoke.spec.ts    # one spec
+npm run e2e:report    # the last run's HTML report, screenshots and traces
+```
+
+It starts nothing - bring the stack up with `npm run dev` first, or it refuses
+and says so. A harness that quietly boots its own server is one that can QA a
+stale one.
+
+These are **not** in `npm run ci`: they need the whole stack up and seeded, which
+the gate deliberately does not require. Method, toolkit and the mandatory flows
+are in `docs/agents/phases/live-qa.md`.
+
 ## 4 · Regenerate the API client
 
 The PWA does not describe the API by hand.

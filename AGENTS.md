@@ -145,18 +145,22 @@ which also carries the migration mapping from the older five-state scheme still 
 
 ## Browser use
 
-QA'ing an ERP screen needs a driver that can click the page, screenshot it, and read network requests
-and console messages. Use whichever one your session has; if it cannot do all four, say so rather than
-claiming a pass you could not verify.
+**QA'ing a screen means writing a Playwright spec, not driving a browser by hand.** Specs live in
+`app/frontend/e2e/`, are committed with the change they QA, and run against this workspace's own stack
+with `npm run e2e` (`npm run e2e:install` once per machine for the Chromium binary; `npm run e2e:report`
+for traces and screenshots). The runner starts nothing - `npm run dev` owns the stack and `e2e` refuses
+if it is not answering, because a harness that quietly boots its own server can QA a stale one.
 
-Three rules hold whatever the tool:
+The method - preconditions, the toolkit in `app/frontend/e2e/kdps.ts`, which flows are mandatory, and
+the visual pass a spec cannot do - is `docs/agents/phases/live-qa.md`.
 
-- **A fresh session per role.** Log out or use a clean profile before testing a role. A pass that ran as
-  whoever happened to be signed in proves nothing.
-- **A new tab, never someone else's.** The driver may be attached to Anand's own browser.
-- **Never trigger an alert or confirm dialog.** It freezes the session until a human dismisses it by hand.
+Three things the harness makes structural rather than a rule to remember. A Playwright context starts
+with no cookies, so **a fresh session per role** is automatic and `superadmin` is never the accidental
+tester. It runs its own browser, so there is **no tab of Anand's to stray into**. And Playwright
+auto-dismisses `alert` and `confirm`, so **the dialog that used to freeze a session until a human
+clicked it cannot happen** - `window.print()`, the one that is browser UI rather than a page dialog, is
+intercepted by the toolkit.
 
-In practice: Anand develops in the **Claude app**, so `mcp__claude-in-chrome__*` is the normal case and
-`mcp__chrome-devtools__*` is the terminal equivalent. Both satisfy the four capabilities above.
-
-The recipe (preconditions, flows, what to assert) is `docs/agents/phases/live-qa.md`.
+Interactive browser tooling (`mcp__claude-in-chrome__*` in the Claude app, `mcp__chrome-devtools__*` in
+the terminal) is still the right instrument for **exploring** - reproducing a bug report, looking at
+something before you know what to assert. It is not how a verdict gets recorded. A verdict is a spec.

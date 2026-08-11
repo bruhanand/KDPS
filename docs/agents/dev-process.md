@@ -104,7 +104,7 @@ A thin design document is not a reason to reach for a stronger model. It is a de
 `implement` sends it back to `design` rather than papering over it. The completeness gate is defined in
 [phases/design.md](phases/design.md) and checked at the top of [phases/implement.md](phases/implement.md).
 
-In Claude Code specifically: Sonnet implements, Opus reviews, Sonnet drives the browser.
+In Claude Code specifically: Sonnet implements, Opus reviews, Sonnet writes the Playwright spec.
 
 ## Parallelism
 

@@ -1,6 +1,6 @@
 ---
 name: implement
-description: "Phase 4 - take one ready issue to an open PR: implement, review once, live browser QA, push. Never merges."
+description: "Phase 4 - take one ready issue to an open PR: implement, review once, live QA in Playwright, push. Never merges."
 disable-model-invocation: true
 ---
 

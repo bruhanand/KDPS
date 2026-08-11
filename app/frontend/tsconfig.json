@@ -20,5 +20,8 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src"]
+  // `e2e` and the Playwright config are typechecked with everything else, so a
+  // renamed testid or a changed prop breaks the build rather than rotting
+  // quietly until the next live-QA run tries to use them.
+  "include": ["src", "e2e", "playwright.config.ts"]
 }

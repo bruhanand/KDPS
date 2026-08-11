@@ -62,17 +62,25 @@ second attempt. It goes in the PR body under "needs a human", or through
 
 ## 4. Live QA, once
 
-Send **one subagent** on a mid-tier model, synchronous, to drive what you actually built in a real
-browser, following [live-qa.md](live-qa.md). Give it the issue's acceptance criteria, the branch name,
-and the path to that document.
+Send **one subagent** on a mid-tier model, synchronous, to write and run a Playwright spec against
+what you actually built, following [live-qa.md](live-qa.md). Give it the issue's acceptance criteria,
+the branch name, and the path to that document.
 
-Ask it to return in under 300 words: pass or fail per flow, and for each fail what it clicked, what it
-expected, what happened, and the network or console line that proves it. Screenshots referenced by
-path, never pasted - a screenshot in the transcript is the single most expensive thing this phase can
-do to your context.
+The spec goes in `app/frontend/e2e/<issue-slug>.spec.ts` and is **committed with the change**. That is
+what makes this the cheapest step in the phase rather than the most expensive one: the QA that passed
+for this issue reruns for free on the next one, and the guards in the toolkit fail the run on a console
+error or an undeclared 4xx, so a pass cannot be a pass by inattention.
 
-A failed flow: fix it yourself, then send a **fresh** subagent to re-drive only the failed flows. **One
-re-drive**, then [escalation.md](escalation.md).
+Ask it to return in under 300 words: pass or fail per test, and for each fail what it clicked, what it
+expected, what happened, and the console or network line that proves it. Trace and screenshot paths
+from the HTML report, never pasted - a screenshot in the transcript is the single most expensive thing
+this phase can do to your context.
+
+Then do the visual pass yourself: **two or three screenshots** from the report, read and judged. That is
+the one thing a spec cannot do, and the tenth screenshot tells you nothing the third did not.
+
+A failed test: fix it yourself, then re-run that spec. **One re-run**, then
+[escalation.md](escalation.md).
 
 The dev stack is per-workspace - its own Postgres, its own ports (`npm run dev:where`) - so a session
 in another workspace is not competing with you and there is nothing to wait for.
