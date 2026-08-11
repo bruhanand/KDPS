@@ -28,9 +28,9 @@ Each ticket carries the approach, acceptance criteria, its process route (`/impl
 
 New tickets created from this register: #290 (CA session - the five money rulings + GST posting split), #291 (rulings roll-up - eight product decisions), #292 (CI full gate), #293 (auto-commits on main, decision), #294 (auth hardening for pilot), #295 (retire demo credentials), #296 (store open/close, full chain), #297 (Tally sync, spike now + chain after #290), #298 (payments & settlement, full chain), #299 (D9 migration design), #300 (data residency decision).
 
-#158 was retitled as the seed umbrella; #205, #251, #252 and #256 are folded into it as duplicates and close when it lands.
-Ruling-gated tickets carry `needs-info` (#262, #215) or `ready-for-human` (#200); every other Phase 0 ticket is `ready-for-agent`.
-Agents pick work with `gh issue list --label ready-for-agent --milestone "Phase 0 - the pause (correctness + hygiene)"`.
+#158 was retitled as the seed umbrella; #205, #251, #252 and #256 were folded into it as duplicates. It landed as PR #312, and all four are closed.
+Ruling-gated tickets carry `blocked` (#200, #215, #262); every other Phase 0 ticket is `ready`.
+Agents pick work with `gh issue list --label ready --milestone "Phase 0 - the pause (correctness + hygiene)"`.
 
 ## Phase 0 - the pause: correctness and hygiene (do these before any new feature)
 
@@ -131,15 +131,15 @@ Fix as one piece of work if possible; the failures interlock:
 
 ### 1.2 Hardware
 
-- **#190 - Printer spike: browser to thermal receipt printing.** `ready-for-human`, has hardware lead time; no counter runs without receipts.
+- **#190 - Printer spike: browser to thermal receipt printing.** `blocked` on hands-on hardware, and has lead time; no counter runs without receipts.
   Barcode label printing rides on the same spike's findings.
 
 ### 1.3 Outbound leftovers
 
-- **#73** - warehouse distribution allocation grid (slice 6, `ready-for-human`).
-- **#77** - alerts job: in-transit aging + return-window 30/15/7 (slice 9).
-- **#79** - role-based landing + outbound navigation rework (slice 12).
-- **#105** - fold Write-off into Stock Adjustment: one correction document, reason-coded (`ready-for-human`; write-off was never designed and is already broken - see memory `writeoff-was-never-designed`).
+- **#73** - warehouse distribution allocation grid (slice 6, `ready`).
+- **#77** - alerts job: in-transit aging + return-window 30/15/7 (slice 9). **Shipped** in PR #167; issue closed 11 Aug.
+- **#79** - outbound navigation rework inside its three sections (slice 12, `ready`; blocked by #73). The role-based landing half was refuted by the stores' own 25 Jul note and is struck.
+- **#105** - fold Write-off into Stock Adjustment: one correction document, reason-coded (`ready` + `money`; #103 has landed, so its sequencing gate is clear - see memory `writeoff-was-never-designed`).
 
 ### 1.4 Missing module
 

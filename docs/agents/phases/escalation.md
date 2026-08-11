@@ -29,7 +29,7 @@ A passage that nearly fits is not a quote; no quote means it is not written down
 
 ## What stopping looks like
 
-Preserve the work: push the branch, open a **draft** PR saying what was attempted, where it stopped, and the finding; relabel the issue `ready-for-human`, comment the question, and stop - no real PR.
+Preserve the work: push the branch, open a **draft** PR saying what was attempted, where it stopped, and the finding; relabel the issue `blocked`, comment the question, and stop - no real PR.
 
 Write the question for a human in simple, everyday English, the way you would say it to a shop owner in Patna: shirts, brands, stores and bills - never models or endpoints; rupees the Indian way (`₹2,85,000`), dates in words; one question at a time, the choices given, and which you would pick, in one line.
 File paths and findings tables live in the draft PR - the question must be answerable without reading code.
