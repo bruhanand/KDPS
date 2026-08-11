@@ -16,6 +16,8 @@ KDPS Lifestyle Pvt Ltd — a multi-brand Indian fashion retailer (Bihar + Jharkh
 
 **Stack (ADR-0001):** React/TypeScript PWA + Python/Django + PostgreSQL. Not Frappe — re-implement ERPNext's *contracts* as plain Django. No backend-as-a-service.
 
+**India context:** money renders in INR with Lakh/Crore grouping (`₹28,50,000`), never raw paise or western grouping; stores run the system in the browser/PWA (no app installs); owners live on WhatsApp; training material is Hindi.
+
 ---
 
 ## The 12 rules (the constitution — every slice obeys these)

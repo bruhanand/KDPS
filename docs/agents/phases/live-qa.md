@@ -18,15 +18,9 @@ The runner starts nothing. `npm run dev` owns the stack; `npm run e2e` refuses w
 
 ## Why a spec and not a driven browser
 
-Driving the browser by hand through a tool was the old method, and it cost a fresh session's worth of clicking every time, produced evidence that lived only in one transcript, and proved nothing the next time the screen changed.
-A spec is the same work, written down once:
-
-- **It reruns.** The QA that passed for this issue is the regression test for the next one, at no extra cost.
-- **It cannot pass by accident.** The guards in the toolkit fail the test on a console error or a 4xx nobody declared, so "I did not notice" stops being possible.
-- **It is cheap in context.** Screenshots attach to the HTML report rather than landing in a transcript, and a failure hands back one trace path instead of a scroll of DOM.
-- **Dialogs stop mattering.** Playwright auto-dismisses `alert` and `confirm`, so the trap that froze a driven browser until a human clicked it does not exist here.
-
-The one thing a spec cannot do is *look* at the screen and judge it. That is the visual pass below, and it stays.
+Hand-driving a browser cost a fresh session of clicking every time and proved nothing once the screen changed.
+A spec is the same work written down once: it **reruns** as the next issue's free regression test, it **cannot pass by accident** (the guards fail it on any undeclared console error or 4xx), it is **cheap in context** (screenshots and traces attach to the report, not the transcript), and **dialogs stop mattering** (Playwright auto-dismisses `alert`/`confirm`).
+The one thing a spec cannot do is *look* at the screen and judge it - that is the visual pass below, and it stays.
 
 ## Preconditions: is the thing under test the thing you built?
 

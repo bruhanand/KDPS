@@ -44,11 +44,7 @@ gate in step 1 buys.
 ## 3. Review, once
 
 Run the review in [review.md](review.md): **one subagent** on the strongest model available, plus a
-**second** on the ledger axis if the issue carries `money`. No standards subagent - ruff, mypy,
-import-linter and tsc already enforce the mechanical part, and `simplify` covers the taste part when
-Anand asks for it.
-
-Never let the model that wrote the code be the only one grading it.
+**second** on the ledger axis if the issue carries `money`.
 
 Then fix, **once**:
 
@@ -82,19 +78,15 @@ the one thing a spec cannot do, and the tenth screenshot tells you nothing the t
 A failed test: fix it yourself, then re-run that spec. **One re-run**, then
 [escalation.md](escalation.md).
 
-The dev stack is per-workspace - its own Postgres, its own ports (`npm run dev:where`) - so a session
-in another workspace is not competing with you and there is nothing to wait for.
-
 ## 5. Pull request
 
 Push the branch and open a PR against `main`. Rebase onto `origin/main` first and re-run the tests
 after the rebase, even if nothing conflicted - two individually green PRs have broken `main` at the
 RBAC and nav contract tests before.
 
-The push alone triggers cloud CI. It runs on GitHub, not locally; do not wait for it before opening
-the PR. It runs the same gate as local `npm run ci` - ruff format and check, mypy, import-linter, the
-migration and drift checks, pytest, the API-client drift check, and the frontend build and unit tests.
-A green run there means what a green run here means.
+The push alone triggers cloud CI ([../ci.md](../ci.md)). It runs on GitHub, not locally; do not wait
+for it before opening the PR. It runs the same gate as local `npm run ci`, so a green run there means
+what a green run here means.
 
 PR body: what changed in plain language; review findings and what was fixed; QA flows driven with
 screenshot paths; deliberate deviations; anything a human must check by hand.

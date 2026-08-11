@@ -62,29 +62,8 @@ whether it *should* be next. Both queries belong in a work-picking command:
 gh issue list -R bruhanand/KDPS --label ready --milestone "Phase 0 - the pause (correctness + hygiene)"
 ```
 
-## Migration status
+## History
 
-**Migrated 11 August 2026.** Every open issue now carries this scheme, and the old labels are gone
-from the tracker.
-
-`ready-for-agent` was *renamed* to `ready` and `ready-for-human` to `blocked`, so closed issues keep
-their history under the new names. `needs-triage`, `needs-info`, `wontfix`, `Sandcastle`, `question`
-and the unused GitHub defaults were deleted.
-
-| Old | New |
-|---|---|
-| `needs-triage` | *(no label)* |
-| `needs-info` | `blocked` |
-| `ready-for-human` | `blocked` (renamed) |
-| `ready-for-agent` | `ready` (renamed) |
-| `wontfix` | close as not planned |
-
-Two cautions the migration itself taught, both worth re-reading before relabelling anything:
-
-- **`ready-for-human` did not mean `blocked`.** It was used for two different things: work only a
-  person can do (#190 needs hands on a printer) and work an agent can do that a person reviews before
-  merge (#73's grid design). The second is not blocked - `implement` never merges anyway. Read the
-  body before mapping; the mechanical translation gets it wrong about half the time.
-- **A label can outlive the comment that changed it.** #79 was moved back to agent-eligible by a
-  triage comment whose ruling never reached the body, and it sat with a stale question in the body and
-  no state label for two weeks. Rewrite the body, then set the label.
+The tracker migrated to this scheme on 11 August 2026.
+`ready-for-agent` was *renamed* to `ready` and `ready-for-human` to `blocked`, so closed issues keep their history under the new names; the other old labels (`needs-triage`, `needs-info`, `wontfix`, `Sandcastle`, `question`) were deleted.
+One caution the migration taught: **a label can outlive the comment that changed it** (#79 sat mislabelled for two weeks). Rewrite the body, then set the label - in that order.
