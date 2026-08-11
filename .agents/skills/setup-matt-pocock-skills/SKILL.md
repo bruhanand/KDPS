@@ -6,6 +6,11 @@ disable-model-invocation: true
 
 # Setup Matt Pocock's Skills
 
+> **Do not run this in the KDPS repo.** `docs/agents/` here holds a hand-written dev process
+> (`dev-process.md`, `labels.md`, `phases/`). Re-running this skill would overwrite it with the
+> generic five-label scheme. It is for bootstrapping a *different* repo.
+
+
 Scaffold the per-repo configuration that the engineering skills assume:
 
 - **Issue tracker** — where issues live (GitHub by default; local markdown is also supported out of the box)

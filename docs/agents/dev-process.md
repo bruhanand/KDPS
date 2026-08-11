@@ -1,52 +1,103 @@
 # The dev process
 
-Feature work moves through a phase chain.
-Each phase is a skill invoked by hand, writes one artifact, shows it, and stops for approval.
-Nothing auto-advances: the developer drives every transition, and feedback on a phase stays in that phase until it is approved.
+Every agent working in this repo follows this. It is tool-neutral: each phase's method is a plain
+document under `docs/agents/phases/`, and each tool's skill file is a pointer at one of them.
 
-Phase artifacts live in one folder per feature: `docs/features/<slug>/` (kebab-case slug, e.g. `docs/features/pos/`).
+Each phase is invoked by hand, writes one artifact, shows it, and stops for approval.
+Nothing auto-advances: the developer drives every transition, and feedback on a phase stays in that
+phase until it is approved.
+
+Phase artifacts live in one folder per feature: `docs/features/<slug>/` (kebab-case slug).
 
 ## The chain
 
-| Phase | Skill | Artifact |
-|---|---|---|
-| 0 - Impact analysis | `/feature-analyst` | `feature-analysis.md` |
-| 1 - Requirements | `/grilling` (money slice: `/grill-with-docs`) | `requirements.md` |
-| 2 - Contract | `/contract-designer` | `api-contract.md` + `db-design.md` |
-| 3 - Technical design | `/system-designer` | `design.md` |
-| 4 - Tickets | `/to-tickets` | GitHub issues, `ready-for-agent` |
-| 5 - Per issue | `/implement` | one PR per issue; a human merges |
-| 6 - Closeout | `/closeout` | `closeout.md` |
+| Phase | Skill | Artifact | Method |
+|---|---|---|---|
+| Triage | `triage` | the issue body becomes the spec | [phases/triage.md](phases/triage.md) |
+| 1 - Spec | `spec` | `docs/features/<slug>/spec.md` | [phases/spec.md](phases/spec.md) |
+| 2 - Design | `design` | `docs/features/<slug>/design.md` | [phases/design.md](phases/design.md) |
+| 3 - Tickets | `to-tickets` | GitHub issues labelled `ready` | [phases/tickets.md](phases/tickets.md) |
+| 4 - Implement | `implement` | one PR per issue; a human merges | [phases/implement.md](phases/implement.md) |
+| 5 - Closeout | `closeout` | `docs/features/<slug>/closeout.md` | [phases/closeout.md](phases/closeout.md) |
 
-`/code-review` runs inside phase 5 before every PR, and stays available standalone.
+Those are skill names; invoke them however your tool does (Claude Code: `/spec`).
 
-## Phase 1 in this repo
+Three supporting documents are read from inside a phase, never invoked directly:
+[phases/review.md](phases/review.md), [phases/live-qa.md](phases/live-qa.md),
+[phases/escalation.md](phases/escalation.md). `code-review` also stays available standalone.
 
-We grill instead of interviewing by template.
-Grill over `feature-analysis.md` plus everything the user provided, then write the outcome to `docs/features/<slug>/requirements.md`: functional requirements, non-functional requirements, edge cases, out of scope.
-Force a concrete number for every quantitative value (expiry, retries, limits, thresholds, lengths, timeouts, retention); "reasonable" and "fast" are not values.
+## Which phase for which issue
 
-## Phase 4 in this repo
+The label says whether an agent may start. **Size** says which phase it starts at.
 
-Run `/to-tickets` over the approved phase 0-3 docs.
-Tickets are vertical tracer-bullet slices with blocking edges, published as GitHub issues.
-Each issue names `docs/features/<slug>/` as its spec source.
+```
+issue has no label
+   → triage. Read it, then either rewrite the body into a real spec and label it
+     `ready`, or label it `blocked` and ask Anand one plain question.
+
+issue is `ready`
+   → does it fit one session?
+        yes → implement            one PR, stops, never merges
+        no  → it is a feature, not an issue.
+              spec → design → to-tickets, which emits `ready` issues that do fit.
+
+issue is `blocked`
+   → nothing runs. Anand answers, the body is REWRITTEN to carry the ruling,
+     then it is labelled `ready`.
+```
+
+A ruling left in a comment while the body still holds the old spec is two specs on one issue, and an
+agent will faithfully build the wrong one. That is how #96 got built wrong. The body is the spec, and
+this holds for issues that predate this process too.
+
+Labels: [labels.md](labels.md). Tracker commands: [issue-tracker.md](issue-tracker.md).
 
 ## Weight scales with the work
 
-The chain is for features.
-A bug fix or a small tweak gets an issue with a clear body, then `/implement` and `/code-review` directly - no phase docs, no closeout.
+The full chain is for features. A bug fix or a small tweak gets a `ready` issue with a clear body,
+then `implement` directly - no phase documents, no closeout.
 
-Existing issues that predate this process work the same way: the issue body is the spec.
-If the comments disagree with the body, the body gets rewritten first; two specs on one issue is how work gets built wrong.
+`design` is skippable when the work is not a money slice and fits in one or two tickets.
+It is never skippable on a money slice.
+
+`closeout` runs only when the feature had three or more tickets, or touched money.
 
 ## Money slices
 
-Phase 0 flags a feature as a money slice when it touches ledgers, postings, GST, valuation, or the document FSM.
-A money flag means, on top of the chain:
+A feature is a money slice when it touches ledgers, postings, GST, valuation, or the document FSM.
+Phase 1 flags it; the `money` label carries the flag onto every ticket it produces.
 
-- Phase 1 uses `/grill-with-docs` so the design is locked against the corpus before code.
-- The postings section of the contract is mandatory: every ledger entry the feature writes, both legs, through `post_entries`.
-- Review follows the cross-model review policy (Opus/Sonnet reviewers).
-- Findings about money always go back to the human - see `.agents/skills/implement/ESCALATION.md`.
+On a money slice:
+
+- Phase 1 grills against the design corpus (`grill-with-docs`) so the design is locked before code.
+- `design` is mandatory, and its postings section is mandatory within it: every ledger entry the
+  feature writes, both legs, on which docstatus transition, through `post_entries`.
+- `implement` runs a second reviewer on the ledger axis.
+- Findings about money always go back to Anand, even when the corpus answers the question.
+  See [phases/escalation.md](phases/escalation.md).
 - The five CA-gated items stay gated until ruled.
+
+## Which model does what
+
+The principle, which every agent follows with whatever models it has:
+
+- **Implement with a mid-tier model.** Writing code against a complete design is typing, not thinking.
+- **Review with the strongest model available.** A review reads a small diff and makes judgement calls.
+  It is where the better model earns its price, and it is cheap in absolute terms.
+- **Never let the model that wrote the code be the only one grading it.**
+
+A thin design document is not a reason to reach for a stronger model. It is a design-phase failure:
+`implement` sends it back to `design` rather than papering over it. The completeness gate is defined in
+[phases/design.md](phases/design.md) and checked at the top of [phases/implement.md](phases/implement.md).
+
+In Claude Code specifically: Sonnet implements, Opus reviews, Sonnet drives the browser.
+
+## Parallelism
+
+Run one issue per session. Sessions do not queue behind each other: every Conductor workspace has its
+own Postgres, its own ports and its own database (`npm run dev:where`).
+
+Because issues run in parallel, `main` moves while you work. Before pushing, rebase onto `origin/main`
+and re-run the test suite after the rebase - especially the RBAC and nav contract tests - even if none
+of your own files conflicted. Two individually green PRs have broken `main` at those tests before
+(the #146 hotfix).

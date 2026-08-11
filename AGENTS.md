@@ -96,7 +96,7 @@ Three tiers, and the rule is that each tier is written once:
 | Tier | Where | Read by |
 |---|---|---|
 | Repo instructions | `AGENTS.md` (this file); `CLAUDE.md` is a symlink to it | every agent, always |
-| The dev process | `docs/agents/*.md` - the phase chain, issue tracker, triage labels, domain-doc layout | every agent, when a phase runs |
+| The dev process | `docs/agents/dev-process.md` plus `docs/agents/phases/*.md`, `labels.md`, `issue-tracker.md`, `domain.md` | every agent, when a phase runs |
 | The skills | `.agents/skills/<name>/SKILL.md`; `.claude/skills/<name>` is a symlink to each | every agent; Claude Code discovers them through the symlinks |
 
 Consequences worth knowing before you edit anything here:
@@ -107,21 +107,29 @@ Consequences worth knowing before you edit anything here:
 
 ### The dev process
 
-Feature work runs through the phase chain in `docs/agents/dev-process.md`, each phase invoked by hand and stopping for approval:
-`feature-analyst` → grill (`grilling`, money: `grill-with-docs`) → `contract-designer` → `system-designer` → `to-tickets` → `implement` per issue → `closeout`.
-Those are skill names; invoke them however your tool does (Claude Code: `/feature-analyst`). Phases 0–3 write their artifacts to `docs/features/<slug>/`; small fixes skip the chain and go straight to `implement`.
+**`docs/agents/dev-process.md` is the whole process.** Read it before any feature work. Each phase's
+method is a document under `docs/agents/phases/`; a skill file is only a pointer at one of them, so read
+the phase document, not the skill.
 
-`implement <issue#>` takes one `ready-for-agent` issue to an open PR:
-spec check → branch → `tdd` → `code-review` + fix → live browser QA → push (triggers cloud CI) → PR.
-The full local `npm run ci` gate is not run as part of this flow - only cloud CI, at push/PR time - to keep the loop fast; run it by hand if you want the stricter local gate.
-It stops at the PR and never merges. Run one issue per session - but sessions no longer queue behind
-each other: every Conductor workspace gets its own Postgres, its own ports and its own database
-(`npm run dev:where`), so issues can be implemented and browser-QA'd in parallel.
+The chain, each phase invoked by hand and stopping for approval:
+`triage` → `spec` → `design` → `to-tickets` → `implement` per issue → `closeout`.
+Those are skill names; invoke them however your tool does (Claude Code: `/spec`). `spec` and `design`
+write to `docs/features/<slug>/`; a bug fix or small tweak skips the chain and goes straight to
+`implement`.
 
-Because issues run in parallel, main may move while you work. Before pushing, rebase your branch onto
-`origin/main` and re-run the full test suite after the rebase - especially the RBAC and nav contract
-tests - even if none of your own files conflicted. Two individually green PRs have broken main at those
-tests before (the #146 hotfix); rebase-then-retest catches that class before the PR does.
+Two rules bind every phase, and both have cost real work in this repo:
+
+- **The issue body is the spec.** A ruling in a comment while the body holds the old spec is two specs
+  on one issue, and an agent will faithfully build the wrong one (#96). Rewrite the body first.
+- **Implement with a mid-tier model, review with the strongest one available**, and never let the model
+  that wrote the code be the only one grading it. A thin design document is a design-phase failure, not
+  a reason to reach for a stronger model: send it back to `design`.
+
+`implement` stops at an open PR and never merges. Run one issue per session; sessions do not queue,
+because every Conductor workspace has its own Postgres, ports and database (`npm run dev:where`).
+Rebase onto `origin/main` and re-run the tests after the rebase before pushing, even if nothing
+conflicted - two individually green PRs have broken main at the RBAC and nav contract tests before
+(the #146 hotfix).
 
 ### Issue tracker
 
@@ -132,9 +140,14 @@ Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See
 `docs/agents/improvement-plan.md` (7 Aug 2026) is the single prioritized register of every known gap between the current build and go-live, phased Phase 0 (pause: correctness + hygiene) → pilot → go-live.
 Read it before picking new work; it marks which items are blocked on human/CA rulings. Feature work is paused until its Phase 0 is closed.
 
-### Triage labels
+### Issue labels
 
-The five triage states each map to a repo label of the same name: `needs-triage`, `needs-info`, **`ready-for-agent`**, `ready-for-human`, `wontfix`. `ready-for-agent` is tool-neutral — any AI agent picks up work with `gh issue list --label ready-for-agent`. (It replaced the tool-specific `Sandcastle` label on 25 Jul 2026.) See `docs/agents/triage-labels.md`.
+A label answers one question: may an agent start on this right now. **No label** means nobody has
+looked, so no agent may start; **`ready`** means the body is a complete spec and any agent can pick it
+up; **`blocked`** means it needs Anand, with the last comment saying what for. **`money`** is an
+orthogonal tag for ledgers, postings, GST, valuation and the document FSM - it changes the review shape
+and the escalation rule, so `implement` reads it before opening any document. See `docs/agents/labels.md`,
+which also carries the migration mapping from the older five-state scheme still live on the tracker.
 
 ### Domain docs
 
@@ -156,6 +169,6 @@ Three rules hold whatever the tool:
 In practice: Anand develops in the **Claude app**, so `mcp__claude-in-chrome__*` is the normal case and
 `mcp__chrome-devtools__*` is the terminal equivalent. Both satisfy the four capabilities above.
 
-The recipe (preconditions, flows, what to assert) is `.agents/skills/implement/LIVE-QA.md`.
+The recipe (preconditions, flows, what to assert) is `docs/agents/phases/live-qa.md`.
 
 *(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*

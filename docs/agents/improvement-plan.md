@@ -144,7 +144,7 @@ Fix as one piece of work if possible; the failures interlock:
 ### 1.4 Missing module
 
 - **Store open/close** - the one true gap the June completeness audit found; still undesigned and unbuilt.
-  Needs the dev-process chain from `/feature-analyst` onward, not a direct build.
+  Needs the full dev-process chain from `spec` onward, not a direct build.
 
 ## Phase 2 - before live money / go-live
 

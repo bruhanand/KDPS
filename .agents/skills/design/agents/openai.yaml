@@ -1,0 +1,5 @@
+interface:
+  display_name: "Design"
+  short_description: "Phase 2 - API contract, schema, postings and components in one document"
+policy:
+  allow_implicit_invocation: false

@@ -1,5 +1,5 @@
 interface:
   display_name: "Implement"
-  short_description: "Take one ready-for-agent issue to an open PR"
+  short_description: "Take one ready issue to an open PR"
 policy:
   allow_implicit_invocation: false

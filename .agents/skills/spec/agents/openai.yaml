@@ -1,0 +1,5 @@
+interface:
+  display_name: "Spec"
+  short_description: "Phase 1 - blast radius, then grill a feature to a spec"
+policy:
+  allow_implicit_invocation: false

@@ -61,5 +61,5 @@ Carry conclusions forward, never snapshots, network dumps or console logs.
 
 Report per flow: pass, or fail with what you clicked, what you expected, what happened, and the network or console line that proves it.
 Any fail: fix, re-run the gate, drive the flow again.
-A real defect outside the issue's scope gets filed as a `needs-triage` issue, in the user's words, and noted in the PR under "Not covered".
+A real defect outside the issue's scope gets filed as a new issue with **no label**, in the user's words, and noted in the PR under "Not covered" - unlabelled is the untriaged state, so it lands in the triage queue rather than looking ready to build.
 Leave the stack running only if you started it and nobody is queued behind you - and say which, so the next session knows.
