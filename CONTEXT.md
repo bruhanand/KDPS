@@ -2,7 +2,7 @@
 
 > The single machine-read briefing every coding agent loads before a slice. If a domain fact, a kernel contract, or a locked decision matters for writing code, it lives here or is linked from here. **One file — don't fork it.** Depth lives in `docs/my-understanding/system-design/`; this is the index of what's load-bearing.
 >
-> Companion files: `CLAUDE.md` = how to operate in this repo (workflow). `README.md` = how to run it. **This file = the domain + kernel + decisions.**
+> Companion files: `AGENTS.md` = how to operate in this repo (workflow; `CLAUDE.md` is a symlink to it). `README.md` = how to run it. **This file = the domain + kernel + decisions.**
 
 ---
 

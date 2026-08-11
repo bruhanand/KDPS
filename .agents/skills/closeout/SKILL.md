@@ -26,7 +26,7 @@ List every deviation; a deviation someone chose deliberately gets its reason quo
 
 ## 3. Whole-feature QA
 
-Drive the feature end to end in the browser with the discipline of `.claude/skills/implement/LIVE-QA.md`: preconditions first, then **cross-ticket flows** - the journeys that span several tickets, which per-issue QA never exercised.
+Drive the feature end to end in the browser with the discipline of `.agents/skills/implement/LIVE-QA.md`: preconditions first, then **cross-ticket flows** - the journeys that span several tickets, which per-issue QA never exercised.
 Include the owning role, one scope-negative flow, and money rendering wherever money shows.
 
 ## 4. Report and sign-off

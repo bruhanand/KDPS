@@ -48,5 +48,5 @@ A money flag means, on top of the chain:
 - Phase 1 uses `/grill-with-docs` so the design is locked against the corpus before code.
 - The postings section of the contract is mandatory: every ledger entry the feature writes, both legs, through `post_entries`.
 - Review follows the cross-model review policy (Opus/Sonnet reviewers).
-- Findings about money always go back to the human - see `.claude/skills/implement/ESCALATION.md`.
+- Findings about money always go back to the human - see `.agents/skills/implement/ESCALATION.md`.
 - The five CA-gated items stay gated until ruled.

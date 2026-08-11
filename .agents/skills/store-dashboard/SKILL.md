@@ -34,7 +34,7 @@ each month is just **drop the export → run**.
 
 3. **Set up Python deps once** (venv lives in this skill folder):
    ```bash
-   cd .claude/skills/store-dashboard
+   cd .agents/skills/store-dashboard
    [ -d .venv ] || python3 -m venv .venv
    .venv/bin/pip install -q -r requirements.txt
    ```

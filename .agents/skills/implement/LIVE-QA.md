@@ -4,7 +4,7 @@ Prove the built thing works by using it, in a real browser, the way a store user
 A green suite and a broken screen coexist happily: the button calls nothing, the table renders empty, the money renders as `285000` instead of `₹2,85,000`.
 This catches exactly that.
 
-Use whichever browser tooling the session has (see "Browser use" in `CLAUDE.md`), loading the tools you need in one ToolSearch call.
+Use whichever browser tooling the session has (see "Browser use" in `AGENTS.md`), loading the tools you need in one ToolSearch call.
 It drives the user's own Chrome: always a new tab, never a tab from another session; and never trigger an alert or confirm dialog - it blocks everything until dismissed by hand.
 
 **`window.print()` is one of those dialogs.** Chrome's print preview is browser UI, so no click or key you send reaches it, and the session is stuck until Anand dismisses it by hand.
