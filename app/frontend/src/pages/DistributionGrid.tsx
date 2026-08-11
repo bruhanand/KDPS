@@ -29,6 +29,7 @@ import {
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { destinationOptions as filterDestinations, type LocationT } from "../lib/transfer-locations";
 
 interface StoreT {
   id: number;
@@ -148,7 +149,14 @@ function suggestLine(available: number, size: string, destIds: string[], weights
 
 export function DistributionGridPage() {
   const navigate = useNavigate();
+  // The source picker asks "which warehouse may I operate from" — the scoped
+  // list. The destination picker asks "where in the network may stock go" —
+  // deliberately the *unscoped* one (`/masters/locations`, #147): a warehouse
+  // person scoped to their own store alone would otherwise see zero
+  // destinations and the grid would be unusable for exactly the role it was
+  // built for. Never collapse these back onto one list (test_masters_locations.py).
   const { data: stores } = useList<StoreT>("/masters/stores");
+  const { data: locations } = useList<LocationT>("/masters/locations");
   const warehouses = stores.filter((s) => s.store_type === "warehouse");
 
   const [sourceId, setSourceId] = useState("");
@@ -164,10 +172,11 @@ export function DistributionGridPage() {
   const [outcome, setOutcome] = useState<{ dest: string; ok: boolean; detail: string }[] | null>(null);
 
   const source = stores.find((s) => String(s.id) === sourceId) || null;
-  // Every other active store is a candidate destination — a partner franchisee
-  // is not excluded, that is the whole point of the flag (#see Setup → Stores).
-  const destinationOptions = stores.filter(
-    (s) => s.is_active && String(s.id) !== sourceId && s.store_type === "store",
+  // Every other store in the network is a candidate destination — a partner
+  // franchisee is not excluded, that is the whole point of the flag — and a
+  // warehouse is never itself a distribution target.
+  const destinationOptions = filterDestinations(locations, sourceId).filter(
+    (l) => l.store_type === "store",
   );
 
   function toggleDest(id: string) {
@@ -190,7 +199,7 @@ export function DistributionGridPage() {
     }
   }
 
-  function crossState(dest: StoreT): boolean {
+  function crossState(dest: LocationT): boolean {
     return !!source && source.gstin !== dest.gstin;
   }
 
@@ -422,7 +431,6 @@ export function DistributionGridPage() {
               <label key={s.id} className="check-row" data-testid={`distribution-dest-${s.code}`}>
                 <input type="checkbox" checked={destIds.includes(String(s.id))} onChange={() => toggleDest(String(s.id))} />
                 {s.code}
-                {s.is_partner && <span className="chip chip-amber" style={{ marginLeft: 4 }}>Partner</span>}
               </label>
             ))}
           </div>
