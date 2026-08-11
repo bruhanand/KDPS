@@ -32,7 +32,10 @@ async function openSectionItem(
   await page.getByTestId(itemTestId).click();
 }
 
-test("warehouse reaches every Transfer screen from the sidebar, scan-and-receive on a dispatched transfer, and the in-transit gaps view", async ({
+// Distribution (the fifth Transfer screen) has its own dedicated coverage in
+// outbound-slice6-distribution-grid.spec.ts, including its sidebar reach -
+// not repeated here.
+test("warehouse reaches Transfers, Send Stock, Stock Request and In-Transit from the sidebar, scan-and-receive on a dispatched transfer, and the in-transit gaps view", async ({
   page,
 }) => {
   await loginAs(page, "warehouse");
@@ -72,6 +75,13 @@ test("warehouse reaches every Transfer screen from the sidebar, scan-and-receive
   await expect(receiveBtn).toBeVisible();
   await receiveBtn.click();
   await expect(page.getByTestId("scan-screen")).toBeVisible();
+  // The superseded typed-quantity receive form is gone (#76's pattern, same
+  // as Adjustments): the only input the receive flow offers is ScanScreen's
+  // own manual-barcode field, never a typed qty cell like TransferNewPage's
+  // planning form uses (`tl-qty-*`) - proves AC2 on this screen, not just
+  // absence of a component name in a grep.
+  await expect(page.getByTestId(/^tl-qty-/)).toHaveCount(0);
+  await expect(page.getByTestId("scan-manual-input")).toBeVisible();
   await evidence(page, "transfer-scan-and-receive-opened");
   await page.getByTestId("scan-close").click();
   await expect(page.getByTestId("scan-screen")).toBeHidden();
@@ -189,6 +199,13 @@ test("a role holding none of these three sections neither sees them in the sideb
   );
 
   await loginAs(page, "promo");
+
+  // Anchor on a section promo1 *does* hold before asserting on the ones it
+  // doesn't - loginAs only waits for the login form to close, not for the
+  // sidebar to render, so an unanchored toHaveCount(0) can pass against a
+  // sidebar that simply hasn't drawn yet. Read scope has failed open here
+  // before; a negative assertion that can pass by timing proves nothing.
+  await expect(page.getByTestId("nav-section-stock")).toBeVisible();
 
   // Promotions holds Home, Stock, Offers & Price and Reports only (seed
   // seed_foundation's role grants) - none of the three sections this issue
