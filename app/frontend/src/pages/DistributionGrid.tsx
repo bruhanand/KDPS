@@ -61,10 +61,25 @@ interface SkuLine {
 }
 
 interface StyleGroup {
+  /** `brand::design` — two brands can share a design string, and the id is
+   *  what every handler matches on, never `design` alone. */
+  id: string;
   design: string;
   brand: string;
   lines: SkuLine[];
   expanded: boolean;
+}
+
+function styleId(brand: string, design: string): string {
+  return `${brand}::${design}`;
+}
+
+/** Coerces a typed cell to the non-negative integer it must always resolve
+ *  to — a blank, a negative, or a decimal all read as "nothing typed here"
+ *  rather than skewing a total or slipping a fractional qty to the API. */
+function toQty(val: string): number {
+  const n = Math.trunc(Number(val));
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /** size (or `_default`) → destination store id → fraction of that size's
@@ -75,16 +90,16 @@ const DEFAULT_WEIGHT_KEY = "_default";
 
 function lineTotal(line: SkuLine): number {
   return (
-    Object.values(line.qtyByDest).reduce((s, v) => s + (Number(v) || 0), 0) + (Number(line.buffer) || 0)
+    Object.values(line.qtyByDest).reduce((s, v) => s + toQty(v), 0) + toQty(line.buffer)
   );
 }
 
 function styleTotals(group: StyleGroup, destIds: string[]) {
   const available = group.lines.reduce((s, l) => s + l.available, 0);
-  const buffer = group.lines.reduce((s, l) => s + (Number(l.buffer) || 0), 0);
+  const buffer = group.lines.reduce((s, l) => s + toQty(l.buffer), 0);
   const byDest: Record<string, number> = {};
   for (const d of destIds) {
-    byDest[d] = group.lines.reduce((s, l) => s + (Number(l.qtyByDest[d]) || 0), 0);
+    byDest[d] = group.lines.reduce((s, l) => s + toQty(l.qtyByDest[d] || ""), 0);
   }
   const allocated = group.lines.reduce((s, l) => s + lineTotal(l), 0);
   const over = group.lines.some((l) => lineTotal(l) > l.available);
@@ -156,7 +171,23 @@ export function DistributionGridPage() {
   );
 
   function toggleDest(id: string) {
-    setDestIds((ds) => (ds.includes(id) ? ds.filter((d) => d !== id) : [...ds, id]));
+    const removing = destIds.includes(id);
+    setDestIds((ds) => (removing ? ds.filter((d) => d !== id) : [...ds, id]));
+    // A de-selected store's cells would otherwise stay in `qtyByDest`,
+    // invisible but still counted in every total and the over-stock check.
+    if (removing) {
+      setStyles((gs) =>
+        gs.map((g) => ({
+          ...g,
+          lines: g.lines.map((l) => {
+            if (!(id in l.qtyByDest)) return l;
+            const rest = { ...l.qtyByDest };
+            delete rest[id];
+            return { ...l, qtyByDest: rest };
+          }),
+        })),
+      );
+    }
   }
 
   function crossState(dest: StoreT): boolean {
@@ -203,6 +234,7 @@ export function DistributionGridPage() {
   async function addRow(r: StockRow) {
     if (styles.some((g) => g.lines.some((l) => l.sku_code === r.sku_code))) return;
     const design = r.design || r.brand || r.sku_code;
+    const id = styleId(r.brand, design);
     const weights = await weightsFor(r.brand);
     const line: SkuLine = {
       sku_code: r.sku_code,
@@ -212,8 +244,8 @@ export function DistributionGridPage() {
       ...suggestLine(r.qty, r.size, destIds, weights),
     };
     setStyles((gs) => {
-      const idx = gs.findIndex((g) => g.design === design && g.brand === r.brand);
-      if (idx === -1) return [...gs, { design, brand: r.brand, lines: [line], expanded: true }];
+      const idx = gs.findIndex((g) => g.id === id);
+      if (idx === -1) return [...gs, { id, design, brand: r.brand, lines: [line], expanded: true }];
       const next = [...gs];
       next[idx] = { ...next[idx], lines: [...next[idx].lines, line], expanded: true };
       return next;
@@ -222,48 +254,54 @@ export function DistributionGridPage() {
     setTerm("");
   }
 
-  function removeLine(design: string, sku: string) {
+  function removeLine(id: string, sku: string) {
     setStyles((gs) =>
       gs
-        .map((g) => (g.design === design ? { ...g, lines: g.lines.filter((l) => l.sku_code !== sku) } : g))
+        .map((g) => (g.id === id ? { ...g, lines: g.lines.filter((l) => l.sku_code !== sku) } : g))
         .filter((g) => g.lines.length > 0),
     );
   }
 
-  function removeStyle(design: string) {
-    setStyles((gs) => gs.filter((g) => g.design !== design));
+  function removeStyle(id: string) {
+    setStyles((gs) => gs.filter((g) => g.id !== id));
   }
 
-  function toggleStyle(design: string) {
-    setStyles((gs) => gs.map((g) => (g.design === design ? { ...g, expanded: !g.expanded } : g)));
+  function toggleStyle(id: string) {
+    setStyles((gs) => gs.map((g) => (g.id === id ? { ...g, expanded: !g.expanded } : g)));
   }
 
   /** Re-split asks the server fresh rather than trusting the cache — the one
    *  moment staleness would matter, e.g. after a newer allocation landed
-   *  elsewhere since this screen was opened. */
-  async function resplitStyle(design: string) {
-    const group = styles.find((g) => g.design === design);
+   *  elsewhere since this screen was opened. A failed fetch leaves both the
+   *  cache and the rows untouched rather than quietly resolving to an even
+   *  split that looks like a real answer. */
+  async function resplitStyle(id: string) {
+    const group = styles.find((g) => g.id === id);
     if (!group || !source || !group.brand) return;
-    const fresh = await api
-      .get<{ weights: SplitWeights }>(
+    let fresh: SplitWeights;
+    try {
+      const { data } = await api.get<{ weights: SplitWeights }>(
         `/outbound/distribution/suggested-split?warehouse=${source.id}&brand=${encodeURIComponent(group.brand)}&stores=${destIds.join(",")}`,
-      )
-      .then((r) => r.data.weights || {})
-      .catch(() => ({}) as SplitWeights);
+      );
+      fresh = data.weights || {};
+    } catch (e) {
+      setError(`Couldn't refresh the suggestion for ${group.design}: ${apiErrorMessage(e)}`);
+      return;
+    }
     setWeightsCache((c) => ({ ...c, [weightsKey(group.brand)]: fresh }));
     setStyles((gs) =>
       gs.map((g) =>
-        g.design === design
+        g.id === id
           ? { ...g, lines: g.lines.map((l) => ({ ...l, ...suggestLine(l.available, l.size, destIds, fresh) })) }
           : g,
       ),
     );
   }
 
-  function setQty(design: string, sku: string, dest: string, val: string) {
+  function setQty(id: string, sku: string, dest: string, val: string) {
     setStyles((gs) =>
       gs.map((g) =>
-        g.design === design
+        g.id === id
           ? {
               ...g,
               lines: g.lines.map((l) =>
@@ -275,10 +313,10 @@ export function DistributionGridPage() {
     );
   }
 
-  function setBuffer(design: string, sku: string, val: string) {
+  function setBuffer(id: string, sku: string, val: string) {
     setStyles((gs) =>
       gs.map((g) =>
-        g.design === design
+        g.id === id
           ? { ...g, lines: g.lines.map((l) => (l.sku_code === sku ? { ...l, buffer: val } : l)) }
           : g,
       ),
@@ -297,7 +335,7 @@ export function DistributionGridPage() {
         return;
       }
     }
-    const activeDests = destIds.filter((d) => allLines.some((l) => Number(l.qtyByDest[d]) > 0));
+    const activeDests = destIds.filter((d) => allLines.some((l) => toQty(l.qtyByDest[d] || "") > 0));
     if (activeDests.length === 0) { setError("Enter at least one quantity for a selected store."); return; }
     for (const d of activeDests) {
       const dest = destinationOptions.find((s) => String(s.id) === d);
@@ -312,7 +350,7 @@ export function DistributionGridPage() {
       activeDests.map((d) => {
         const dest = destinationOptions.find((s) => String(s.id) === d)!;
         const lines = allLines
-          .map((l) => ({ sku_code: l.sku_code, qty_planned: Number(l.qtyByDest[d]) || 0 }))
+          .map((l) => ({ sku_code: l.sku_code, qty_planned: toQty(l.qtyByDest[d] || "") }))
           .filter((l) => l.qty_planned > 0);
         return api.post("/outbound/transfers", {
           source_store: source.id,
@@ -472,13 +510,13 @@ export function DistributionGridPage() {
                   {styles.map((group) => {
                     const totals = styleTotals(group, destIds);
                     return (
-                      <Fragment key={group.design}>
+                      <Fragment key={group.id}>
                         <tr data-testid={`distribution-style-${group.design}`}>
                           <td>
                             <button
                               type="button"
                               className="btn btn-sm"
-                              onClick={() => toggleStyle(group.design)}
+                              onClick={() => toggleStyle(group.id)}
                               aria-expanded={group.expanded}
                               data-testid={`distribution-style-toggle-${group.design}`}
                             >
@@ -500,7 +538,7 @@ export function DistributionGridPage() {
                               type="button"
                               className="btn btn-sm"
                               title="Re-split this style to the suggestion"
-                              onClick={() => void resplitStyle(group.design)}
+                              onClick={() => void resplitStyle(group.id)}
                               data-testid={`distribution-resplit-${group.design}`}
                             >
                               <RefreshCw size={13} />
@@ -508,7 +546,7 @@ export function DistributionGridPage() {
                             <button
                               type="button"
                               className="btn btn-sm"
-                              onClick={() => removeStyle(group.design)}
+                              onClick={() => removeStyle(group.id)}
                               data-testid={`distribution-remove-style-${group.design}`}
                             >
                               <Trash2 size={13} />
@@ -532,7 +570,7 @@ export function DistributionGridPage() {
                                     style={{ width: 64, textAlign: "right" }}
                                     inputMode="numeric"
                                     value={line.qtyByDest[d] || ""}
-                                    onChange={(e) => setQty(group.design, line.sku_code, d, e.target.value)}
+                                    onChange={(e) => setQty(group.id, line.sku_code, d, e.target.value)}
                                     data-testid={`distribution-qty-${line.sku_code}-${d}`}
                                   />
                                 </td>
@@ -543,7 +581,7 @@ export function DistributionGridPage() {
                                   style={{ width: 64, textAlign: "right" }}
                                   inputMode="numeric"
                                   value={line.buffer}
-                                  onChange={(e) => setBuffer(group.design, line.sku_code, e.target.value)}
+                                  onChange={(e) => setBuffer(group.id, line.sku_code, e.target.value)}
                                   data-testid={`distribution-buffer-${line.sku_code}`}
                                 />
                               </td>
@@ -553,7 +591,7 @@ export function DistributionGridPage() {
                               <td>
                                 <button
                                   className="btn btn-sm"
-                                  onClick={() => removeLine(group.design, line.sku_code)}
+                                  onClick={() => removeLine(group.id, line.sku_code)}
                                   data-testid={`distribution-remove-${line.sku_code}`}
                                 >
                                   <Trash2 size={13} />
