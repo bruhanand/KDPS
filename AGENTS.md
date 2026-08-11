@@ -1,11 +1,9 @@
 # AGENTS.md
 
-Guidance for **any coding agent** working in this repository - Claude Code, Codex, Cursor, Copilot or anything else.
-This is the one root instruction file. `CLAUDE.md` is a symlink to it, so Claude Code and every other tool read the same bytes; edit `AGENTS.md`, never the symlink.
+Guidance for **any coding agent** working in this repository - Claude Code, Codex, Cursor, Antigravity or anything else.
 
-Anything below that names a specific tool is an *example of the principle*, not the principle. Follow the principle with whatever you have.
-
-> **Before building any slice, read [`CONTEXT.md`](CONTEXT.md) (repo root)** — the single machine-read briefing: the domain language, the 12 rules, the kernel contracts, and the money-critical locked + CA-gated decisions. **It is the one build-context file** — the phase skills (`to-spec`, `tdd`, `code-review`, `grill-with-docs`) read it; don't fork it. This `AGENTS.md` is *workflow/project* guidance; `CONTEXT.md` is the *domain/kernel* context; `README.md` is how to run it.
+> **Before building anything, read [`CONTEXT.md`](CONTEXT.md) (repo root)** - the domain language, the 12 rules, the kernel contracts, and the money-critical locked + CA-gated decisions.
+> This file is workflow and project guidance; `CONTEXT.md` is the domain and kernel context; `README.md` is how to run it.
 
 ## What this project is
 
@@ -13,32 +11,25 @@ Anand is the consultant/architect designing and building an operating system for
 
 **Anand designs the system himself.** The client supplied their own plans (PRD, "Definitive Plan" with 10 AI agents, an 8-month phasing) — those are in `docs/client-requirements-docs/` and are **requirements input only, not the design**. Do not treat the client's architecture, agent list, tech stack, or phasing as decisions. The cancelled "Phase-1" plan is in `__archive/` — never build from it.
 
-## Where things stand (2 July 2026)
+## The code is the truth
 
-**The master architecture is `docs/my-understanding/system-design/00-system-architecture.html`** — the whole system on one page (5 layers: master data → documents → ledgers → controls → intelligence), the 12 rules every module must obey (documents-write-ledgers, snapshot masters, flag-don't-block, AI at edges only, variation-is-data-not-code, etc.), and the ordered discussion plan D3–D9. **Read it before any design discussion; designs that break a rule must change the rule consciously on that page first.**
+The system is built and live (alpha): a Django backend (`app/backend` - kernel `core` plus one app per module) and a React/TypeScript PWA (`app/frontend`), auto-deploying to a Render alpha (Postgres 16, Singapore region).
+Stack ratified in ADR-0001: no backend-as-a-service; ERPNext not adopted, but its GST data model is borrowed.
 
-The system design ("the spine") is built in process order, one discussion at a time. Each design lives in its own folder under `docs/my-understanding/system-design/`:
+**What exists and how it behaves is answered by reading the code and git history, never by a document.**
+The design corpus (`docs/my-understanding/system-design/`) largely predates the build; requirements changed during it and not every change was written back, so parts of it are stale.
+Treat it as input and background: where a document and the code disagree, the code wins - note the drift instead of building from the doc.
+Do not add "where things stand" status prose to this file or the other instruction files; it goes stale the day after it is written.
 
-1. **D1 · Vendor management & booking** — designed → `01-vendor-management/`
-2. **D2 · Inbound** (goods arrival → data injection → sellable in store) — designed → `02-inbound/`
-3. **D3 · Outbound + stocktake** (sale, exchange, transfer, returns out, EOSS, counting) — designed → `03-outbound/`
-4. **D4 · Payments & roles** — designed (locked 18 Jun 2026) → `04-payments/`
-5. **D5 · Offer rulebook** — designed → `05-offers/`
-6. **D7 · Analytics & AI** (the intelligence layer) — designed → `07-analytics-ai/`
-7. **D6 · Tally sync** — designed (locked 20 Jun 2026) → `06-tally-sync/`
-8. **D8 · Master-data & users consolidation** — designed (locked 21 Jun 2026) → `08-master-data/`
+What stays binding regardless of the code: the 12 rules, the kernel contracts, the locked money decisions and the CA-gated list, all in `CONTEXT.md`.
+Code that breaks one of those is a bug even when it is on `main`; changing one is a conscious decision by Anand, never a drive-by edit.
 
-**Built and live (alpha).** All module designs (D1–D8) are done, and the **foundation plus the first business layer are now built and merged to `main`** — the Emergent build, landed via PRs #31 / #33 / #34 / #35 — auto-deploying to a **Render alpha** (Postgres 16 + Django API + React PWA). Ten Django apps exist: the kernel `core` (money-as-paise, append-only ledgers with DB triggers, docstatus FSM + gap-free voucher numbering, a value GL + balanced `post_entries`, Indian FY) plus `masters`, `accounts`, `files`, `vendors`, `inbound`, `ptmapper`, `stockledger`, `finledger`, `aiagents`. The PWA has ~12 wired screens (Bookings, Inbound/GRN, PT-Mapper + review queue, Stock/Vendor/Cash ledgers, Master Data) + ~20 "coming soon" stubs. The 30-Jun code review's money-path defects were **remediated** (Phases A–F: P-RATE valuation, commercial-model liability branching, GRN/PtFile reparented onto the `core.Document` FSM, a Books-Health/trial-balance endpoint). **Active dev moved from Emergent to Claude Code** (Emergent parked, not cut). *Alpha caveats:* the vendor/cash ledgers are still single-entry running balances (only the PT-inward path is true double-entry); demo creds + JWT-in-`localStorage` are consciously deferred for the alpha. **Not built yet:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, and store open/close. **Deferred by decision (revisit before go-live):** D9 · migration & rollout → `09-migration/`, the deep **roles/access** model (D4 left it thin), and **Attendance & Payroll**. Current build state is also recorded in `memory/PRD.md` and the `emergent-build-on-main` memory.
+New work enters through the dev process below and gets its own fresh spec and design under `docs/features/<slug>/` - never a rebuild from an old corpus doc.
+Pace: no fixed timeline - ASAP with quality, one verified vertical slice at a time.
+Current focus: end-of-season sale (EOSS); accounting and finance comes next, as a new design discussion.
+The prioritized gap register is `docs/agents/improvement-plan.md`.
 
-**Stack (ratified 25 Jun 2026 — ADR-0001):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as the analytics/AI) + **PostgreSQL** (deployed on a **Render alpha, Singapore region**; true in-India data residency deferred). **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `docs/my-understanding/system-design/consolidation/stack-decision.html`; how to run/deploy: `README.md` + `DEPLOY.md`.
-
-**Reviewed, decided & reconciled (25 June 2026).** A full design review (drift audit + India retail-ERP best-practice research) ran across the corpus, then a **16-decision Q&A** locked every open seam — GRN posts quantity / PT posts value + liability; cross-state (Bihar↔Jharkhand) transfer = taxable IGST; unit cost = P RATE directly (never strip GST); barcode = a non-unique scan-alias with stock a **count under it**; own-POS in scope (**superseded 26 Jun→26 Jul 2026: the third-party-POS route is dropped — KDPS builds its own POS, designed later**); booking-less direct receipt for any brand; commercial model stored as **two axes** (ownership × return-terms) with derived labels; **stack ratified (ADR-0001)**; per-user-configurable digest; **Rule 12 "variation is data, not code"**. Decisions are logged in `.context/qa-decisions.md`; the review is `consolidation/system-review-2026-06-24.html`. The **canonical doc set is now in order**: constitution (`00-system-architecture.html`) → design-of-record (`consolidation/consolidated-system-design.html`) → build artifacts (`consolidation/glossary.html`, `data-model.html`, `posting-catalog.html`, `lifecycles.html`, `integration-contracts.html`) → ratified **ADR chain** (`adr/0001`–`0007`) → D1–D8 appendices → build companion (`build-process-and-roadmap.html`, `erpnext-engineering-study.html`). **Five money-critical items still await a CA ruling before the alpha handles live money**: SOR/Consignment GST single-recognition (F9), the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT, and the no-reposting rule. The distrusted `foundation.html` and the old `docs/adr/*` in the checkout are **slated for deletion (pending Anand's go)**; their salvage is already folded into the new ADRs + glossary. (`CONTEXT.md` is **not** in that list — it is now the canonical build-context briefing; see the top of this file. Neither is `docs/agents/*`: the old agent-design material there was superseded, and the folder is now the tool-neutral home of the dev process.)
-
-**Pace (decided 10 June 2026): no fixed timeline — ASAP with quality.** Working plan (revised 23 Jun): lock the stack → build the **foundation** (project setup) → then **one verified vertical slice at a time** with just-in-time per-slice specs (data model, posting entries and golden files grow per slice, not all upfront). Spike the two externals (Tally import, barcode tool) **in parallel** — they have lead time. (A third, the incumbent POS's API, was dropped on 26 Jul 2026 when KDPS decided to build its own POS.) D9 migration is designed before go-live. Never all PRDs upfront, never module-by-module to completion. Full process: the **"How we build"** section of the architecture doc.
-
-The in-app **PT-mapper** (`app/backend/ptmapper`, the brand-PT → KDPS mapper) is built and live — 9 brand profiles + seeded lookups + a human review queue; fed and hardened 1 Jul, seeded on Render. The separate standalone `code/pdf-to-pt` Invoice→PT maker is regenerated per-need (weekly), not restored.
-
-Separately, there is a recurring live duty: **month-start brand reports** (1st week of every month) in `docs/data-from-kdps/monthly-reports-april-may-2026/`. Skills exist for this: `kdps-report`, `discount-audit-v2`, `kdps-offer`. A `store-dashboard` skill (added 2 Jul) generates the 16-measure per-store business dashboard from a store's sales + SOH exports (first run: JSL).
+One recurring live duty sits outside feature work: **month-start brand reports** (1st week of every month) in `docs/data-from-kdps/monthly-reports-april-may-2026/`, via the `kdps-report`, `discount-audit-v2`, `kdps-offer` and `store-dashboard` skills.
 
 ## Folder map
 
@@ -46,13 +37,13 @@ Separately, there is a recurring live duty: **month-start brand reports** (1st w
 
 | Folder | What it is |
 |---|---|
-| `docs/my-understanding/` | **Anand's own work.** `system-design/` = the spine (architecture + D1–D9 module designs + `workflow-diagrams/`); `req-understanding-docs/` = requirement write-ups; `workflow/` = **ground truth** (`KDPS-current-workflow.pdf` = how KDPS works today, the design is derived from it; `conversations.md` = raw staff interviews). |
-| `docs/data-from-kdps/` | **Raw material received from the client.** `05-reference-data/` (PT file format + real vendor invoice/PT/ledger samples + logo), `Q&A-req-recieved/` (store list, supplier-brand details, brand offers, ~25 brand PT files, report formats), `bank-statement/`, `monthly-reports-april-may-2026/` (the report duty; `KDPS-DIRECTION.xlsx` = worked example to copy, `FORMAT_SALES_VOUCHERS.xlsx` = blank template), `store-analysis/` (per-store deep-dives: Vaishnavi Deoghar + JSL — the JSL one produced via the `store-dashboard` skill), `store-requirements-users/`, `transfer-data/`. |
+| `docs/my-understanding/` | **Anand's design work.** `system-design/` = the design corpus (architecture + D1–D9 module designs + ADRs) - **input, may lag the code**; `workflow/` = how KDPS works today (`KDPS-current-workflow.pdf`, staff interviews) - the business ground truth the design was derived from. |
+| `docs/data-from-kdps/` | **Raw material received from the client:** reference data (PT formats, real invoices, samples), Q&A answers, bank statements, the monthly-report duty folder, per-store analyses, transfer data. |
 | `docs/client-requirements-docs/` | Client's asks (PRD, Definitive Plan, `client-demands.html`, `ERP-requirements-register.html`, `change-request/`). **Requirements only — not the design.** |
 | `docs/04-client-docs/` | Client-facing per-module deliverables (Vendor, Goods-Inward, Outbound, Payments, Offers, POS requirements). Living documents — they change until the architecture is final. |
 | `docs/meetings/` | One folder per meeting, named `YYYY-MM-DD-topic/` (audio + transcript + minutes). |
 | `code/` | `pdf-to-pt/` Invoice→PT pipeline (see its `BLUEPRINT.md`); ~150 real invoices in `document/` for testing. `scripts/generate-pdf.mjs` = HTML→PDF helper; `scripts/trace-logo.py` = traces the client's logo PNG into the app's vector logo component and app icons. |
-| `app/` | **The built system** (Emergent build, on `main`, deployed to a Render alpha). `backend/` = Django (kernel `core` + 9 apps: masters/accounts/files/vendors/inbound/ptmapper/stockledger/finledger/aiagents); `frontend/` = React/TS PWA. Run: `README.md`; deploy: `DEPLOY.md` + `render.yaml`. |
+| `app/` | **The built system** (on `main`, deployed to a Render alpha). `backend/` = Django, kernel `core` + one app per module; `frontend/` = React/TS PWA. Run: `README.md`; deploy: `DEPLOY.md` + `render.yaml`. |
 | `__archive/` | Stale material (cancelled Phase-1, old timeline, old direction doc, old drafts/decks). **Never design or build from here.** |
 | `docs/agents/` | **The dev process, tool-neutral.** The phase chain, the issue tracker's commands, the triage labels, the domain-doc layout, and the go-live gap register. Plain markdown any agent can read. |
 | `.agents/skills/` | **The skills, tool-neutral.** One folder per skill, each with a `SKILL.md`. `.claude/skills/` is a directory of symlinks pointing here, so Claude Code sees the same set - see "Where the instructions live" below. |
@@ -103,7 +94,6 @@ Consequences worth knowing before you edit anything here:
 
 - **Never edit through a symlink's name.** Edit `AGENTS.md`, not `CLAUDE.md`; edit `.agents/skills/<name>/`, not `.claude/skills/<name>/`. They are the same file, but naming the real path keeps the diff honest.
 - **A new skill needs its symlink.** Create it under `.agents/skills/<name>/`, then `ln -s ../../.agents/skills/<name> .claude/skills/<name>` in the same commit, or Claude Code will not see it.
-- **Model pinning is the one genuinely tool-specific thing.** No tool but Claude Code lets you name the model for a subagent. The principle, which every agent follows with whatever it has: implement with a mid-tier model, review with the strongest one available, and never let the model that wrote the code be the only one grading it.
 
 ### The dev process
 
@@ -170,5 +160,3 @@ In practice: Anand develops in the **Claude app**, so `mcp__claude-in-chrome__*`
 `mcp__chrome-devtools__*` is the terminal equivalent. Both satisfy the four capabilities above.
 
 The recipe (preconditions, flows, what to assert) is `docs/agents/phases/live-qa.md`.
-
-*(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*

@@ -16,7 +16,9 @@ there. The completeness gate at the bottom is not a formality: `implement` check
 Read the current models, serializers, views and urls of the touched apps, and the touched screens, so
 the design extends the established patterns instead of inventing new ones. Trace one existing similar
 flow end to end. For anything that posts, read the posting catalog
-(`docs/my-understanding/system-design/consolidation/posting-catalog.html`).
+(`docs/my-understanding/system-design/consolidation/posting-catalog.html`) as background, then read
+what the code actually posts - where they disagree, the code is the reference and the design extends
+the code's real behaviour.
 
 ## 2. Ask only what the spec does not settle
 

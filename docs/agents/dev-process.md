@@ -9,6 +9,19 @@ phase until it is approved.
 
 Phase artifacts live in one folder per feature: `docs/features/<slug>/` (kebab-case slug).
 
+## The code is the truth
+
+The design corpus (`docs/my-understanding/system-design/`) is input, not the spec of record: much of
+it predates the build, and requirements changed without every change being written back. What exists
+and how it behaves is answered by reading the code and git history. Where a document and the code
+disagree, the code wins - note the drift rather than building from the doc.
+
+The exceptions, which bind regardless of the code, live in `CONTEXT.md`: the 12 rules, the kernel
+contracts, the locked money decisions and the CA-gated list.
+
+Every feature builds from its own fresh `docs/features/<slug>/` spec and design, written by the
+phases below against the current code - never from an old corpus document.
+
 ## The chain
 
 | Phase | Skill | Artifact | Method |
@@ -69,7 +82,8 @@ Phase 1 flags it; the `money` label carries the flag onto every ticket it produc
 
 On a money slice:
 
-- Phase 1 grills against the design corpus (`grill-with-docs`) so the design is locked before code.
+- Phase 1 grills with the design corpus as input (`grill-with-docs`) so the design is locked before
+  code - but a corpus claim enters the spec only after the code confirms it still holds.
 - `design` is mandatory, and its postings section is mandatory within it: every ledger entry the
   feature writes, both legs, on which docstatus transition, through `post_entries`.
 - `implement` runs a second reviewer on the ledger axis.

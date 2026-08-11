@@ -71,7 +71,8 @@ On a money slice, the second subagent gets this instead:
 - A reversal must not re-derive editable master data - it posts to the wrong account while the trial
   balance still reads zero, and no detector in this codebase catches it. Snapshot on the money line.
 - Money renders in Indian format (`₹2,85,000`), never raw paise.
-- Reconcile every posting in the diff against the design's postings section and the posting catalog.
+- Reconcile every posting in the diff against the design's postings section. The posting catalog is
+  background; where it disagrees with the code's established postings, the code is the reference.
 
 </money-checklist>
 

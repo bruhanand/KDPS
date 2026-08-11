@@ -9,8 +9,11 @@ of the spec.
 
 ## 1. Read the context
 
-Read `CONTEXT.md`. If the design corpus has a module folder for this area
-(`docs/my-understanding/system-design/`), read its design too. Read the ADRs that touch it.
+Read `CONTEXT.md` and the ADRs that touch the area. If the design corpus
+(`docs/my-understanding/system-design/`) has a module folder for this area, read it as background -
+it may be stale. Then read the code the feature touches: the code is the truth for what exists and
+how it behaves today. A corpus claim goes into the spec only once the code confirms it, or with an
+explicit flag that it describes a change.
 
 Facts you can look up in the repo are never questions for Anand. Decisions always are.
 

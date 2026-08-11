@@ -18,8 +18,8 @@ endpoint, or test - or **gap**. A requirement met by no ticket is the classic ho
 
 - Every endpoint in `design.md`: exists, matches its step flow, returns every error in its error table.
 - Every table and column: present in the migrations as designed.
-- Every posting: fires on the designed transition, both legs, through `post_entries`. Reconcile
-  against the posting catalog.
+- Every posting: fires on the designed transition, both legs, through `post_entries`, as the
+  feature's `design.md` specifies.
 
 List every deviation. A deviation someone chose deliberately gets its reason quoted from the PR;
 everything else is a finding.
