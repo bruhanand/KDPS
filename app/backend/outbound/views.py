@@ -744,6 +744,48 @@ class CrossLocationStockSearchView(APIView):
         )
 
 
+class DistributionSuggestedSplitView(APIView):
+    """GET ?warehouse=&brand=&stores=<comma-separated ids> — the Distribution
+    grid's pre-fill (#73): a per-size weight for each destination store,
+    scoped the same as raising a transfer out of ``warehouse`` (the grid
+    creates one draft per store, so seeing the suggestion needs no more than
+    creating the drafts already does).
+    """
+
+    permission_classes = [CanWriteTransfer]
+
+    def get(self, request: Request) -> Response:
+        from outbound.distribution import suggest_split
+
+        warehouse_raw = request.query_params.get("warehouse")
+        if not warehouse_raw:
+            raise ValidationError({"warehouse": "Required."})
+        try:
+            warehouse_id = int(warehouse_raw)
+        except ValueError as exc:
+            raise ValidationError({"warehouse": "Must be a store id."}) from exc
+        enforce_store_scope(request.user, warehouse_id)
+
+        store_ids = []
+        for raw in request.query_params.get("stores", "").split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                store_ids.append(int(raw))
+            except ValueError as exc:
+                raise ValidationError(
+                    {"stores": "Must be a comma-separated list of store ids."}
+                ) from exc
+
+        weights = suggest_split(
+            warehouse_id=warehouse_id,
+            brand=request.query_params.get("brand", ""),
+            store_ids=store_ids,
+        )
+        return Response({"weights": weights})
+
+
 class BillingPolicyView(APIView):
     """The one partner-billing dial: informational-only, or also a receivable
     at Purchase Price. Read at `money: view`, changed at `money: manage` —

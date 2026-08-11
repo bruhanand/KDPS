@@ -1886,6 +1886,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/outbound/distribution/suggested-split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET ?warehouse=&brand=&stores=<comma-separated ids> — the Distribution
+         *     grid's pre-fill (#73): a per-size weight for each destination store,
+         *     scoped the same as raising a transfer out of ``warehouse`` (the grid
+         *     creates one draft per store, so seeing the suggestion needs no more than
+         *     creating the drafts already does).
+         */
+        get: operations["outbound_distribution_suggested_split_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/outbound/gap-closures/{id}": {
         parameters: {
             query?: never;
@@ -8451,6 +8474,24 @@ export interface operations {
             path: {
                 id: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_distribution_suggested_split_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

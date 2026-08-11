@@ -38,6 +38,7 @@ from outbound.views import (
     CountSessionScanView,
     CountSessionSubmitView,
     CrossLocationStockSearchView,
+    DistributionSuggestedSplitView,
     GapClosureDetailView,
     GapClosureSubmitView,
     MarkDamagedView,
@@ -135,6 +136,12 @@ urlpatterns = [
     ),
     # Stock requests — the pull side of a transfer (#74)
     path("stock-search", CrossLocationStockSearchView.as_view(), name="stock-search"),
+    # The Distribution grid's pre-fill weights (#73)
+    path(
+        "distribution/suggested-split",
+        DistributionSuggestedSplitView.as_view(),
+        name="distribution-suggested-split",
+    ),
     path("stock-requests", StockRequestListCreateView.as_view(), name="stock-request-list"),
     path("stock-requests/<int:pk>", StockRequestDetailView.as_view(), name="stock-request-detail"),
     path(

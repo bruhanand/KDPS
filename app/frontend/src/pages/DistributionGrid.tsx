@@ -4,13 +4,32 @@
 // the same approval → scan-and-dispatch → receive pipeline as a transfer raised
 // one at a time on "Send Stock" — this screen only saves the Ops Head from
 // doing that N times for one arrived batch.
-import { useMemo, useState } from "react";
+//
+// Rows are styles (`design`) — a style's size × colour breakup opens inside
+// its row, one line per barcode, each with its own per-store cells and a
+// warehouse **buffer** cell for stock explicitly held back rather than sent.
+// The pre-fill (#73's v1: last split for the brand, weighted by each store's
+// own size mix) comes from `/outbound/distribution/suggested-split`; every
+// cell stays hand-editable afterward, and re-split re-asks the server rather
+// than reusing a stale answer.
+import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Plus, RefreshCw, Send, Trash2, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  RefreshCw,
+  Send,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import { PageHeader } from "../components/PageHeader";
+import { destinationOptions as filterDestinations, type LocationT } from "../lib/transfer-locations";
 
 interface StoreT {
   id: number;
@@ -33,15 +52,59 @@ interface StockRow {
   is_own: boolean;
 }
 
-interface GridRow {
+interface SkuLine {
   sku_code: string;
-  label: string;
+  color: string;
+  size: string;
   available: number;
   qtyByDest: Record<string, string>;
+  buffer: string;
 }
 
-function rowTotal(row: GridRow): number {
-  return Object.values(row.qtyByDest).reduce((s, v) => s + (Number(v) || 0), 0);
+interface StyleGroup {
+  /** `brand::design` — two brands can share a design string, and the id is
+   *  what every handler matches on, never `design` alone. */
+  id: string;
+  design: string;
+  brand: string;
+  lines: SkuLine[];
+  expanded: boolean;
+}
+
+function styleId(brand: string, design: string): string {
+  return `${brand}::${design}`;
+}
+
+/** Coerces a typed cell to the non-negative integer it must always resolve
+ *  to — a blank, a negative, or a decimal all read as "nothing typed here"
+ *  rather than skewing a total or slipping a fractional qty to the API. */
+function toQty(val: string): number {
+  const n = Math.trunc(Number(val));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** size (or `_default`) → destination store id → fraction of that size's
+ *  qty the store should get. Mirrors `outbound.distribution.suggest_split`'s
+ *  return shape exactly — see that module for what "last split" means. */
+type SplitWeights = Record<string, Record<string, number>>;
+const DEFAULT_WEIGHT_KEY = "_default";
+
+function lineTotal(line: SkuLine): number {
+  return (
+    Object.values(line.qtyByDest).reduce((s, v) => s + toQty(v), 0) + toQty(line.buffer)
+  );
+}
+
+function styleTotals(group: StyleGroup, destIds: string[]) {
+  const available = group.lines.reduce((s, l) => s + l.available, 0);
+  const buffer = group.lines.reduce((s, l) => s + toQty(l.buffer), 0);
+  const byDest: Record<string, number> = {};
+  for (const d of destIds) {
+    byDest[d] = group.lines.reduce((s, l) => s + toQty(l.qtyByDest[d] || ""), 0);
+  }
+  const allocated = group.lines.reduce((s, l) => s + lineTotal(l), 0);
+  const over = group.lines.some((l) => lineTotal(l) > l.available);
+  return { available, buffer, byDest, allocated, over };
 }
 
 /** A starting point, not a decision: split what's available as evenly as the
@@ -61,10 +124,40 @@ function equalSplit(available: number, destIds: string[]): Record<string, string
   return out;
 }
 
+/** The suggested fill for one line: the size's weight if the server has ever
+ *  seen this brand dispatched to these stores, else `_default`'s (that
+ *  store's overall share across every size), else an even split. Whatever
+ *  floor() leaves unallocated goes to the warehouse buffer — rounding never
+ *  invents or drops a piece. */
+function suggestLine(available: number, size: string, destIds: string[], weights: SplitWeights) {
+  const sizeWeights = weights[size] || weights[DEFAULT_WEIGHT_KEY];
+  if (!sizeWeights || destIds.length === 0 || available <= 0) {
+    return { qtyByDest: equalSplit(available, destIds), buffer: "" };
+  }
+  const qtyByDest: Record<string, string> = {};
+  let allocated = 0;
+  for (const d of destIds) {
+    const qty = Math.floor(available * (sizeWeights[d] ?? 0));
+    if (qty > 0) {
+      qtyByDest[d] = String(qty);
+      allocated += qty;
+    }
+  }
+  const remainder = available - allocated;
+  return { qtyByDest, buffer: remainder > 0 ? String(remainder) : "" };
+}
+
 export function DistributionGridPage() {
   const navigate = useNavigate();
+  // The source picker asks "which warehouse may I operate from" — the scoped
+  // list. The destination picker asks "where in the network may stock go" —
+  // deliberately the *unscoped* one (`/masters/locations`, #147): a warehouse
+  // person scoped to their own store alone would otherwise see zero
+  // destinations and the grid would be unusable for exactly the role it was
+  // built for. Never collapse these back onto one list (test_masters_locations.py).
   const { data: stores } = useList<StoreT>("/masters/stores");
-  const warehouses = useMemo(() => stores.filter((s) => s.store_type === "warehouse"), [stores]);
+  const { data: locations } = useList<LocationT>("/masters/locations");
+  const warehouses = stores.filter((s) => s.store_type === "warehouse");
 
   const [sourceId, setSourceId] = useState("");
   const [destIds, setDestIds] = useState<string[]>([]);
@@ -72,24 +165,41 @@ export function DistributionGridPage() {
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<StockRow[]>([]);
   const [searching, setSearching] = useState(false);
-  const [rows, setRows] = useState<GridRow[]>([]);
+  const [styles, setStyles] = useState<StyleGroup[]>([]);
+  const [weightsCache, setWeightsCache] = useState<Record<string, SplitWeights>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<{ dest: string; ok: boolean; detail: string }[] | null>(null);
 
   const source = stores.find((s) => String(s.id) === sourceId) || null;
-  // Every other active store is a candidate destination — a partner franchisee
-  // is not excluded, that is the whole point of the flag (#see Setup → Stores).
-  const destinationOptions = useMemo(
-    () => stores.filter((s) => s.is_active && String(s.id) !== sourceId && s.store_type === "store"),
-    [stores, sourceId],
+  // Every other store in the network is a candidate destination — a partner
+  // franchisee is not excluded, that is the whole point of the flag — and a
+  // warehouse is never itself a distribution target.
+  const destinationOptions = filterDestinations(locations, sourceId).filter(
+    (l) => l.store_type === "store",
   );
 
   function toggleDest(id: string) {
-    setDestIds((ds) => (ds.includes(id) ? ds.filter((d) => d !== id) : [...ds, id]));
+    const removing = destIds.includes(id);
+    setDestIds((ds) => (removing ? ds.filter((d) => d !== id) : [...ds, id]));
+    // A de-selected store's cells would otherwise stay in `qtyByDest`,
+    // invisible but still counted in every total and the over-stock check.
+    if (removing) {
+      setStyles((gs) =>
+        gs.map((g) => ({
+          ...g,
+          lines: g.lines.map((l) => {
+            if (!(id in l.qtyByDest)) return l;
+            const rest = { ...l.qtyByDest };
+            delete rest[id];
+            return { ...l, qtyByDest: rest };
+          }),
+        })),
+      );
+    }
   }
 
-  function crossState(dest: StoreT): boolean {
+  function crossState(dest: LocationT): boolean {
     return !!source && source.gstin !== dest.gstin;
   }
 
@@ -108,34 +218,117 @@ export function DistributionGridPage() {
     }
   }
 
-  function addRow(r: StockRow) {
-    if (rows.some((row) => row.sku_code === r.sku_code)) return;
-    setRows((rs) => [
-      ...rs,
-      {
-        sku_code: r.sku_code,
-        label: [r.design, r.color, r.size].filter(Boolean).join(" · ") || r.brand,
-        available: r.qty,
-        qtyByDest: equalSplit(r.qty, destIds),
-      },
-    ]);
+  function weightsKey(brand: string): string {
+    return `${brand}::${[...destIds].sort().join(",")}`;
+  }
+
+  /** The last-known weights for `brand` at the currently-picked destinations,
+   *  fetched once and cached — a re-split asks fresh rather than trusting the
+   *  cache, since that is the one moment staleness would matter. */
+  async function weightsFor(brand: string): Promise<SplitWeights> {
+    const key = weightsKey(brand);
+    if (weightsCache[key]) return weightsCache[key];
+    if (!source || destIds.length === 0 || !brand) return {};
+    try {
+      const { data } = await api.get<{ weights: SplitWeights }>(
+        `/outbound/distribution/suggested-split?warehouse=${source.id}&brand=${encodeURIComponent(brand)}&stores=${destIds.join(",")}`,
+      );
+      setWeightsCache((c) => ({ ...c, [key]: data.weights || {} }));
+      return data.weights || {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function addRow(r: StockRow) {
+    if (styles.some((g) => g.lines.some((l) => l.sku_code === r.sku_code))) return;
+    const design = r.design || r.brand || r.sku_code;
+    const id = styleId(r.brand, design);
+    const weights = await weightsFor(r.brand);
+    const line: SkuLine = {
+      sku_code: r.sku_code,
+      color: r.color,
+      size: r.size,
+      available: r.qty,
+      ...suggestLine(r.qty, r.size, destIds, weights),
+    };
+    setStyles((gs) => {
+      const idx = gs.findIndex((g) => g.id === id);
+      if (idx === -1) return [...gs, { id, design, brand: r.brand, lines: [line], expanded: true }];
+      const next = [...gs];
+      next[idx] = { ...next[idx], lines: [...next[idx].lines, line], expanded: true };
+      return next;
+    });
     setResults([]);
     setTerm("");
   }
 
-  function removeRow(sku: string) {
-    setRows((rs) => rs.filter((r) => r.sku_code !== sku));
-  }
-
-  function resplitRow(sku: string) {
-    setRows((rs) =>
-      rs.map((r) => (r.sku_code === sku ? { ...r, qtyByDest: equalSplit(r.available, destIds) } : r)),
+  function removeLine(id: string, sku: string) {
+    setStyles((gs) =>
+      gs
+        .map((g) => (g.id === id ? { ...g, lines: g.lines.filter((l) => l.sku_code !== sku) } : g))
+        .filter((g) => g.lines.length > 0),
     );
   }
 
-  function setQty(sku: string, dest: string, val: string) {
-    setRows((rs) =>
-      rs.map((r) => (r.sku_code === sku ? { ...r, qtyByDest: { ...r.qtyByDest, [dest]: val } } : r)),
+  function removeStyle(id: string) {
+    setStyles((gs) => gs.filter((g) => g.id !== id));
+  }
+
+  function toggleStyle(id: string) {
+    setStyles((gs) => gs.map((g) => (g.id === id ? { ...g, expanded: !g.expanded } : g)));
+  }
+
+  /** Re-split asks the server fresh rather than trusting the cache — the one
+   *  moment staleness would matter, e.g. after a newer allocation landed
+   *  elsewhere since this screen was opened. A failed fetch leaves both the
+   *  cache and the rows untouched rather than quietly resolving to an even
+   *  split that looks like a real answer. */
+  async function resplitStyle(id: string) {
+    const group = styles.find((g) => g.id === id);
+    if (!group || !source || !group.brand) return;
+    let fresh: SplitWeights;
+    try {
+      const { data } = await api.get<{ weights: SplitWeights }>(
+        `/outbound/distribution/suggested-split?warehouse=${source.id}&brand=${encodeURIComponent(group.brand)}&stores=${destIds.join(",")}`,
+      );
+      fresh = data.weights || {};
+    } catch (e) {
+      setError(`Couldn't refresh the suggestion for ${group.design}: ${apiErrorMessage(e)}`);
+      return;
+    }
+    setWeightsCache((c) => ({ ...c, [weightsKey(group.brand)]: fresh }));
+    setStyles((gs) =>
+      gs.map((g) =>
+        g.id === id
+          ? { ...g, lines: g.lines.map((l) => ({ ...l, ...suggestLine(l.available, l.size, destIds, fresh) })) }
+          : g,
+      ),
+    );
+  }
+
+  function setQty(id: string, sku: string, dest: string, val: string) {
+    setStyles((gs) =>
+      gs.map((g) =>
+        g.id === id
+          ? {
+              ...g,
+              lines: g.lines.map((l) =>
+                l.sku_code === sku ? { ...l, qtyByDest: { ...l.qtyByDest, [dest]: val } } : l,
+              ),
+            }
+          : g,
+      ),
+    );
+  }
+
+  function setBuffer(id: string, sku: string, val: string) {
+    setStyles((gs) =>
+      gs.map((g) =>
+        g.id === id
+          ? { ...g, lines: g.lines.map((l) => (l.sku_code === sku ? { ...l, buffer: val } : l)) }
+          : g,
+      ),
     );
   }
 
@@ -144,13 +337,14 @@ export function DistributionGridPage() {
     setOutcome(null);
     if (!source) { setError("Select a source warehouse."); return; }
     if (destIds.length === 0) { setError("Select at least one destination store."); return; }
-    for (const row of rows) {
-      if (rowTotal(row) > row.available) {
-        setError(`${row.sku_code}: allocated (${rowTotal(row)}) exceeds available (${row.available}).`);
+    const allLines = styles.flatMap((g) => g.lines);
+    for (const line of allLines) {
+      if (lineTotal(line) > line.available) {
+        setError(`${line.sku_code}: allocated (${lineTotal(line)}) exceeds available (${line.available}).`);
         return;
       }
     }
-    const activeDests = destIds.filter((d) => rows.some((r) => Number(r.qtyByDest[d]) > 0));
+    const activeDests = destIds.filter((d) => allLines.some((l) => toQty(l.qtyByDest[d] || "") > 0));
     if (activeDests.length === 0) { setError("Enter at least one quantity for a selected store."); return; }
     for (const d of activeDests) {
       const dest = destinationOptions.find((s) => String(s.id) === d);
@@ -164,8 +358,8 @@ export function DistributionGridPage() {
     const results = await Promise.allSettled(
       activeDests.map((d) => {
         const dest = destinationOptions.find((s) => String(s.id) === d)!;
-        const lines = rows
-          .map((r) => ({ sku_code: r.sku_code, qty_planned: Number(r.qtyByDest[d]) || 0 }))
+        const lines = allLines
+          .map((l) => ({ sku_code: l.sku_code, qty_planned: toQty(l.qtyByDest[d] || "") }))
           .filter((l) => l.qty_planned > 0);
         return api.post("/outbound/transfers", {
           source_store: source.id,
@@ -221,7 +415,7 @@ export function DistributionGridPage() {
           className="select"
           style={{ marginTop: 10, maxWidth: 320 }}
           value={sourceId}
-          onChange={(e) => { setSourceId(e.target.value); setDestIds([]); setRows([]); setOutcome(null); }}
+          onChange={(e) => { setSourceId(e.target.value); setDestIds([]); setStyles([]); setWeightsCache({}); setOutcome(null); }}
           data-testid="distribution-source-select"
         >
           <option value="">Select warehouse…</option>
@@ -237,7 +431,6 @@ export function DistributionGridPage() {
               <label key={s.id} className="check-row" data-testid={`distribution-dest-${s.code}`}>
                 <input type="checkbox" checked={destIds.includes(String(s.id))} onChange={() => toggleDest(String(s.id))} />
                 {s.code}
-                {s.is_partner && <span className="chip chip-amber" style={{ marginLeft: 4 }}>Partner</span>}
               </label>
             ))}
           </div>
@@ -290,7 +483,7 @@ export function DistributionGridPage() {
                       <td><b className="mono">{r.sku_code}</b></td>
                       <td>{[r.design, r.color, r.size].filter(Boolean).join(" · ") || r.brand}</td>
                       <td className="num">{r.qty} available</td>
-                      <td><button className="btn btn-sm" onClick={() => addRow(r)} data-testid={`distribution-add-${r.sku_code}`}><Plus size={13} /> Add</button></td>
+                      <td><button className="btn btn-sm" onClick={() => void addRow(r)} data-testid={`distribution-add-${r.sku_code}`}><Plus size={13} /> Add</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -298,66 +491,124 @@ export function DistributionGridPage() {
             </div>
           )}
 
-          {rows.length > 0 && (
+          {styles.length > 0 && (
             <div className="table-wrap" style={{ marginTop: 18 }}>
               <p className="muted-cell" style={{ marginBottom: 8 }}>
-                Every row opens with an even split across the stores you picked — edit any cell, or
+                Every style opens with the suggested split — last time this brand went to these stores,
+                weighted by each store's own size mix — pre-filled, with whatever is left over held in
+                the Buffer column. Edit any cell, or
                 <RefreshCw size={11} style={{ verticalAlign: "-1px", margin: "0 3px" }} />
-                re-split a row back to even.
+                re-split a style back to the suggestion. Click a style to open its size · colour breakup.
               </p>
               <table className="data" data-testid="distribution-grid-table">
                 <thead>
                   <tr>
-                    <th>SKU</th>
-                    <th>Item</th>
+                    <th>Style / SKU</th>
                     <th className="num">Available</th>
                     {destIds.map((d) => {
                       const s = destinationOptions.find((x) => String(x.id) === d);
                       return <th key={d} className="num">{s?.code}</th>;
                     })}
+                    <th className="num">Buffer</th>
                     <th className="num">Allocated</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
-                    const total = rowTotal(row);
-                    const over = total > row.available;
+                  {styles.map((group) => {
+                    const totals = styleTotals(group, destIds);
                     return (
-                      <tr key={row.sku_code} data-testid={`distribution-row-${row.sku_code}`}>
-                        <td><b className="mono">{row.sku_code}</b></td>
-                        <td>{row.label}</td>
-                        <td className="num">{row.available}</td>
-                        {destIds.map((d) => (
-                          <td key={d} className="num">
-                            <input
-                              className="input"
-                              style={{ width: 70, textAlign: "right" }}
-                              inputMode="numeric"
-                              value={row.qtyByDest[d] || ""}
-                              onChange={(e) => setQty(row.sku_code, d, e.target.value)}
-                              data-testid={`distribution-qty-${row.sku_code}-${d}`}
-                            />
+                      <Fragment key={group.id}>
+                        <tr data-testid={`distribution-style-${group.design}`}>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => toggleStyle(group.id)}
+                              aria-expanded={group.expanded}
+                              data-testid={`distribution-style-toggle-${group.design}`}
+                            >
+                              {group.expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                            </button>{" "}
+                            <b>{group.design}</b>{" "}
+                            <span className="muted-cell">
+                              ({group.lines.length} {group.lines.length === 1 ? "line" : "lines"})
+                            </span>
                           </td>
-                        ))}
-                        <td className="num">
-                          <b style={over ? { color: "var(--red)" } : undefined}>{total}</b>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-sm"
-                            title="Re-split this row evenly"
-                            onClick={() => resplitRow(row.sku_code)}
-                            data-testid={`distribution-resplit-${row.sku_code}`}
-                          >
-                            <RefreshCw size={13} />
-                          </button>
-                          <button className="btn btn-sm" onClick={() => removeRow(row.sku_code)} data-testid={`distribution-remove-${row.sku_code}`}>
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      </tr>
+                          <td className="num">{totals.available}</td>
+                          {destIds.map((d) => <td key={d} className="num">{totals.byDest[d] || 0}</td>)}
+                          <td className="num">{totals.buffer}</td>
+                          <td className="num">
+                            <b style={totals.over ? { color: "var(--red)" } : undefined}>{totals.allocated}</b>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              title="Re-split this style to the suggestion"
+                              onClick={() => void resplitStyle(group.id)}
+                              data-testid={`distribution-resplit-${group.design}`}
+                            >
+                              <RefreshCw size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => removeStyle(group.id)}
+                              data-testid={`distribution-remove-style-${group.design}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                        {group.expanded && group.lines.map((line) => {
+                          const total = lineTotal(line);
+                          const over = total > line.available;
+                          return (
+                            <tr key={line.sku_code} data-testid={`distribution-line-${line.sku_code}`}>
+                              <td style={{ paddingLeft: 28 }}>
+                                <b className="mono">{line.sku_code}</b>{" "}
+                                <span className="muted-cell">{[line.color, line.size].filter(Boolean).join(" · ")}</span>
+                              </td>
+                              <td className="num">{line.available}</td>
+                              {destIds.map((d) => (
+                                <td key={d} className="num">
+                                  <input
+                                    className="input"
+                                    style={{ width: 64, textAlign: "right" }}
+                                    inputMode="numeric"
+                                    value={line.qtyByDest[d] || ""}
+                                    onChange={(e) => setQty(group.id, line.sku_code, d, e.target.value)}
+                                    data-testid={`distribution-qty-${line.sku_code}-${d}`}
+                                  />
+                                </td>
+                              ))}
+                              <td className="num">
+                                <input
+                                  className="input"
+                                  style={{ width: 64, textAlign: "right" }}
+                                  inputMode="numeric"
+                                  value={line.buffer}
+                                  onChange={(e) => setBuffer(group.id, line.sku_code, e.target.value)}
+                                  data-testid={`distribution-buffer-${line.sku_code}`}
+                                />
+                              </td>
+                              <td className="num">
+                                <b style={over ? { color: "var(--red)" } : undefined}>{total}</b>
+                              </td>
+                              <td>
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => removeLine(group.id, line.sku_code)}
+                                  data-testid={`distribution-remove-${line.sku_code}`}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -372,7 +623,7 @@ export function DistributionGridPage() {
             <button
               type="button"
               className="btn btn-cta"
-              disabled={saving || rows.length === 0}
+              disabled={saving || styles.length === 0}
               onClick={() => void submit()}
               data-testid="distribution-submit"
             >
