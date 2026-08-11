@@ -5,6 +5,7 @@ import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "luci
 import { useAuth } from "../auth/AuthContext";
 import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { Money } from "../lib/format";
 import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -12,7 +13,7 @@ import { PageHeader } from "../components/PageHeader";
 
 interface AccountT {
   account: string;
-  balance_rupees: string;
+  balance_paise: number;
   entries: number;
 }
 interface EntryT {
@@ -22,7 +23,7 @@ interface EntryT {
   kind: string;
   kind_label: string;
   account: string;
-  amount_rupees: string;
+  amount: number;
   description: string;
   vendor_name: string;
 }
@@ -33,7 +34,7 @@ export default function CashLedger() {
   // read from the same section payload rather than a role list of our own.
   const isFinance = userCan(user, "money", "manage");
 
-  const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
+  const [summary, setSummary] = useState<{ total_paise: number; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
@@ -106,11 +107,11 @@ export default function CashLedger() {
       />
 
       <div className="stat-grid" data-testid="cl-summary">
-        <div className="card stat-card"><Wallet size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="cl-total">{summary?.total_rupees ?? "0.00"}</div><div className="stat-label">Total cash on hand (₹)</div></div>
+        <div className="card stat-card"><Wallet size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="cl-total"><Money paise={summary?.total_paise ?? 0} /></div><div className="stat-label">Total cash on hand (₹)</div></div>
         {(summary?.accounts ?? []).map((a) => (
           <div className="card stat-card" key={a.account}>
             <Wallet size={18} style={{ color: "var(--navy)" }} />
-            <div className="stat-value mono">{a.balance_rupees}</div>
+            <div className="stat-value mono"><Money paise={a.balance_paise} /></div>
             <div className="stat-label">{a.account} ({a.entries})</div>
           </div>
         ))}
@@ -171,7 +172,7 @@ export default function CashLedger() {
                   </td>
                   <td className="mono">{e.account}</td>
                   <td>{e.description}{e.vendor_name ? ` · ${e.vendor_name}` : ""}</td>
-                  <td className="num mono" style={{ fontWeight: 700, color: Number(e.amount_rupees) < 0 ? "var(--rust)" : "inherit" }}>{e.amount_rupees}</td>
+                  <td className="num mono" style={{ fontWeight: 700, color: e.amount < 0 ? "var(--rust)" : "inherit" }}><Money paise={e.amount} /></td>
                   <td>{isFinance && e.kind !== "reversal" && (
                     <button className="btn btn-sm" disabled={busy} onClick={() => reverse(e.id)} data-testid={`cl-reverse-${e.id}`}><RotateCcw size={13} /> Reverse</button>
                   )}</td>
