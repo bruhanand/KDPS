@@ -126,11 +126,23 @@ describe("canAccess", () => {
   });
 
   it("PT making rose to the warehouse's rung; reading a PT did not (#119)", () => {
-    // The store's cell kept its rung (`operate`) and lost only the making
-    // screen - the list+upload+authoring workspace at /receive/pt itself.
-    expect(canAccess("/receive/pt", storePerson)).toBe(false);
-    expect(canAccess("/receive/pt", warehouse)).toBe(true); // raised to `approve`
+    // The list is a *read*, so it opens at `view` - the rung the endpoint
+    // behind it has always answered at (`CanReadOrMakePtFile` = view read /
+    // approve write). #119 raised PT-making to `approve` and carried the route
+    // and the menu line up with it, which was a rung too far: it shut out
+    // Patna, who holds `view` and is the desk that opens a file marked "Sent to
+    // Patna" to send it back or push it into the system. Patna could reach one
+    // file by deep link from its arrival and never the list.
+    expect(canAccess("/receive/pt", accounts)).toBe(true); // the regression this closes
+    expect(canAccess("/receive/pt", owner)).toBe(true);
+    expect(canAccess("/receive/pt", warehouse)).toBe(true);
     expect(canAccess("/receive/pt", admin)).toBe(true); // already `manage`
+    // The store sees the list again, and that is not the boundary it looked
+    // like: the ladder cannot say "Patna in, store out" here, because Accounts
+    // at `view` sits *below* the store's `operate`. What actually keeps PT
+    // making off the store is the gate on each write - rows, re-run and send
+    // all demand `approve` - not a hidden route.
+    expect(canAccess("/receive/pt", storePerson)).toBe(true);
     // A PT already made, reached from its GRN, stays open to read - the
     // making screen's raised rung does not travel onto its own documents.
     expect(canAccess("/receive/pt/64", storePerson)).toBe(true);

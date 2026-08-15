@@ -195,12 +195,22 @@ export const SECTIONS: NavSectionDef[] = [
       // inside "New receipt", so a second entry promised a screen that would
       // only have sent people back here.
       { label: "Receive", to: "/receive" },
-      // PT making moved to the warehouse's rung (#119): this line - the
-      // Mapper-upload and from-GRN authoring workspace - needs
-      // `receive_goods: approve`, so it drops off the store's sidebar on its
-      // own. A PT already made stays open to read (`/receive/pt/:id`, reached
-      // from its GRN) at whatever rung holding the section requires.
-      { label: "PT Files", to: "/receive/pt", minCapability: "approve", childMinCapability: "view" },
+      // PT making moved to the warehouse's rung (#119), and this line moved
+      // with it - one rung too far. Making a PT needs `receive_goods: approve`;
+      // *reading the list of them* is `view`, which is what the endpoint behind
+      // this line has always answered at
+      // (`ptmapper.CanReadOrMakePtFile` = view read / approve write). Gating the
+      // menu line at the write rung hid the screen from the one desk that has to
+      // work it: Patna holds `view`, and the office is where a file marked "Sent
+      // to Patna" is opened, sent back or pushed into the system. It could reach
+      // an individual file by deep link from its arrival and never the list.
+      //
+      // So the line sits at the rung its own list answers at, and #85 holds in
+      // both directions - the sidebar shows no screen the API refuses, and hides
+      // none it allows. The store is still kept out of PT-making, but by the
+      // gates on the writes (rows / re-run / send, all `approve`) rather than by
+      // a hidden menu line, which was never a boundary in the first place.
+      { label: "PT Files", to: "/receive/pt", minCapability: "view" },
     ],
   },
   {
