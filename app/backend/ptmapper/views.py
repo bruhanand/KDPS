@@ -170,6 +170,10 @@ CanReadOrMakePtFile = require_section("receive_goods", CAP_VIEW, write_minimum=C
 #: reading one — one constant, so the three cannot drift apart.
 CanMakePtFile = require_section("receive_goods", CAP_APPROVE)
 
+#: Patna's send-back, one rung lower on purpose — the reasoning is on
+#: `PtFileRecallView`, where the act it guards is described.
+CanRecallPtFile = require_section("receive_goods", CAP_VIEW)
+
 
 class PtFileListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, CanReadOrMakePtFile]
@@ -645,9 +649,28 @@ class PtFileSendView(APIView):
 
 
 class PtFileRecallView(APIView):
-    """Patna sends a file back to the warehouse for further edits."""
+    """Patna sends a file back to the warehouse for further edits.
 
-    permission_classes = [IsAuthenticated]
+    Deliberately a rung *below* its three siblings, and the reasoning is the
+    point rather than the convenience. Recall is the reviewer's "no, fix this"
+    button, and the reviewer is Patna — Accounts or Owner, who both sit at
+    `receive_goods: view` because reviewing an inward is not receiving one
+    (posting itself is gated separately by `PT_INWARD_ACTION`, the money floor).
+    Gating this at the warehouse's `approve` would lock out the only desk the
+    button exists for, which is how a gate copied from its neighbour breaks a
+    flow while looking correct.
+
+    `view` is a real gate here and not an empty one, because of what recall can
+    and cannot do now that its siblings are closed. It posts nothing, deletes
+    nothing and edits no cell: it flips one sent draft back to mapping, and
+    re-sending it is a keystroke. Whoever bounces a file can no longer follow it
+    with a rewrite — rows, re-run and send all need `approve` — so the worst a
+    lower rung buys is nuisance, against a real cost if the rung were higher. It
+    still shuts out `promo` and `data_steward`, who hold `none` and have no
+    business anywhere in the inward flow.
+    """
+
+    permission_classes = [IsAuthenticated, CanRecallPtFile]
 
     def post(self, request: Request, pk: int) -> Response:
         pt = PtFile.objects.filter(pk=pk).first()

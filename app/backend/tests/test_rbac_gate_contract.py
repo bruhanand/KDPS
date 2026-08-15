@@ -173,6 +173,10 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
     # is `operate`.
     ("grn list", "receive_goods", CAP_VIEW, "get", "/api/inbound/grns"),
     ("grn create", "receive_goods", CAP_OPERATE, "post", "/api/inbound/grns"),
+    # Patna's send-back sits a rung below the warehouse's own writes, and the
+    # row is here so that stays a decision the matrix answers for rather than a
+    # comment. The reasoning is on `PtFileRecallView`.
+    ("pt file recall", "receive_goods", CAP_VIEW, "post", f"/api/ptmapper/files/{ABSENT}/recall"),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -331,14 +335,21 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
     and ``manage`` on money alone. It must not create, submit, dispatch, receive,
     create an ownership flip or destroy stock on any of them. Executing an
     already-approved V-flip is a separate stored actor policy.
+
+    The discriminator is each row's declared rung, not its HTTP verb. The verb
+    stood in for the rung while every write in the table sat at ``operate`` or
+    above. PT recall is the one deliberately pitched at ``view`` - Patna's
+    send-back, and Patna *is* Accounts (see ``PtFileRecallView``) - so reading
+    "a POST must answer 403" off the old shape would demand a denial on the one
+    button this role is the intended holder of.
     """
-    client = _client(_user("acc", _role("accounts")))
-    for label, _section, _minimum, method, path in GATED_ENDPOINTS:
+    role = _role("accounts")
+    client = _client(_user("acc", role))
+    for label, section, minimum, method, path in GATED_ENDPOINTS:
         status = _call(client, method, path).status_code
-        if method == "get":
-            # Reads are the point of `view` - the inbound queue and the booking
-            # list are Accounts' to open, and asserting that keeps this test
-            # measuring both halves rather than skipping the read rows.
+        if meets(_stored_capability(role, section), minimum):
+            # What `view` is for - the inbound queue, the booking list, the
+            # arrivals queue, and the send-back Accounts is the desk for.
             assert status != 403, label
         else:
             assert status == 403, label
@@ -738,7 +749,6 @@ UNGATED_VIEWS = {
     "outbound/views.py:CrossLocationStockSearchView",
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",
-    "ptmapper/views.py:PtFileRecallView",
     "ptmapper/views.py:PtFilePostView",
     "ptmapper/views.py:PtFileReverseView",
     "ptmapper/views.py:PtFilePriceView",
