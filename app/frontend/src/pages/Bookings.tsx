@@ -422,6 +422,10 @@ export function BookingDetailPage() {
   const { data: b, loading, reload } = useDoc<BookingT>(`/bookings/${id}`);
   // Same rung the server checks (`vendors.CanCloseBooking` = booking:approve).
   const canEnd = userCan(user, "booking", "approve");
+  // Receiving against this booking is Receive Goods' rung, not Booking's — HO
+  // Ops books the goods and never inwards one (the three-way match depends on
+  // it), so the shortcut is drawn only for someone the GRN endpoint will accept.
+  const canReceive = userCan(user, "receive_goods", "operate");
   if (loading || !b) return <div className="page-pad"><p className="lead">Loading…</p></div>;
   const ended = b.status === "closed" || b.status === "cancelled";
   return (
@@ -432,7 +436,7 @@ export function BookingDetailPage() {
         actions={
           <>
             <StatusPill status={b.status} label={b.status_label} />
-            {!ended && (
+            {!ended && canReceive && (
               <Link className="btn btn-cta" to={`/receive/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
             )}
             {!ended && canEnd && <EndBooking booking={b} onDone={reload} />}

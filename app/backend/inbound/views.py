@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_VIEW
+from accounts.sections import CAP_OPERATE, CAP_VIEW
 from core.documents import DocStatus, VoucherSeries
 from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
@@ -241,9 +241,29 @@ def _booking_touches_stores(booking: Any, ids: list[int]) -> bool:
 #: to-many relation and `text_filter` must not span one.
 GRN_SEARCH_FIELDS = ("doc_number", "vendor__name", "booking__brand__name")
 
+#: Reading the arrivals and recording one are different rights. The list opens
+#: at whatever `receive_goods` rung the caller holds — Owner, Accounts, HO Ops
+#: and a brand manager all sit at `view` and watch the queue without ever
+#: receiving into it — while creating a GRN needs `operate`, the rung the
+#: ratified sheet gives the people who actually stand at the door ("Receive +
+#: bill upload (own store)" for a store, "Create (GRN, PT)" for the warehouse).
+#:
+#: This view carried no section gate at all before (bare `IsAuthenticated`,
+#: recorded in `UNGATED_VIEWS`), so the access table decided nothing about the
+#: first document in the inbound chain: a GRN posts quantity into the stock
+#: ledger, and any logged-in caller could post one. `write_minimum` is
+#: `require_section`'s shape for "one view that both lists and creates" — the
+#: alternative is picking one rung for both, and picking the lower one is how a
+#: `view` cell quietly becomes a create.
+#:
+#: Store scope is a separate, unchanged gate: `_resolve_receiving_store` still
+#: refuses a store the caller may not act in, so `operate` buys the rung, not
+#: the location.
+CanReadOrMakeGrn = require_section("receive_goods", CAP_VIEW, write_minimum=CAP_OPERATE)
+
 
 class GrnListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadOrMakeGrn]
     serializer_class = GrnSerializer
 
     def get_queryset(self) -> Any:

@@ -18,6 +18,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { useMakePt } from "../components/InboundQueueCard";
 import { ListSearchBar } from "../components/SearchBox";
+import { userCan } from "../shell/navConfig";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -120,10 +121,16 @@ export function activeFlow(flows: ReceiveFlow[], tabParam: string | null): Recei
 
 export function InboundPage() {
   const [params, setParams] = useSearchParams();
-  const { activeStore } = useAuth();
+  const { user, activeStore } = useAuth();
   const flows = receiveFlows(activeStore);
   const tab = activeFlow(flows, params.get("tab"));
   const kind = tab === "nonbranded" ? "non_branded" : "branded";
+  // Mirrors the server gate exactly (`inbound.CanReadOrMakeGrn` writes at
+  // `receive_goods: operate`), read from the same section payload rather than a
+  // role list of our own. Owner, Accounts, HO Ops and a brand manager hold
+  // `view` — the arrivals list is theirs, the form behind this button is not,
+  // and offering it would walk them into a 403.
+  const canReceive = userCan(user, "receive_goods", "operate");
 
   const [q, setQ] = useState("");
   const { data: grns, loading } = useList<GrnListItemT>("/inbound/grns", { kind, q });
@@ -140,13 +147,15 @@ export function InboundPage() {
     <div className="page-pad">
       <PageHeader
         actions={
-          <Link
-            className="btn btn-cta"
-            to={`/receive/new?kind=${tab}`}
-            data-testid="new-receipt-btn"
-          >
-            <Plus size={16} /> New receipt
-          </Link>
+          canReceive && (
+            <Link
+              className="btn btn-cta"
+              to={`/receive/new?kind=${tab}`}
+              data-testid="new-receipt-btn"
+            >
+              <Plus size={16} /> New receipt
+            </Link>
+          )
         }
       />
 

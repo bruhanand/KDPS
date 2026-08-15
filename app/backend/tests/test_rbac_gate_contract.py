@@ -168,6 +168,11 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
     ),
     ("pt file send", "receive_goods", CAP_APPROVE, "post", f"/api/ptmapper/files/{ABSENT}/send"),
     ("pt file rerun", "receive_goods", CAP_APPROVE, "post", f"/api/ptmapper/files/{ABSENT}/rerun"),
+    # The first document in the inbound chain, and the one that posts quantity
+    # into the stock ledger. Reading the queue is `view`; standing at the door
+    # is `operate`.
+    ("grn list", "receive_goods", CAP_VIEW, "get", "/api/inbound/grns"),
+    ("grn create", "receive_goods", CAP_OPERATE, "post", "/api/inbound/grns"),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -663,7 +668,6 @@ UNGATED_VIEWS = {
     "approvals/views.py:ApprovalDecideView",
     "inbound/views.py:PendingBookingsView",
     "inbound/views.py:InvoiceDraftView",
-    "inbound/views.py:GrnListCreateView",
     "inbound/views.py:GrnDetailView",
     # --- mail: ungated by design, and the only family here that is ----------
     #
