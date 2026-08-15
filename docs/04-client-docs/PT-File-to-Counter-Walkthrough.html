@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — From PT File to Billing Counter</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:22px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:22px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  h3{font-size:11.5pt; margin:14px 0 4px; color:var(--navy); page-break-after:avoid;}
+  p{margin:7px 0;}
+  ul,ol{margin:7px 0; padding-left:20px;}
+  li{margin:3px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .flow{font-size:10.5pt; margin:10px 0; padding:10px 12px; background:var(--soft); border:1px solid var(--line); border-radius:6px;}
+  .flow b{color:var(--navy);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 10px; margin:10px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;}
+  .ask li{margin:7px 0;}
+  .ask .note{color:var(--muted); font-size:10pt;}
+  .menu{background:#eef1f5; border:1px solid var(--line); border-radius:4px; padding:1px 7px; font-weight:600; color:var(--navy); font-size:10.5pt; white-space:nowrap;}
+  .btn{background:#fff; border:1px solid var(--orange); border-radius:4px; padding:1px 7px; font-weight:600; color:var(--orange); font-size:10.5pt; white-space:nowrap;}
+  .stagebar{display:flex; gap:6px; margin:12px 0; font-size:10pt;}
+  .stagebar div{flex:1; background:var(--soft); border:1px solid var(--line); border-top:3px solid var(--orange); border-radius:5px; padding:8px 10px;}
+  .stagebar b{display:block; color:var(--navy);}
+  .stagebar span{color:var(--muted);}
+  footer{margin-top:26px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · How to use the system</div>
+  <h1>From PT File to Billing Counter</h1>
+  <p class="sub">A menu-by-menu walkthrough: what each person opens, what they press, and what the system does — from the day goods arrive to the moment the barcode scans at the counter.</p>
+</header>
+
+<div class="scope">
+  <strong>Who this is for:</strong> the warehouse team at Ranchi, the office at Patna, and the store staff. Every menu name below is exactly what is written on the screen. Nothing here needs any technical knowledge.
+</div>
+
+<section>
+<h2><span class="num">1.</span>The journey in one line</h2>
+<div class="flow">
+  <b>Goods arrive</b> → receipt made at <b>Receive Goods</b> → PT file mapped or made at <b>PT Files</b> → checked and <b>Sent to Patna</b> → Patna presses <b>Push into system</b> → stock is official → sent to the store under <b>Transfer</b> (only if it landed at the warehouse) → counter syncs under <b>Till &amp; Sync</b> → barcode scans at <b>Billing</b>.
+</div>
+
+<h3>The same journey as a table</h3>
+<table>
+  <tr><th>Step</th><th>Who does it</th><th>Menu they open</th><th>What it achieves</th></tr>
+  <tr><td>1</td><td>Store or warehouse staff</td><td>Receive Goods → Receive</td><td>Records that the delivery arrived, with its invoice</td></tr>
+  <tr><td>2</td><td>Warehouse (Ranchi)</td><td>Receive Goods → PT Files</td><td>Turns the brand's file into the KDPS format, or makes a PT file for non-branded goods</td></tr>
+  <tr><td>3</td><td>Warehouse (Ranchi)</td><td>The PT file's own page</td><td>Fills the blanks, then sends the file to Patna</td></tr>
+  <tr><td>4</td><td>Patna office</td><td>The same PT file page</td><td>Pushes it into the system — this is when stock becomes real</td></tr>
+  <tr><td>5</td><td>Operations</td><td>Transfer</td><td>Sends the goods from the warehouse to the selling store</td></tr>
+  <tr><td>6</td><td>Store counter</td><td>Sell → Till &amp; Sync, then Sell → Billing</td><td>Brings the new items onto the counter and sells them</td></tr>
+</table>
+</section>
+
+<section>
+<h2><span class="num">2.</span>Step 1 — Record the delivery</h2>
+<p><strong>Menu:</strong> <span class="menu">Receive Goods</span> → <span class="menu">Receive</span></p>
+
+<h3>What to do</h3>
+<ol>
+  <li>Open <span class="menu">Receive Goods → Receive</span>.</li>
+  <li>Press <span class="btn">New receipt</span>. The button is drawn only for the people who receive — the store and the warehouse. The office opens the same list to watch what has arrived, without the button.</li>
+  <li>Choose the store or warehouse where the goods actually landed.</li>
+  <li>Type the <strong>invoice number</strong> and attach the invoice copy.</li>
+  <li>Enter what physically arrived, line by line.</li>
+  <li>Save. The system gives the receipt its own number (the GRN number).</li>
+</ol>
+
+<h3>Two kinds of delivery — this choice decides everything after</h3>
+<table>
+  <tr><th>Kind</th><th>What it means</th><th>Where the goods land</th><th>Who supplies the PT file</th></tr>
+  <tr><td><strong>Branded</strong></td><td>Invoice + barcodes on the pieces + a file from the brand</td><td>Usually at a store</td><td>The brand sends it; the warehouse maps it</td></tr>
+  <tr><td><strong>Non-branded</strong></td><td>Invoice only, no barcodes, no brand file</td><td>At the warehouse</td><td>We make it ourselves in the system</td></tr>
+</table>
+
+<div class="scope"><strong>Important:</strong> the invoice number is not optional paperwork. In the next step the system asks you to pick this receipt by its invoice number, so the goods and their pricing stay tied to the same arrival.</div>
+</section>
+
+<section>
+<h2><span class="num">3.</span>Step 2 — Make the PT file</h2>
+<p><strong>Menu:</strong> <span class="menu">Receive Goods</span> → <span class="menu">PT Files</span></p>
+<p>The warehouse works this screen and the office reads it. A store person can open it too, but only to look: every button that changes a PT file is refused for them, so the work stays at Ranchi whichever way the screen is reached.</p>
+<p>The page has two tabs. Use the one that matches the delivery.</p>
+
+<h3>Tab A — <span class="btn">PT File Mapper</span> (branded goods)</h3>
+<ol>
+  <li><strong>Step 1 on screen:</strong> pick the received invoice from the drop-down. Only arrivals that carry an invoice and have no PT file yet are listed.</li>
+  <li>Press <span class="btn">Map this invoice</span>.</li>
+  <li><strong>Step 2 on screen:</strong> drop the brand's file into the box. Excel and CSV files are accepted.</li>
+  <li>If the brand's file does not name the brand or the invoice date, fill those two boxes before dropping the file.</li>
+  <li>The system converts the brand's columns into the 22 KDPS columns and opens the file.</li>
+</ol>
+<p>If there is genuinely no invoice, press <span class="btn">Map without an invoice</span>. Use this rarely — the link to the arrival is lost.</p>
+
+<h3>Tab B — <span class="btn">PT File Making</span> (non-branded goods)</h3>
+<ul>
+  <li>The top of the tab lists the arrivals that are still waiting for a PT file.</li>
+  <li>Pick one and the system builds a PT file from that receipt, reading the invoice for you where it can.</li>
+  <li>You then fill in the details the invoice never carried — size, colour tier, season — and price the rows.</li>
+</ul>
+
+<h3>Two helper screens on this page</h3>
+<table>
+  <tr><th>Button</th><th>What it is for</th></tr>
+  <tr><td><span class="btn">Unmapped queue</span></td><td>Words from a brand's file the system has never seen — a colour name, a size code. Map each one once, and the system remembers it for every future file from every brand.</td></tr>
+  <tr><td><span class="btn">Learning proposals</span></td><td>Rules the system has worked out by itself from your past corrections, waiting for a yes or no.</td></tr>
+</table>
+</section>
+
+<section>
+<h2><span class="num">4.</span>Step 3 — Check the file and send it to Patna</h2>
+<p><strong>Menu:</strong> <span class="menu">Receive Goods</span> → <span class="menu">PT Files</span> → press <span class="btn">Open</span> on the file</p>
+
+<p>Every PT file page shows a three-step bar at the top, so you always know where it stands:</p>
+<div class="stagebar">
+  <div><b>1 · Warehouse mapping</b><span>Ranchi is still working on it</span></div>
+  <div><b>2 · Sent to Patna</b><span>Waiting with the office</span></div>
+  <div><b>3 · Posted to system</b><span>Done — stock is real</span></div>
+</div>
+
+<h3>What to do on this page</h3>
+<ol>
+  <li>Read the coloured note under the buttons. It tells you plainly whether the file is ready or something is missing.</li>
+  <li>Press <span class="btn">Only rows with blanks</span> to see just the rows that need attention.</li>
+  <li>Press <span class="btn">Edit table</span> to fill them. Empty cells are highlighted.</li>
+  <li>To fill a whole column at once, use the <strong>Fill a whole column</strong> bar — pick the column, pick the value, choose "only blank rows" or "all rows", press <span class="btn">Apply</span>.</li>
+  <li>When you correct a value, tick <strong>remember</strong> beside it. The system learns that correction and applies it to every future file.</li>
+  <li>Press <span class="btn">Save changes</span>.</li>
+  <li>Press <span class="btn">Send to Patna</span>.</li>
+</ol>
+
+<h3>Extra buttons on a non-branded (made) file</h3>
+<table>
+  <tr><th>Button</th><th>What it does</th></tr>
+  <tr><td><span class="btn">P · Premium / M · Medium / E · Economy</span></td><td>Puts the price tier into the colour column on every row that has no colour</td></tr>
+  <tr><td><span class="btn">Free Size</span></td><td>Sets "Free Size" on every row with no size</td></tr>
+  <tr><td><span class="btn">Price blank rows</span></td><td>Works out the MRP on unpriced rows: purchase rate + 1.1% transport + the category margin, with GST added on top</td></tr>
+</table>
+<p>A red note appears if any row is still missing a <strong>barcode</strong> or a <strong>season</strong>. The file cannot go to Patna until both are on every row.</p>
+
+<h3>Colour marks on the table</h3>
+<table>
+  <tr><th>Mark</th><th>Meaning</th><th>What to do</th></tr>
+  <tr><td>Amber cell</td><td>The system worked this value out by judgement</td><td>Glance at it and move on if it looks right</td></tr>
+  <tr><td>Blue cell</td><td>A person typed this by hand</td><td>Nothing — it is a human decision and is kept</td></tr>
+  <tr><td>Empty cell with a dash</td><td>Nothing is there yet</td><td>Fill it before sending</td></tr>
+</table>
+</section>
+
+<section>
+<h2><span class="num">5.</span>Step 4 — Patna pushes it into the system</h2>
+<p><strong>Menu:</strong> <span class="menu">Receive Goods</span> → <span class="menu">PT Files</span> → open the file marked <em>Sent to Patna</em></p>
+
+<h3>What the office does</h3>
+<ol>
+  <li>Open the file and look through the table.</li>
+  <li>If it is wrong, press <span class="btn">Send back</span> — it returns to Ranchi for correction.</li>
+  <li>If it is right, pick the booking from <strong>Reconcile to booking</strong> when there is one. This is optional.</li>
+  <li>Press <span class="btn">Push into system</span>.</li>
+</ol>
+
+<h3>What happens the moment that button is pressed</h3>
+<table>
+  <tr><th>The system does this</th><th>Why it matters to you</th></tr>
+  <tr><td>Gives the file its own voucher number</td><td>The permanent reference for this inward, with no gaps in the numbering</td></tr>
+  <tr><td>Adds the quantity to stock at the receiving location</td><td>The goods now exist in the system's stock</td></tr>
+  <tr><td>Records every barcode as an item, with its brand, design, colour, size, HSN and MRP</td><td>This is what lets the counter recognise a scan later</td></tr>
+  <tr><td>Records the cost of each piece against its season</td><td>Profit can be worked out later without anyone typing it</td></tr>
+  <tr><td>Writes the accounting entry and the vendor's bill</td><td>The books and the stock always agree</td></tr>
+  <tr><td>Locks the file</td><td>A posted record is never edited. A mistake is fixed with <span class="btn">Reverse posting</span>, which is a fresh, visible correction</td></tr>
+</table>
+<div class="scope"><strong>This is the single most important moment in the whole flow.</strong> Before this button, the goods are only paperwork. After it, they are stock the company owns and the counter can sell.</div>
+</section>
+
+<section>
+<h2><span class="num">6.</span>Step 5 — Send the goods to the store</h2>
+<p><strong>Menu:</strong> <span class="menu">Transfer</span></p>
+<p>Skip this whole step when the goods were received at the selling store itself — they are already there. It applies when goods landed at the warehouse.</p>
+
+<table>
+  <tr><th>Menu line</th><th>Use it for</th></tr>
+  <tr><td>Transfer → <strong>Send Stock</strong></td><td>Sending a set of pieces to one store</td></tr>
+  <tr><td>Transfer → <strong>Distribution</strong></td><td>Splitting one arrival across many stores in a single grid, instead of raising the same transfer store by store</td></tr>
+  <tr><td>Transfer → <strong>Stock Request</strong></td><td>A store asking the warehouse for stock</td></tr>
+  <tr><td>Transfer → <strong>In-Transit</strong></td><td>Watching what has left but not yet arrived</td></tr>
+  <tr><td>Transfer → <strong>Transfers</strong></td><td>The full list, and where the receiving store confirms what came in</td></tr>
+</table>
+
+<h3>The order of events</h3>
+<ol>
+  <li>The warehouse raises the transfer and enters the bus number, courier number or vehicle number.</li>
+  <li>It is approved, then dispatched. The stock leaves the warehouse and shows under <strong>In-Transit</strong>.</li>
+  <li>A printed PT travels with the carton.</li>
+  <li>The store opens the transfer and records what actually arrived. Anything short or extra is recorded there and then.</li>
+  <li>The stock lands on that store's shelf in the system.</li>
+</ol>
+</section>
+
+<section>
+<h2><span class="num">7.</span>Step 6 — The counter</h2>
+<p><strong>Menu:</strong> <span class="menu">Sell</span> → <span class="menu">Till &amp; Sync</span>, then <span class="menu">Sell</span> → <span class="menu">Billing</span></p>
+
+<p>The billing counter works without internet. To do that, it keeps its own copy of everything it needs on the machine — item names, prices, tax rates, offers, salesmen, quantities. That copy is refreshed by syncing.</p>
+
+<h3>What to do</h3>
+<ol>
+  <li>At store opening, open <span class="menu">Sell → Till &amp; Sync</span> and press <span class="btn">Sync now</span>. This pulls a full fresh copy.</li>
+  <li>Through the day the counter tops itself up quietly in the background.</li>
+  <li>Open <span class="menu">Sell → Billing</span> and scan. The item name and price come up from the counter's own copy, so it works even if the line is down.</li>
+  <li>If a new arrival does not scan, go back to <span class="menu">Sell → Till &amp; Sync</span> and press <span class="btn">Sync now</span> once.</li>
+</ol>
+
+<h3>What the counter is given, and what it is never given</h3>
+<table>
+  <tr><th>Sent to the counter</th><th>Never sent to the counter</th></tr>
+  <tr><td>Barcode, brand, design, colour, size, HSN and the MRP on the tag</td><td>The cost price of any piece</td></tr>
+  <tr><td>Quantity of each barcode at this store only</td><td>Any other store's stock or prices</td></tr>
+  <tr><td>GST slabs, live offers, salesmen, the store's own settings</td><td>The company's margins or purchase rates</td></tr>
+</table>
+<p>A store person can see the selling price of everything and the cost of nothing. This is built into the system, not left to trust.</p>
+</section>
+
+<section class="avoid">
+<h2><span class="num">8.</span>Why a barcode does not scan</h2>
+<p>A new barcode reaches the counter only when all three of these are true. Check them in this order.</p>
+<table>
+  <tr><th>#</th><th>Condition</th><th>Where to check it</th></tr>
+  <tr><td>1</td><td>The PT file has been <strong>pushed into the system</strong> by Patna</td><td>Receive Goods → PT Files — the file must read "Posted to system"</td></tr>
+  <tr><td>2</td><td>The stock is <strong>at this store</strong> — received here, or transferred in and confirmed</td><td>Stock → Stock on Hand, or Transfer → In-Transit if it is still on the way</td></tr>
+  <tr><td>3</td><td>The counter has <strong>synced</strong> since then</td><td>Sell → Till &amp; Sync, then press Sync now</td></tr>
+</table>
+<p>If all three are true and the piece still does not scan, the barcode column on the PT file was most likely left blank or entered wrongly. Patna can reverse the posting and the warehouse can correct it.</p>
+</section>
+
+<section class="avoid">
+<h2><span class="num">9.</span>Quick reference — who opens what</h2>
+<table>
+  <tr><th>Menu → line</th><th>Used by</th><th>For</th></tr>
+  <tr><td>Receive Goods → Receive</td><td>Store, warehouse</td><td>Recording an arrival with its invoice</td></tr>
+  <tr><td>Receive Goods → PT Files</td><td>Warehouse and Patna office work it; store can look</td><td>Mapping or making the PT file, and posting it</td></tr>
+  <tr><td>Transfer → Send Stock / Distribution</td><td>Warehouse, operations</td><td>Moving stock out to stores</td></tr>
+  <tr><td>Transfer → In-Transit</td><td>Warehouse, store</td><td>What has left but not yet arrived</td></tr>
+  <tr><td>Stock → Stock on Hand</td><td>Store, warehouse, office</td><td>What is on the shelf right now</td></tr>
+  <tr><td>Stock → Search Across Stores</td><td>Store</td><td>"Who else has this in size L?"</td></tr>
+  <tr><td>Stock → Movement History</td><td>Office</td><td>Every movement of a piece, in and out</td></tr>
+  <tr><td>Sell → Billing</td><td>Counter</td><td>Selling</td></tr>
+  <tr><td>Sell → Till &amp; Sync</td><td>Counter</td><td>Refreshing the counter's copy; checking what is still to reach head office</td></tr>
+  <tr><td>Offers &amp; Price → Price Book</td><td>Office, store</td><td>The current price of every item</td></tr>
+  <tr><td>Offers &amp; Price → Promotions</td><td>Office</td><td>Offers and the end-of-season markdown</td></tr>
+  <tr><td>Home → Approvals</td><td>Whoever approves</td><td>The one inbox for everything waiting on a yes or no</td></tr>
+</table>
+<h3>Looking and doing are different rights</h3>
+<p>Seeing a screen and being allowed to change what is on it are two separate permissions. Most screens open widely so people can check on their own work; the buttons that <em>move stock or money</em> are held much tighter. This is why two people can be looking at the same page and see a different set of buttons.</p>
+<table>
+  <tr><th>On this screen</th><th>Who may look</th><th>Who may press the buttons</th></tr>
+  <tr><td>Receive Goods → Receive</td><td>Store, warehouse, office</td><td>Store and warehouse — the people who take the delivery</td></tr>
+  <tr><td>Receive Goods → PT Files, and any PT file</td><td>Store, warehouse, office</td><td><strong>Warehouse only</strong> — edit the table, re-map, <span class="btn">Send to Patna</span></td></tr>
+  <tr><td>A PT file marked <em>Sent to Patna</em></td><td>Store, warehouse, office</td><td><strong>Patna only</strong> — <span class="btn">Push into system</span>. <span class="btn">Send back</span> is open to anyone who can open the file: it only returns the file to Ranchi and changes nothing else</td></tr>
+</table>
+<div class="scope">
+  <strong>Why it is built this way.</strong> Hiding a menu is not a lock — anyone who knows the address could still walk in. So the rule is checked where the work actually happens: on the button. A store person may open a PT file and read it, which is often exactly what they need in order to answer "has my delivery been priced yet?" — and every button that would change what the file <em>says</em> is refused for them. The office is the mirror image: it may open and read the whole receiving flow, and it presses the one button that is the office's alone — the posting that turns paperwork into stock.
+</div>
+<p class="sub" style="font-size:10pt;">Menu names are the same for everyone. What differs is how many of them a person sees, and how many buttons they get once inside — both follow the rights on their login. Nobody is offered a button the system will then refuse, and nobody is hidden from a screen they are allowed to read.</p>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — From PT File to Billing Counter. 15 August 2026. Describes the system as built.
+</footer>
+
+</div>
+</body>
+</html>
