@@ -166,6 +166,7 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         "patch",
         f"/api/ptmapper/files/{ABSENT}/rows",
     ),
+    ("pt file send", "receive_goods", CAP_APPROVE, "post", f"/api/ptmapper/files/{ABSENT}/send"),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -733,7 +734,6 @@ UNGATED_VIEWS = {
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",
     "ptmapper/views.py:PtFileRerunView",
-    "ptmapper/views.py:PtFileSendView",
     "ptmapper/views.py:PtFileRecallView",
     "ptmapper/views.py:PtFilePostView",
     "ptmapper/views.py:PtFileReverseView",

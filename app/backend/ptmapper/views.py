@@ -614,7 +614,7 @@ def _invoice_send_blocks(pt: PtFile) -> list[dict]:
 class PtFileSendView(APIView):
     """Warehouse → Patna: hand the mapped draft over for review/posting."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanMakePtFile]
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
