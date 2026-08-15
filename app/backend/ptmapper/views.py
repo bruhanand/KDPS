@@ -323,7 +323,7 @@ class PtFileRerunView(APIView):
     seed/rule fills the remaining blanks without clobbering a manual fix. Passing
     ``{"discard_edits": true}`` is the explicit full wipe (today's behaviour)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanMakePtFile]
 
     def post(self, request: Request, pk: int) -> Response:
         pt = PtFile.objects.filter(pk=pk).first()
