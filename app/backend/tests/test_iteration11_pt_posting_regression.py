@@ -112,6 +112,11 @@ def test_grn_direct_line_keeps_received_and_damaged_qty() -> None:
     auth = _login("owner", SEED_OWNER_PASSWORD)
     h = _headers(auth["access"])
     store_id = _pick_id("/masters/stores", h)
+    # Receiving needs `receive_goods: operate` - Owner only *reads* Receive
+    # Goods on the ratified sheet, so the arrival is recorded from the
+    # warehouse seat (network-scoped, so any store is in reach). Same split
+    # #119 made for the PT upload below: owner reads, the warehouse acts.
+    wh = _headers(_login("wh.patna", "Wh@123")["access"])
 
     payload = {
         "store_id": store_id,
@@ -129,7 +134,7 @@ def test_grn_direct_line_keeps_received_and_damaged_qty() -> None:
             }
         ],
     }
-    create = requests.post(f"{API}/inbound/grns", headers=h, json=payload, timeout=30)
+    create = requests.post(f"{API}/inbound/grns", headers=wh, json=payload, timeout=30)
     assert create.status_code == 201, (
         f"direct GRN create failed: {create.status_code} {create.text[:250]}"
     )
@@ -153,10 +158,13 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
     season_id = _pick_id("/masters/seasons", h)
 
     assert Path(PT_SAMPLE).exists(), f"missing PT sample file: {PT_SAMPLE}"
-    # PT-making needs the warehouse's raised rung (#119) - Owner only reads
-    # Receive Goods, so the upload goes through the warehouse seat; posting,
-    # sending and reversing below stay on the owner token unaffected.
+    # Owner only *reads* Receive Goods on the ratified sheet, so every act in
+    # that section runs on the warehouse seat: the PT upload and send at the
+    # making rung (#119), and recording the arrival at `operate`. Posting and
+    # reversing stay on the owner token - those are the money floor, which is
+    # Accounts/Owner and deliberately not the warehouse.
     warehouse_access = _login("wh.patna", "Wh@123")["access"]
+    wh = _headers(warehouse_access)
     uploaded = _upload_pt(warehouse_access, PT_SAMPLE)
     pt_id = int(uploaded["id"])
     detail = _wait_pt(access, pt_id)
@@ -191,14 +199,14 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
         "invoice_number": f"ITER11-VAR-{int(time.time())}",
         "lines": [{"style_code": "ITER11-VARIANCE", "size": "M", "received_qty": 1}],
     }
-    grn = requests.post(f"{API}/inbound/grns", headers=h, json=variance_payload, timeout=30)
+    grn = requests.post(f"{API}/inbound/grns", headers=wh, json=variance_payload, timeout=30)
     assert grn.status_code == 201, (
         f"booking variance GRN failed: {grn.status_code} {grn.text[:250]}"
     )
     grn_line = grn.json()["lines"][0]
     assert grn_line.get("is_variance") is True
 
-    send = requests.post(f"{API}/ptmapper/files/{pt_id}/send", headers=h, json={}, timeout=30)
+    send = requests.post(f"{API}/ptmapper/files/{pt_id}/send", headers=wh, json={}, timeout=30)
     assert send.status_code == 200, f"PT send failed: {send.status_code} {send.text[:250]}"
 
     post = requests.post(
