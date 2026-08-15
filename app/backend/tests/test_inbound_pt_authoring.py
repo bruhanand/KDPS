@@ -565,3 +565,133 @@ def test_backfill_keys_off_is_direct_not_booking(world):
     assert direct.kind == Grn.Kind.NON_BRANDED  # direct receipt → non-branded
     assert deleted_booking.kind == Grn.Kind.BRANDED  # null booking but not direct → stays branded
     assert submitted.kind == Grn.Kind.NON_BRANDED  # submitted direct receipt flips despite the FSM
+
+
+# ------------------------------------------------- the write gates behind PT Files
+
+
+@pytest.fixture
+def promo_client(db):
+    """`receive_goods: none` on the ratified sheet — the offers desk, which has
+    no business anywhere in the inward flow."""
+    c = APIClient()
+    c.force_authenticate(_user("offers-desk", "promo"))
+    return c
+
+
+def _sent_pt(world, warehouse_client) -> int:
+    grn = _grn(world, lines=LINES)
+    pt_id = warehouse_client.post(f"/api/ptmapper/files/from-grn/{grn.id}").json()["id"]
+    _fill_for_send(pt_id, warehouse_client)
+    return pt_id
+
+
+def test_a_role_with_no_receive_goods_cannot_touch_a_pt(
+    world, vocab, warehouse_client, promo_client
+):
+    """The hole, named with a real file rather than an absent pk.
+
+    `promo` holds `receive_goods: none`, and until the writes behind "PT Files"
+    were gated it could rewrite a mapped PT and hand it to Patna over the API —
+    the sidebar hid the screen and nothing else stopped it.
+    """
+    pt_id = _sent_pt(world, warehouse_client)
+    row_id = PtFile.objects.get(pk=pt_id).rows.first().id
+
+    assert (
+        promo_client.patch(
+            f"/api/ptmapper/files/{pt_id}/rows",
+            {"rows": [{"id": row_id, "data": {"BARCODE": "REWRITTEN"}}]},
+            format="json",
+        ).status_code
+        == 403
+    )
+    assert promo_client.post(f"/api/ptmapper/files/{pt_id}/rerun").status_code == 403
+    assert promo_client.post(f"/api/ptmapper/files/{pt_id}/send").status_code == 403
+    assert promo_client.post("/api/inbound/grns", {}, format="json").status_code == 403
+    # nothing was written on the way to any of those refusals
+    assert PtFile.objects.get(pk=pt_id).rows.get(pk=row_id).data["BARCODE"] != "REWRITTEN"
+    assert PtFile.objects.get(pk=pt_id).stage == PtFile.Stage.MAPPING
+
+
+def test_a_store_cannot_make_a_pt_but_keeps_everything_else(
+    world, vocab, warehouse_client, store_client
+):
+    """#119 moved PT-making off the store; it moved nothing else.
+
+    The cashier is the other half of the finding — same writes, one rung up from
+    `promo` and still below the making rung. What must survive is the store's own
+    work: reading a PT already made (the `/receive/pt/:id` deep link the sidebar
+    keeps open at `view`) and receiving at its own store.
+    """
+    pt_id = _sent_pt(world, warehouse_client)
+    row_id = PtFile.objects.get(pk=pt_id).rows.first().id
+
+    assert (
+        store_client.patch(
+            f"/api/ptmapper/files/{pt_id}/rows",
+            {"rows": [{"id": row_id, "data": {"BARCODE": "REWRITTEN"}}]},
+            format="json",
+        ).status_code
+        == 403
+    )
+    assert store_client.post(f"/api/ptmapper/files/{pt_id}/send").status_code == 403
+
+    # ...but the document itself still opens, which is the half #119 kept.
+    assert store_client.get(f"/api/ptmapper/files/{pt_id}").status_code == 200
+
+
+def test_a_store_still_receives_at_its_own_store(world, vocab):
+    """The case gating `/inbound/grns` at `operate` must not break.
+
+    A store person is the person who stands at the door, so the rung has to let
+    them through — and the store boundary has to keep doing the narrowing it
+    always did, which is a scope and not a rung.
+    """
+    shop = Store.objects.create(
+        code="SHOP-R", name="Shop R", store_type=Store.StoreType.STORE, gstin=world["wh"].gstin
+    )
+    VoucherSeries.objects.get_or_create(
+        fy=financial_year(date.today()), store_code=shop.code, doc_type="GRN"
+    )
+    cashier = _user("shop-receiver", "store_staff")
+    cashier.scope_type = "store"
+    cashier.save(update_fields=["scope_type"])
+    cashier.stores.add(shop)
+    client = APIClient()
+    client.force_authenticate(cashier)
+
+    own = client.post(
+        "/api/inbound/grns",
+        {
+            "store_id": shop.id,
+            "kind": Grn.Kind.BRANDED,
+            "vendor_name_raw": "Localwear Traders",
+            "invoice_number": "INV-SHOP-1",
+            "lines": [{"style_code": "KURTA-01", "size": "M", "color": "Blue", "received_qty": 2}],
+        },
+        format="json",
+    )
+    assert own.status_code == 201, own.content
+
+    # The rung is not the boundary: another unit is still refused, by scope.
+    elsewhere = client.post(
+        "/api/inbound/grns",
+        {"store_id": world["wh"].id, "kind": Grn.Kind.BRANDED, "invoice_number": "INV-WH-1"},
+        format="json",
+    )
+    assert elsewhere.status_code == 403
+
+
+def test_patna_can_still_send_a_file_back(world, vocab, warehouse_client, patna_client):
+    """The reason recall sits at `view` and not at the warehouse's `approve`.
+
+    Accounts holds `receive_goods: view`; it is also the desk the send-back
+    exists for. A gate copied from recall's three siblings would have refused
+    the only role that presses this button.
+    """
+    pt_id = _sent_pt(world, warehouse_client)
+    assert warehouse_client.post(f"/api/ptmapper/files/{pt_id}/send").status_code == 200
+
+    assert patna_client.post(f"/api/ptmapper/files/{pt_id}/recall").status_code == 200
+    assert PtFile.objects.get(pk=pt_id).stage == PtFile.Stage.MAPPING
