@@ -45,7 +45,8 @@ def client(db):
 def steward_client(db):
     # Data Steward: mapping-stewardship rights (proposal decide/review), never
     # PT-making rights (receive_goods:none) - the ratified matrix and #119 both
-    # keep those apart, so this client never uploads a file itself.
+    # keep those apart, so this client never uploads a file itself, and never
+    # writes to one: the rows/rerun/send endpoints are gated at the making rung.
     c = APIClient()
     c.force_authenticate(
         User.objects.create_user(
@@ -103,7 +104,7 @@ def test_discard_edits_resets_to_the_engine_mapping(client, vocab):
 
 def test_approved_rule_fills_blanks_without_touching_manual_cells(client, steward_client, vocab):
     pt_id, row_id = _upload(client, vocab, b"BARCODE,COLOR,QTY,MRP\nB1,MISTYX,2,100\n")
-    steward_client.patch(  # hand-fix FIT (COLOR is still an unmapped blank)
+    client.patch(  # the warehouse hand-fixes FIT (COLOR is still an unmapped blank)
         f"/api/ptmapper/files/{pt_id}/rows",
         {"rows": [{"id": row_id, "data": {"FIT": "SLIM"}}]},
         format="json",

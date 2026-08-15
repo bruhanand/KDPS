@@ -156,6 +156,16 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
     # not from the API either.
     ("pt file list", "receive_goods", CAP_VIEW, "get", "/api/ptmapper/files"),
     ("pt file create", "receive_goods", CAP_APPROVE, "post", "/api/ptmapper/files"),
+    # ...and the writes behind the same screen, which #119 left on a bare
+    # `IsAuthenticated` while it moved the screen itself off the store. Editing
+    # a mapped PT is making one, so each answers at the making rung.
+    (
+        "pt rows update",
+        "receive_goods",
+        CAP_APPROVE,
+        "patch",
+        f"/api/ptmapper/files/{ABSENT}/rows",
+    ),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -188,7 +198,9 @@ def _client(user: User) -> APIClient:
 
 
 def _call(client: APIClient, method: str, path: str):
-    return client.post(path, {}, format="json") if method == "post" else client.get(path)
+    if method in ("post", "patch"):
+        return getattr(client, method)(path, {}, format="json")
+    return client.get(path)
 
 
 # --- 1. The gates ----------------------------------------------------------
@@ -721,7 +733,6 @@ UNGATED_VIEWS = {
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",
     "ptmapper/views.py:PtFileRerunView",
-    "ptmapper/views.py:PtRowsUpdateView",
     "ptmapper/views.py:PtFileSendView",
     "ptmapper/views.py:PtFileRecallView",
     "ptmapper/views.py:PtFilePostView",

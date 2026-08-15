@@ -155,6 +155,21 @@ PT_FILE_SEARCH_FIELDS = ("original_filename", "brand_guess", "status")
 #: here.
 CanReadOrMakePtFile = require_section("receive_goods", CAP_VIEW, write_minimum=CAP_APPROVE)
 
+#: The same rung, for the writes that happen *after* the file exists — hand-edit
+#: the mapped rows, re-run the mapping, hand it to Patna. #119 raised PT-making
+#: to `approve` and took the "PT Files" line off the store's sidebar, but only
+#: the create endpoint was actually gated: the three verbs behind that screen
+#: kept a bare `IsAuthenticated`, so the sidebar was the whole enforcement. A
+#: role at `receive_goods: none` (`promo`, `data_steward`) could rewrite a mapped
+#: PT and send it to Patna over the API, and so could a store cashier at
+#: `operate` — the exact right #119 moved off the store.
+#:
+#: Editing a draft, re-mapping it and sending it are the same act as making one:
+#: they decide what the PT will say when Patna posts it, which is what freezes
+#: unit cost and brand liability. So they answer at the making rung, not the
+#: reading one — one constant, so the three cannot drift apart.
+CanMakePtFile = require_section("receive_goods", CAP_APPROVE)
+
 
 class PtFileListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, CanReadOrMakePtFile]
@@ -469,7 +484,7 @@ class PtRowsUpdateView(APIView):
     a live rule when the file is sent to Patna, or immediately if it is already sent).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanMakePtFile]
 
     @transaction.atomic
     def patch(self, request: Request, pk: int) -> Response:

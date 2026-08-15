@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -52,6 +53,27 @@ def steward(db):
 def client(steward):
     c = APIClient()
     c.force_authenticate(steward)
+    return c
+
+
+@pytest.fixture
+def mapper(db):
+    """The warehouse operator who edits a mapped PT and ticks "remember this".
+
+    A different person from the steward, because they hold a different right:
+    the rows endpoint is a PT-file *write*, gated at `receive_goods: approve`
+    (#119's rung), and the steward holds `none` on that section — its work is
+    the review queue and the proposal decisions below, not the PT itself.
+    """
+    return User.objects.create_user(
+        username="mapper", password=TEST_PASSWORD, role=make_role("warehouse")
+    )
+
+
+@pytest.fixture
+def mapper_client(mapper):
+    c = APIClient()
+    c.force_authenticate(mapper)
     return c
 
 
@@ -102,8 +124,8 @@ def test_review_resolution_multi_brand_defaults_global(client, vocab):
 # ---------------------------------------------------------------- remember (D1 SENT gate)
 
 
-def _remember_fit(client, pt, row, value="REGULAR"):
-    return client.patch(
+def _remember_fit(mapper_client, pt, row, value="REGULAR"):
+    return mapper_client.patch(
         f"/api/ptmapper/files/{pt.id}/rows",
         {
             "rows": [{"id": row.id, "data": {"FIT": value}}],
@@ -113,26 +135,26 @@ def _remember_fit(client, pt, row, value="REGULAR"):
     )
 
 
-def test_remember_on_mapping_file_stays_proposed_until_sent(client, steward, vocab, pe_file):
+def test_remember_on_mapping_file_stays_proposed_until_sent(mapper_client, mapper, vocab, pe_file):
     pt, row = pe_file
-    resp = _remember_fit(client, pt, row)
+    resp = _remember_fit(mapper_client, pt, row)
     assert resp.status_code == 200, resp.json()
     prop = LookupProposal.objects.get(origin="remember")
     assert prop.status == "proposed"  # not yet promoted — the file hasn't been sent
     assert not Lookup.objects.filter(dimension="fit", source_key="PJ RG OCTANE").exists()
 
     # sending to Patna is the trust gate → the proposal promotes, actor = the ticker
-    send = client.post(f"/api/ptmapper/files/{pt.id}/send", {}, format="json")
+    send = mapper_client.post(f"/api/ptmapper/files/{pt.id}/send", {}, format="json")
     assert send.status_code == 200, send.json()
     prop.refresh_from_db()
-    assert prop.status == "approved" and prop.decided_by_id == steward.id
+    assert prop.status == "approved" and prop.decided_by_id == mapper.id
     lk = Lookup.objects.get(dimension="fit", source_key="PJ RG OCTANE")
     assert (lk.target_value, lk.brand) == ("REGULAR", "PETER ENGLAND")
 
 
-def test_rule_seeds_from_raw_not_the_displayed_value(client, vocab, pe_file):
+def test_rule_seeds_from_raw_not_the_displayed_value(mapper_client, vocab, pe_file):
     pt, row = pe_file
-    _remember_fit(client, pt, row, value="REGULAR")
+    _remember_fit(mapper_client, pt, row, value="REGULAR")
     prop = LookupProposal.objects.get(origin="remember")
     # source_key is the raw the engine read, not the mapped value the operator sees
     assert prop.source_key == "PJ RG OCTANE"
@@ -140,37 +162,39 @@ def test_rule_seeds_from_raw_not_the_displayed_value(client, vocab, pe_file):
     assert prop.brand == "PETER ENGLAND"
 
 
-def test_remember_on_already_sent_file_promotes_immediately(client, vocab, pe_file):
+def test_remember_on_already_sent_file_promotes_immediately(mapper_client, vocab, pe_file):
     pt, row = pe_file
     pt.draft_stage = PtFile.DraftStage.SENT  # already sent
     pt.save(update_fields=["draft_stage"])
-    resp = _remember_fit(client, pt, row)
+    resp = _remember_fit(mapper_client, pt, row)
     assert resp.status_code == 200, resp.json()
     prop = LookupProposal.objects.get(origin="remember")
     assert prop.status == "approved"  # instant, no send needed
     assert Lookup.objects.filter(dimension="fit", source_key="PJ RG OCTANE").exists()
 
 
-def test_remember_dedupes_open_proposals(client, vocab, pe_file):
+def test_remember_dedupes_open_proposals(mapper_client, vocab, pe_file):
     pt, row = pe_file
-    _remember_fit(client, pt, row, value="REGULAR")
-    _remember_fit(client, pt, row, value="SLIM")  # same (dim, key, brand) → one open proposal
+    _remember_fit(mapper_client, pt, row, value="REGULAR")
+    _remember_fit(
+        mapper_client, pt, row, value="SLIM"
+    )  # same (dim, key, brand) → one open proposal
     props = LookupProposal.objects.filter(origin="remember", status="proposed")
     assert props.count() == 1
     assert props.get().target_value == "SLIM"  # latest value wins on the open proposal
 
 
-def test_remember_rawless_or_uncontrolled_is_a_clean_error(client, vocab, pe_file):
+def test_remember_rawless_or_uncontrolled_is_a_clean_error(mapper_client, vocab, pe_file):
     pt, row = pe_file
     # BARCODE isn't a learnable dimension → clean 400, nothing written
-    bad_col = client.patch(
+    bad_col = mapper_client.patch(
         f"/api/ptmapper/files/{pt.id}/rows",
         {"remember": [{"row_id": row.id, "column": "BARCODE"}]},
         format="json",
     )
     assert bad_col.status_code == 400
     # COLOR has no raw source value on this row → clean 400
-    bad_raw = client.patch(
+    bad_raw = mapper_client.patch(
         f"/api/ptmapper/files/{pt.id}/rows",
         {
             "rows": [{"id": row.id, "data": {"COLOR": "BLUE"}}],
