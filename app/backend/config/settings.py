@@ -218,3 +218,39 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "Asia/Kolkata"
 LANGUAGE_CODE = "en-us"
+
+# --- Logging -----------------------------------------------------------------
+# Django's default config sends `django.request` 500 tracebacks to `mail_admins`
+# and nowhere else once DEBUG is off, and ADMINS is empty here - so on the Render
+# alpha a real outage printed one bare line, "POST /api/auth/login 500 Internal
+# Server Error", with no cause. That is how a suspended Postgres (22 Aug 2026)
+# read as an unexplained login failure. Send the traceback to stdout, which is
+# what Render collects.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {"format": "%(levelname)s %(asctime)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        # `propagate: False` keeps the traceback off the root logger, so it is
+        # printed once rather than twice.
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.db.backends.base": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+}

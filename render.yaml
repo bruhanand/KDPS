@@ -6,7 +6,7 @@
 # line and must never deploy here; ship by merging main -> client-testing.
 #
 # Provisions the whole stack from one file:
-#   - kdps-db      PostgreSQL 16 (managed)
+#   - kdps-db-0831 PostgreSQL 16 (managed)
 #   - kdps-erp-api Django API (uvicorn), serves its own static via WhiteNoise
 #   - kdps-erp-web React PWA (static site)
 #
@@ -25,10 +25,18 @@
 # -----------------------------------------------------------------------------
 
 databases:
-  - name: kdps-db
+  # NOTE: a free Postgres lives 30 days, then Render suspends it for billing and
+  # the data is gone. The first one (`kdps-db`, created 23 Jul) expired on 22 Aug
+  # and every login started answering 500 while `/api/health` stayed 200 - that
+  # endpoint is database-free by design, so it cannot see the outage. When this
+  # one expires (30 Sep 2026), the fix is another rename here plus a push: the
+  # build command re-runs migrate and all four seeders, so the demo logins come
+  # back, but anything the client entered does not. Move to a paid plan to stop
+  # the clock.
+  - name: kdps-db-0831
     databaseName: kdps
     user: kdps
-    plan: free                 # NOTE: free Postgres is deleted after 30 days. Upgrade to keep data.
+    plan: free                 # expires 2026-09-30 - see the note above
     postgresMajorVersion: "16"
     region: singapore          # closest Render region to India
 
@@ -60,7 +68,7 @@ services:
         value: "0"
       - key: DATABASE_URL
         fromDatabase:
-          name: kdps-db
+          name: kdps-db-0831
           property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
         # NOTE: `fromService property: host` resolves to the bare service slug
